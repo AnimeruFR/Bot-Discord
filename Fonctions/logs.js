@@ -6,7 +6,8 @@ const { Flags } = Discord.PermissionsBitField
 
 const COULEURS = {
     ban: 0xE74C3C, unban: 0x2ECC71, kick: 0xE67E22, mute: 0xF1C40F, unmute: 0x2ECC71,
-    warn: 0xF39C12, unwarn: 0x3498DB, clear: 0x95A5A6, ticket: 0x9B59B6
+    warn: 0xF39C12, unwarn: 0x3498DB, clear: 0x95A5A6, ticket: 0x9B59B6, tempban: 0xC0392B,
+    lock: 0x7F8C8D, unlock: 0x2ECC71, slowmode: 0x95A5A6, automod: 0x34495E, config: 0x3498DB
 }
 
 // Renvoie le salon de logs du serveur s'il existe encore et que le bot peut y écrire

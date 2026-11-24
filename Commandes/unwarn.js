@@ -49,6 +49,8 @@ module.exports = {
             return message.reply({ content: `Le warn n°${id} a déjà été retiré.`, flags: Discord.MessageFlags.Ephemeral })
         }
 
+        db.addCase(message.guild.id, { userId: warn.user_id, moderatorId: message.user.id, type: "unwarn", reason: raisonBrute ? `Warn n°${id} retiré : ${raisonBrute}` : `Warn n°${id} retiré` })
+
         const user = member?.user ?? await bot.users.fetch(warn.user_id).catch(() => null)
         await message.reply(`${message.user} a retiré le warn n°${id} de ${user ?? `<@${warn.user_id}>`} pour la raison : ***${formatReason(raisonBrute)}***`)
         await sendModLog(message, { action: "unwarn", cible: user, raison: raisonBrute, details: `Warn n°${id} retiré (raison d'origine : ${formatReason(warn.reason).slice(0, 300)})` })

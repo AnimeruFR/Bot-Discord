@@ -10,8 +10,9 @@ const loadCommands = require('./Loader/loadCommands')
 const loadEvents = require('./Loader/loadEvents')
 
 const bot = new Discord.Client({
-    // Seul l'intent Guilds est nécessaire : les slash commandes n'ont pas besoin des intents privilégiés
-    intents: [Discord.GatewayIntentBits.Guilds],
+    // Aucun intent privilégié : Guilds pour les serveurs et salons, GuildModeration pour savoir
+    // quand un membre est débanni (fin anticipée d'un ban temporaire)
+    intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildModeration],
     // Le bot ne ping jamais @everyone, @here ou un rôle, même si une raison en contient
     allowedMentions: { parse: [], repliedUser: false }
 })

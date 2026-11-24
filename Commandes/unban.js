@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason } = require('../Fonctions/moderation')
 const { sendModLog } = require('../Fonctions/logs')
+const db = require('../Fonctions/db')
 
 module.exports = {
     name: "unban",
@@ -25,12 +26,16 @@ module.exports = {
 
     async run(bot, message, args) {
         const user = args.getUser("utilisateur")
-        const reason = formatReason(args.getString("raison"))
+        const raisonBrute = args.getString("raison")
+        const reason = formatReason(raisonBrute)
 
-        if (!await message.guild.bans.fetch(user.id).catch(() => null)) return message.reply("Cet utilisateur n'est pas banni !")
+        if (!await message.guild.bans.fetch({ user: user.id, force: true }).catch(() => null)) return message.reply("Cet utilisateur n'est pas banni !")
 
-        await message.guild.members.unban(user, auditReason(message, args.getString("raison")))
+        await message.guild.members.unban(user, auditReason(message, raisonBrute))
+        // Un ban temporaire levé à la main n'a plus d'échéance
+        db.removeTempban(message.guild.id, user.id)
+        db.addCase(message.guild.id, { userId: user.id, moderatorId: message.user.id, type: "unban", reason: raisonBrute })
         await message.reply(`${message.user} a unban ${user.tag} pour la raison : ***${reason}***`)
-        await sendModLog(message, { action: "unban", cible: user, raison: args.getString("raison") })
+        await sendModLog(message, { action: "unban", cible: user, raison: raisonBrute })
     }
 }

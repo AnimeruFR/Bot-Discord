@@ -25,7 +25,9 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Donnée | Contenu | Pourquoi |
 |---|---|---|
 | Avertissements (`/warn`) | ID du serveur, ID du membre averti, ID du modérateur, raison écrite par le modérateur, date | Suivi des sanctions par le staff |
-| Configuration du serveur | ID du salon de logs, ID de la catégorie et du rôle staff des tickets | Faire fonctionner le bot |
+| Historique des sanctions | ID du serveur, ID du membre, ID du modérateur, type (avertissement, mute, kick, ban, déban…), raison, durée, date | Suivi des sanctions par le staff (`/historique`). Gardé 2 ans au plus. La raison d'un avertissement retiré est effacée |
+| Bans temporaires en cours | ID du serveur, ID du membre, date de fin | Lever le ban à la date prévue. Effacé dès que le ban est levé |
+| Configuration du serveur | ID du salon de logs, ID de la catégorie et du rôle staff des tickets, seuils de sanctions automatiques, permissions d'un salon avant `/lock` | Faire fonctionner le bot |
 | Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |
 
@@ -50,7 +52,7 @@ Je ne vends rien, je ne fais pas de publicité et je ne partage pas vos données
 
 ## 7. Durée de conservation
 
-- Tant que le bot est sur un serveur, ses données sont conservées.
+- Tant que le bot est sur un serveur, ses données sont conservées, sauf l'historique des sanctions, effacé automatiquement au bout de **2 ans**.
 - Quand le bot quitte un serveur (expulsé ou retiré), toutes les données de ce serveur sont **supprimées automatiquement 30 jours plus tard**. Ce délai permet de réinviter le bot par erreur sans rien perdre.
 - Un administrateur peut tout supprimer **tout de suite** avec la commande `/privacy supprimer:True` (une confirmation par bouton est demandée).
 - Sauvegardes : une copie de la base est faite chaque jour et seules les plus récentes sont gardées (7 par défaut), les plus anciennes étant remplacées. Une donnée effacée disparaît donc aussi des sauvegardes, en général sous 7 jours. Ce délai peut être un peu plus long si le bot est arrêté ou si une sauvegarde échoue, ainsi que pour les éventuelles copies de sauvegarde conservées hors du serveur. Ces copies sont soumises aux mêmes règles et protégées de la même façon.

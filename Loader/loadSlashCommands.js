@@ -20,6 +20,8 @@ function buildSlashCommand(command) {
                 option.setAutocomplete(opt.autocomplete ?? false)
                 if (opt.maxLength) option.setMaxLength(opt.maxLength)
             }
+            // Liste fermée de valeurs (25 au plus) : { name: "texte affiché", value: "valeur reçue" }
+            if (opt.choices) option.addChoices(...opt.choices)
             if (opt.minValue !== undefined) option.setMinValue(opt.minValue)
             if (opt.maxValue !== undefined) option.setMaxValue(opt.maxValue)
             if (opt.channelTypes) option.addChannelTypes(...opt.channelTypes)
