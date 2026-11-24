@@ -38,6 +38,7 @@ module.exports = {
                 "• les avertissements (`/warn`) : membre, modérateur, raison, date ;",
                 "• l'historique des sanctions (warn, mute, kick, ban…) : membre, modérateur, raison, durée, date (2 ans maximum) ;",
                 "• les bans temporaires en cours (date de fin) ;",
+                "• le suivi des tickets : auteur, staff qui l'a pris en charge, dates, note de 1 à 5 (90 jours après la suppression ; jamais le contenu) ;",
                 "• la configuration : salon de logs, tickets, sanctions automatiques, salons verrouillés ;",
                 "• la date de dernière ouverture d'un ticket (effacée dans les 24 h environ).",
                 "",

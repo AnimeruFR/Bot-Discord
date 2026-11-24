@@ -1,5 +1,5 @@
 const Discord = require('discord.js')
-const { openTicket, closeTicket } = require('../Fonctions/tickets')
+const tickets = require('../Fonctions/tickets')
 
 module.exports = async (bot, interaction) => {
     try {
@@ -26,10 +26,16 @@ module.exports = async (bot, interaction) => {
             return await command.run(bot, interaction, interaction.options)
         }
 
+        // Composants persistants (panneaux et salons de tickets). Les boutons de confirmation, eux,
+        // sont attendus directement par la commande qui les a posés (awaitMessageComponent).
         if (interaction.isButton()) {
-            if (interaction.customId === "ticket") return await openTicket(bot, interaction)
-            if (interaction.customId === "close") return await closeTicket(bot, interaction)
+            if (interaction.customId === "ticket") return await tickets.onBoutonTicket(bot, interaction)
+            if (interaction.customId === "close") return await tickets.closeTicket(bot, interaction)
+            if (interaction.customId === "claim") return await tickets.claimTicket(bot, interaction)
+            if (interaction.customId.startsWith("note:")) return await tickets.noterTicket(bot, interaction)
         }
+        if (interaction.isStringSelectMenu() && interaction.customId === "ticket-type") return await tickets.onMenuType(bot, interaction)
+        if (interaction.isModalSubmit() && interaction.customId.startsWith("ticket-form:")) return await tickets.onFormulaire(bot, interaction)
     } catch (err) {
         console.error(`Erreur sur l'interaction ${interaction.commandName ?? interaction.customId ?? interaction.type} :`, err)
         if (!interaction.isRepliable()) return

@@ -28,6 +28,8 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Historique des sanctions | ID du serveur, ID du membre, ID du modérateur, type (avertissement, mute, kick, ban, déban…), raison, durée, date | Suivi des sanctions par le staff (`/historique`). Gardé 2 ans au plus. La raison d'un avertissement retiré est effacée |
 | Bans temporaires en cours | ID du serveur, ID du membre, date de fin | Lever le ban à la date prévue. Effacé dès que le ban est levé |
 | Configuration du serveur | ID du salon de logs, ID de la catégorie et du rôle staff des tickets, seuils de sanctions automatiques, permissions d'un salon avant `/lock` | Faire fonctionner le bot |
+| Suivi des tickets | ID du serveur, du salon, de l'auteur et du membre du staff qui l'a pris en charge, type, dates (ouverture, prise en charge, fermeture), note de 1 à 5 donnée par l'auteur | Prise en charge, fermeture des tickets inactifs, statistiques (`/stats`). Le contenu du formulaire et des messages n'est **pas** enregistré par le bot. Effacé 90 jours après la suppression du ticket |
+| Types de tickets | Nom, description, ID de la catégorie et du rôle staff | Faire fonctionner le bot |
 | Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |
 
@@ -35,7 +37,8 @@ Le bot ne collecte rien d'autre.
 
 ## 4. Tickets et logs de modération
 
-- Le bot **ne stocke pas** le contenu des tickets.
+- Le bot **ne stocke pas** le contenu des tickets (ni le formulaire rempli à l'ouverture, qui est seulement affiché dans le salon du ticket).
+- Après la suppression d'un ticket, son auteur peut donner une note de 1 à 5 en message privé (facultatif). La note est enregistrée et signalée dans le salon de logs du serveur.
 - Quand un membre du staff supprime un ticket, le bot envoie un transcript (texte des messages s'il y a accès, auteurs, dates) et une copie des pièces jointes dans le salon de logs choisi par les administrateurs du serveur. Ces données sont alors dans Discord, sous la responsabilité du serveur.
 - Les actions de modération (ban, kick, mute, etc.) sont résumées dans ce même salon de logs, s'il est configuré.
 
