@@ -10,9 +10,12 @@ const loadCommands = require('./Loader/loadCommands')
 const loadEvents = require('./Loader/loadEvents')
 
 const bot = new Discord.Client({
-    // Aucun intent privilégié : Guilds pour les serveurs et salons, GuildModeration pour savoir
-    // quand un membre est débanni (fin anticipée d'un ban temporaire)
-    intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildModeration],
+    // Guilds pour les serveurs et salons, GuildModeration pour savoir quand un membre est débanni.
+    // GuildMembers (intent PRIVILÉGIÉ, à cocher dans le Developer Portal) : messages de bienvenue / au revoir
+    // et vérification des participants d'un giveaway.
+    intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildModeration, Discord.GatewayIntentBits.GuildMembers],
+    // Départ d'un membre absent du cache : l'événement arrive quand même (avec au moins son compte)
+    partials: [Discord.Partials.GuildMember],
     // Le bot ne ping jamais @everyone, @here ou un rôle, même si une raison en contient
     allowedMentions: { parse: [], repliedUser: false }
 })
@@ -30,6 +33,9 @@ bot.on('error', err => console.error("Erreur du client Discord :", err))
 bot.on('shardDisconnect', (event, shardId) => {
     if (arretEnCours) return // arrêt volontaire (Ctrl+C, docker stop) : géré par arreter()
     console.error(`Shard ${shardId} déconnecté définitivement (code ${event.code}), arrêt du bot.`)
+    if (event.code === Discord.GatewayCloseCodes.DisallowedIntents) {
+        console.error("➜ Discord refuse un intent privilégié : active « Server Members Intent » dans le Developer Portal (Bot > Privileged Gateway Intents), puis relance le bot.")
+    }
     process.exit(1)
 })
 process.on('unhandledRejection', err => console.error("Promesse rejetée non gérée :", err))

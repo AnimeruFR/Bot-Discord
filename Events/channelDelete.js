@@ -5,6 +5,7 @@ module.exports = async (bot, channel) => {
     try {
         if (!channel.guildId) return
         db.removeLock(channel.guildId, channel.id)
+        db.removePanelsOfChannel(channel.guildId, channel.id)
         const ticket = db.getTicket(channel.id)
         if (ticket && ticket.status !== "supprime") db.setTicketStatus(channel.id, "supprime")
     } catch (err) {

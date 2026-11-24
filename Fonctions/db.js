@@ -126,6 +126,58 @@ db.exec(`
         rated_at INTEGER
     );
     CREATE INDEX IF NOT EXISTS idx_tickets_serveur ON tickets (guild_id, status);
+
+    -- Lot G : rôles par boutons
+    CREATE TABLE IF NOT EXISTS role_panels (
+        message_id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        titre TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'multiple'
+    );
+    CREATE TABLE IF NOT EXISTS role_panel_buttons (
+        message_id TEXT NOT NULL,
+        guild_id TEXT NOT NULL,
+        role_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        PRIMARY KEY (message_id, role_id)
+    );
+
+    -- Lot G : giveaways (le tirage survit à un redémarrage)
+    CREATE TABLE IF NOT EXISTS giveaways (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        message_id TEXT,
+        prix TEXT NOT NULL,
+        gagnants INTEGER NOT NULL,
+        ends_at INTEGER NOT NULL,
+        host_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'en_cours',
+        winners TEXT NOT NULL DEFAULT '[]',
+        ended_at INTEGER,
+        -- 0 : résultat à publier, 2 : publication en cours, 1 : publié (republié au passage suivant après un crash)
+        announced INTEGER NOT NULL DEFAULT 0,
+        -- Tous les gagnants des tirages précédents (exclus d'un nouveau tirage)
+        previous_winners TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE INDEX IF NOT EXISTS idx_giveaways_fin ON giveaways (status, ends_at);
+    CREATE TABLE IF NOT EXISTS giveaway_entries (
+        giveaway_id INTEGER NOT NULL,
+        user_id TEXT NOT NULL,
+        PRIMARY KEY (giveaway_id, user_id)
+    );
+
+    -- Lot G : annonces programmées (supprimées une fois envoyées)
+    CREATE TABLE IF NOT EXISTS announcements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        author_id TEXT NOT NULL,
+        contenu TEXT NOT NULL,
+        send_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_announcements_date ON announcements (send_at);
 `)
 
 // Migration lot E : les warns d'avant le lot E apparaissent dans l'historique
@@ -141,6 +193,10 @@ if (!colonnes.includes("ticket_category_id")) db.exec("ALTER TABLE guild_config 
 if (!colonnes.includes("ticket_staff_role_id")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_staff_role_id TEXT")
 // Lot F : fermeture automatique des tickets inactifs (0 = désactivée)
 if (!colonnes.includes("ticket_inactivity_days")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_inactivity_days INTEGER NOT NULL DEFAULT 0")
+// Lot G : messages de bienvenue et d'au revoir
+for (const colonne of ["welcome_channel_id", "welcome_message", "goodbye_channel_id", "goodbye_message"]) {
+    if (!colonnes.includes(colonne)) db.exec(`ALTER TABLE guild_config ADD COLUMN ${colonne} TEXT`)
+}
 
 const requetes = {
     addWarn: db.prepare("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"),
@@ -169,9 +225,10 @@ const requetes = {
     guildsWithData: db.prepare(`SELECT guild_id FROM warns UNION SELECT guild_id FROM guild_config
         UNION SELECT guild_id FROM ticket_cooldowns UNION SELECT guild_id FROM cases UNION SELECT guild_id FROM tempbans
         UNION SELECT guild_id FROM sanction_thresholds UNION SELECT guild_id FROM channel_locks
-        UNION SELECT guild_id FROM ticket_types UNION SELECT guild_id FROM tickets`),
+        UNION SELECT guild_id FROM ticket_types UNION SELECT guild_id FROM tickets UNION SELECT guild_id FROM role_panels
+        UNION SELECT guild_id FROM giveaways UNION SELECT guild_id FROM announcements`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
-        "ticket_types", "tickets"]
+        "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -202,6 +259,62 @@ const requetes = {
     getInactivity: db.prepare("SELECT ticket_inactivity_days FROM guild_config WHERE guild_id = ?"),
     setInactivity: db.prepare(`INSERT INTO guild_config (guild_id, ticket_inactivity_days) VALUES (?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET ticket_inactivity_days = excluded.ticket_inactivity_days`),
+    // Lot G
+    addRolePanel: db.prepare("INSERT INTO role_panels (message_id, guild_id, channel_id, titre, mode) VALUES (?, ?, ?, ?, ?)"),
+    getRolePanel: db.prepare("SELECT * FROM role_panels WHERE guild_id = ? AND message_id = ?"),
+    listRolePanels: db.prepare("SELECT * FROM role_panels WHERE guild_id = ?"),
+    removeRolePanel: db.prepare("DELETE FROM role_panels WHERE guild_id = ? AND message_id = ?"),
+    removeRolePanelButtons: db.prepare("DELETE FROM role_panel_buttons WHERE guild_id = ? AND message_id = ?"),
+    addRoleButton: db.prepare("INSERT OR REPLACE INTO role_panel_buttons (message_id, guild_id, role_id, label) VALUES (?, ?, ?, ?)"),
+    removeRoleButton: db.prepare("DELETE FROM role_panel_buttons WHERE guild_id = ? AND message_id = ? AND role_id = ?"),
+    listRoleButtons: db.prepare("SELECT * FROM role_panel_buttons WHERE guild_id = ? AND message_id = ? ORDER BY rowid"),
+    getRoleButton: db.prepare("SELECT * FROM role_panel_buttons WHERE guild_id = ? AND message_id = ? AND role_id = ?"),
+    panelsOfRole: db.prepare("SELECT DISTINCT message_id FROM role_panel_buttons WHERE guild_id = ? AND role_id = ?"),
+    removeButtonsOfRole: db.prepare("DELETE FROM role_panel_buttons WHERE guild_id = ? AND role_id = ?"),
+    panelsOfChannel: db.prepare("SELECT message_id FROM role_panels WHERE guild_id = ? AND channel_id = ?"),
+
+    addGiveaway: db.prepare(`INSERT INTO giveaways (guild_id, channel_id, prix, gagnants, ends_at, host_id) VALUES (?, ?, ?, ?, ?, ?)`),
+    setGiveawayMessage: db.prepare("UPDATE giveaways SET message_id = ? WHERE id = ?"),
+    getGiveaway: db.prepare("SELECT * FROM giveaways WHERE guild_id = ? AND id = ?"),
+    getGiveawayById: db.prepare("SELECT * FROM giveaways WHERE id = ?"),
+    listGiveaways: db.prepare("SELECT * FROM giveaways WHERE guild_id = ? ORDER BY id DESC LIMIT 15"),
+    countActiveGiveaways: db.prepare("SELECT COUNT(*) AS total FROM giveaways WHERE guild_id = ? AND status = 'en_cours'"),
+    dueGiveaways: db.prepare("SELECT * FROM giveaways WHERE status = 'en_cours' AND ends_at <= ? ORDER BY ends_at"),
+    // Fin + gagnants en une seule écriture, seulement si encore en cours : un seul tirage même si deux passages se chevauchent
+    endGiveaway: db.prepare("UPDATE giveaways SET status = 'termine', ended_at = ?, winners = ?, announced = 0 WHERE id = ? AND status = 'en_cours'"),
+    // Nouveau tirage (relancer) : nouveaux gagnants, à republier
+    setGiveawayWinners: db.prepare("UPDATE giveaways SET winners = ?, previous_winners = ?, announced = 0 WHERE id = ? AND status = 'termine'"),
+    setGiveawayAnnounced: db.prepare("UPDATE giveaways SET announced = 1 WHERE id = ?"),
+    // Réservation de la publication : un seul publieur à la fois (commande et tâche de fond)
+    reserveGiveawayAnnounce: db.prepare("UPDATE giveaways SET announced = 2 WHERE id = ? AND announced = 0"),
+    resetGiveawayAnnouncing: db.prepare("UPDATE giveaways SET announced = 0 WHERE announced = 2"),
+    removeEntriesOfMember: db.prepare(`DELETE FROM giveaway_entries WHERE user_id = ?
+        AND giveaway_id IN (SELECT id FROM giveaways WHERE guild_id = ? AND status = 'en_cours')`),
+    unannouncedGiveaways: db.prepare("SELECT * FROM giveaways WHERE status = 'termine' AND announced = 0"),
+    deleteGiveaway: db.prepare("DELETE FROM giveaways WHERE id = ?"),
+    deleteGiveawayEntries: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id = ?"),
+    addEntry: db.prepare("INSERT OR IGNORE INTO giveaway_entries (giveaway_id, user_id) VALUES (?, ?)"),
+    removeEntry: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id = ? AND user_id = ?"),
+    listEntries: db.prepare("SELECT user_id FROM giveaway_entries WHERE giveaway_id = ?"),
+    countEntries: db.prepare("SELECT COUNT(*) AS total FROM giveaway_entries WHERE giveaway_id = ?"),
+    deleteEntriesOfGuild: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id IN (SELECT id FROM giveaways WHERE guild_id = ?)"),
+    deleteGiveawaysOfGuild: db.prepare("DELETE FROM giveaways WHERE guild_id = ?"),
+    purgeEntries: db.prepare("DELETE FROM giveaway_entries WHERE giveaway_id IN (SELECT id FROM giveaways WHERE status = 'termine' AND ended_at < ?)"),
+    purgeGiveaways: db.prepare("DELETE FROM giveaways WHERE status = 'termine' AND ended_at < ?"),
+
+    addAnnouncement: db.prepare("INSERT INTO announcements (guild_id, channel_id, author_id, contenu, send_at) VALUES (?, ?, ?, ?, ?)"),
+    listAnnouncements: db.prepare("SELECT * FROM announcements WHERE guild_id = ? ORDER BY send_at"),
+    countAnnouncements: db.prepare("SELECT COUNT(*) AS total FROM announcements WHERE guild_id = ?"),
+    removeAnnouncement: db.prepare("DELETE FROM announcements WHERE guild_id = ? AND id = ?"),
+    dueAnnouncements: db.prepare("SELECT * FROM announcements WHERE send_at <= ? ORDER BY send_at"),
+    deleteAnnouncementById: db.prepare("DELETE FROM announcements WHERE id = ?"),
+
+    getWelcome: db.prepare("SELECT welcome_channel_id, welcome_message, goodbye_channel_id, goodbye_message FROM guild_config WHERE guild_id = ?"),
+    setWelcome: db.prepare(`INSERT INTO guild_config (guild_id, welcome_channel_id, welcome_message) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET welcome_channel_id = excluded.welcome_channel_id, welcome_message = excluded.welcome_message`),
+    setGoodbye: db.prepare(`INSERT INTO guild_config (guild_id, goodbye_channel_id, goodbye_message) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET goodbye_channel_id = excluded.goodbye_channel_id, goodbye_message = excluded.goodbye_message`),
+
     guildsWithInactivity: db.prepare("SELECT guild_id, ticket_inactivity_days FROM guild_config WHERE ticket_inactivity_days > 0"),
 
     addCase: db.prepare(`INSERT INTO cases (guild_id, user_id, moderator_id, type, reason, duration_ms, auto, created_at)
@@ -283,7 +396,7 @@ module.exports = {
     deleteGuildData(guildId) {
         db.exec("BEGIN")
         try {
-            let total = 0
+            let total = requetes.deleteEntriesOfGuild.run(guildId).changes + requetes.deleteGiveawaysOfGuild.run(guildId).changes
             for (const requete of requetes.deleteParServeur) total += requete.run(guildId).changes
             requetes.cancelLeft.run(guildId)
             db.exec("COMMIT")
@@ -358,6 +471,90 @@ module.exports = {
     getTicketInactivity: guildId => requetes.getInactivity.get(guildId)?.ticket_inactivity_days ?? 0,
     setTicketInactivity: (guildId, jours) => requetes.setInactivity.run(guildId, jours),
     guildsWithTicketInactivity: () => requetes.guildsWithInactivity.all(),
+
+    // Rôles par boutons (guild_id toujours dans le WHERE)
+    addRolePanel: (guildId, { messageId, channelId, titre, mode }) => requetes.addRolePanel.run(messageId, guildId, channelId, titre, mode),
+    getRolePanel: (guildId, messageId) => requetes.getRolePanel.get(guildId, messageId) ?? null,
+    listRolePanels: guildId => requetes.listRolePanels.all(guildId),
+    removeRolePanel(guildId, messageId) {
+        requetes.removeRolePanelButtons.run(guildId, messageId)
+        return requetes.removeRolePanel.run(guildId, messageId).changes > 0
+    },
+    addRoleButton: (guildId, messageId, roleId, label) => requetes.addRoleButton.run(messageId, guildId, roleId, label),
+    removeRoleButton: (guildId, messageId, roleId) => requetes.removeRoleButton.run(guildId, messageId, roleId).changes > 0,
+    listRoleButtons: (guildId, messageId) => requetes.listRoleButtons.all(guildId, messageId),
+    getRoleButton: (guildId, messageId, roleId) => requetes.getRoleButton.get(guildId, messageId, roleId) ?? null,
+    // Rôle supprimé : ses boutons disparaissent. Renvoie les panneaux à rafraîchir.
+    removeButtonsOfRole(guildId, roleId) {
+        const panneaux = requetes.panelsOfRole.all(guildId, roleId).map(l => l.message_id)
+        requetes.removeButtonsOfRole.run(guildId, roleId)
+        return panneaux
+    },
+    // Salon supprimé : ses panneaux sont oubliés
+    removePanelsOfChannel(guildId, channelId) {
+        for (const { message_id: messageId } of requetes.panelsOfChannel.all(guildId, channelId)) this.removeRolePanel(guildId, messageId)
+    },
+
+    // Giveaways
+    addGiveaway: (guildId, { channelId, prix, gagnants, endsAt, hostId }) =>
+        Number(requetes.addGiveaway.run(guildId, channelId, prix, gagnants, endsAt, hostId).lastInsertRowid),
+    setGiveawayMessage: (id, messageId) => requetes.setGiveawayMessage.run(messageId, id),
+    getGiveaway: (guildId, id) => requetes.getGiveaway.get(guildId, id) ?? null,
+    getGiveawayById: id => requetes.getGiveawayById.get(id) ?? null,
+    listGiveaways: guildId => requetes.listGiveaways.all(guildId),
+    countActiveGiveaways: guildId => requetes.countActiveGiveaways.get(guildId).total,
+    dueGiveaways: (maintenant = Date.now()) => requetes.dueGiveaways.all(maintenant),
+    // Renvoie false si le giveaway était déjà terminé (tirage déjà fait ailleurs)
+    endGiveaway: (id, winners, date = Date.now()) => requetes.endGiveaway.run(date, JSON.stringify(winners), id).changes > 0,
+    setGiveawayWinners: (id, winners, previous) => requetes.setGiveawayWinners.run(JSON.stringify(winners), JSON.stringify(previous), id).changes > 0,
+    setGiveawayAnnounced: id => requetes.setGiveawayAnnounced.run(id),
+    reserveGiveawayAnnounce: id => requetes.reserveGiveawayAnnounce.run(id).changes > 0,
+    // Au démarrage : une publication interrompue par un arrêt du bot est reprise
+    resetGiveawayAnnouncing: () => requetes.resetGiveawayAnnouncing.run().changes,
+    // Membre parti : ses participations aux giveaways en cours sont effacées
+    removeEntriesOfMember: (guildId, userId) => requetes.removeEntriesOfMember.run(userId, guildId).changes,
+    unannouncedGiveaways: () => requetes.unannouncedGiveaways.all(),
+    deleteGiveaway(id) {
+        db.exec("BEGIN")
+        try {
+            requetes.deleteGiveawayEntries.run(id)
+            requetes.deleteGiveaway.run(id)
+            db.exec("COMMIT")
+        } catch (err) {
+            db.exec("ROLLBACK")
+            throw err
+        }
+    },
+    addEntry: (giveawayId, userId) => requetes.addEntry.run(giveawayId, userId).changes > 0,
+    removeEntry: (giveawayId, userId) => requetes.removeEntry.run(giveawayId, userId).changes > 0,
+    listEntries: giveawayId => requetes.listEntries.all(giveawayId).map(e => e.user_id),
+    countEntries: giveawayId => requetes.countEntries.get(giveawayId).total,
+    // Giveaways terminés depuis plus de 30 jours : participations et giveaway effacés
+    purgeOldGiveaways(avant) {
+        requetes.purgeEntries.run(avant)
+        return requetes.purgeGiveaways.run(avant).changes
+    },
+
+    // Annonces programmées
+    addAnnouncement: (guildId, { channelId, authorId, contenu, sendAt }) =>
+        Number(requetes.addAnnouncement.run(guildId, channelId, authorId, contenu, sendAt).lastInsertRowid),
+    listAnnouncements: guildId => requetes.listAnnouncements.all(guildId),
+    countAnnouncements: guildId => requetes.countAnnouncements.get(guildId).total,
+    removeAnnouncement: (guildId, id) => requetes.removeAnnouncement.run(guildId, id).changes > 0,
+    dueAnnouncements: (maintenant = Date.now()) => requetes.dueAnnouncements.all(maintenant),
+    deleteAnnouncementById: id => requetes.deleteAnnouncementById.run(id).changes > 0,
+
+    // Bienvenue / au revoir
+    getWelcome(guildId) {
+        const l = requetes.getWelcome.get(guildId)
+        return {
+            bienvenue: l?.welcome_channel_id ? { channelId: l.welcome_channel_id, message: l.welcome_message } : null,
+            aurevoir: l?.goodbye_channel_id ? { channelId: l.goodbye_channel_id, message: l.goodbye_message } : null
+        }
+    },
+    // channelId null : désactivé
+    setWelcome: (guildId, type, channelId, message) =>
+        (type === "aurevoir" ? requetes.setGoodbye : requetes.setWelcome).run(guildId, channelId, channelId ? message : null),
 
     backupTo: destination => requetes.backup.run(destination),
     fichier,

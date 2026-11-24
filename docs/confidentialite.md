@@ -30,10 +30,15 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Configuration du serveur | ID du salon de logs, ID de la catégorie et du rôle staff des tickets, seuils de sanctions automatiques, permissions d'un salon avant `/lock` | Faire fonctionner le bot |
 | Suivi des tickets | ID du serveur, du salon, de l'auteur et du membre du staff qui l'a pris en charge, type, dates (ouverture, prise en charge, fermeture), note de 1 à 5 donnée par l'auteur | Prise en charge, fermeture des tickets inactifs, statistiques (`/stats`). Le contenu du formulaire et des messages n'est **pas** enregistré par le bot. Effacé 90 jours après la suppression du ticket |
 | Types de tickets | Nom, description, ID de la catégorie et du rôle staff | Faire fonctionner le bot |
+| Giveaways | ID du serveur, du salon, de l'organisateur, des participants et des gagnants, prix, dates | Tirer au sort et publier le résultat. Effacé 30 jours après la fin du giveaway |
+| Annonces programmées | ID du serveur, du salon et de l'auteur, texte de l'annonce, date d'envoi | Publier l'annonce à la date prévue. Effacé dès l'envoi (ou l'annulation) |
+| Panneaux de rôles, bienvenue | ID des messages, salons et rôles, titres et textes écrits par les administrateurs | Faire fonctionner le bot |
 | Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |
 
 Le bot ne collecte rien d'autre.
+
+Les arrivées et départs de membres sont reçus par le bot (pour les messages de bienvenue et d'au revoir), mais rien n'en est enregistré.
 
 ## 4. Tickets et logs de modération
 

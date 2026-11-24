@@ -12,7 +12,8 @@
 | D – Socle dev/prod et conformité | `--env=dev/prod`, Docker durci + healthcheck, sauvegardes vérifiées, RGPD (purge à 30 jours, `/privacy`), pages légales, job CI Docker | ✅ Fusionné (PR #7), CI verte |
 | E – Modération avancée | historique `/historique`, `/tempban` + débans automatiques, seuils `/sanctions`, `/lock` `/unlock` `/slowmode`, `/automod` | ✅ Fusionné (PR #8), CI verte |
 | F – Tickets pro | types (`/tickettype`), formulaire, prise en charge, `/ticket ajouter/retirer`, fermeture des inactifs, transcript HTML, notes en MP, `/stats` | ✅ Commité sur `lot-f/tickets-pro` |
-| G à K | Voir `ROADMAP.md` (engagement, langues, croissance, monétisation, dashboard) | ⏳ À faire, dans l'ordre |
+| G – Engagement | rôles à boutons, giveaways, sondages natifs, annonces programmées, bienvenue/au revoir (intent Server Members) | ✅ Commité sur `lot-g/engagement` (part du lot F) |
+| H à K | Voir `ROADMAP.md` (configuration et langues, croissance, monétisation, dashboard) | ⏳ À faire, dans l'ordre |
 
 ## Décisions prises
 - Token et rôle staff dans `.env` (`process.loadEnvFile`), plus de `config.js`.
@@ -29,6 +30,7 @@
 - Lot D : un fichier d'environnement choisi (`--env=dev`) est obligatoire et prime sur les variables déjà définies (jamais le token de prod en dev). Données d'un serveur quitté effacées 30 jours après (pas sur une simple panne). Sauvegardes par `VACUUM INTO` vérifiées, pas de sauvegarde au démarrage si la dernière est récente. Bot arrêté (code 1) en cas de déconnexion définitive pour que Docker le relance.
 - Lot E : historique dans une table `cases` (les anciens warns y sont repris à la migration, purge à 2 ans, raison effacée sur `/unwarn`). Seuil de sanction automatique déclenché au nombre exact de warns, et seulement si le modérateur a lui-même le droit de la sanction. Ban temporaire marqué `[tempban:<échéance>]` dans le journal d'audit : sans ce marqueur exact, le bot ne débannit pas (re-ban manuel). Intent `GuildModeration` ajouté (non privilégié) pour suivre les débans manuels. `/lock` exige « Gérer les permissions » et ne restaure que les 5 droits qu'il a retirés.
 - Lot F : rôle staff figé sur le ticket à sa création (modifier un type ne change pas l'accès aux tickets existants). Contenu du formulaire jamais stocké en base. Inactivité mesurée sur le dernier message d'un humain, relu via l'API (pas d'intent messages ajouté). Transcript HTML envoyé dans un 2e message (chaque envoi reste sous la limite de Discord). `/ticket` sans permission par défaut : chaque action vérifie ses droits.
+- Lot G : intent privilégié **Server Members** accepté (bienvenue, vérification des participants de giveaway) : à cocher dans le Developer Portal. Rôles à boutons interdits pour tout rôle ayant une permission de modération, revérifié à chaque clic. Annonces : droits de l'auteur revérifiés à l'envoi, aucune mention active, envoyées « au plus une fois ». Giveaway : fin et gagnants écrits en une seule fois (jamais deux tirages), résultat republié après un crash.
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
 ## À faire par Animeru
@@ -39,4 +41,4 @@
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Lot F (tickets pro) codé sur `lot-f/tickets-pro` (part de `main` après la PR #8). À commiter, puis PR. À tester sur le serveur de test : panneau avec types, formulaire, prise en charge, note en MP, transcript HTML. Ensuite : lot G (engagement).
+Lot F commité (`62768d5`) sur `lot-f/tickets-pro`, non poussé. Lot G codé sur `lot-g/engagement` (branche partie du lot F), commité. À faire : pousser les deux branches, PR du lot F puis du lot G. Cocher « Server Members Intent » dans le Developer Portal avant de lancer le bot. Ensuite : lot H (configuration et langues).
