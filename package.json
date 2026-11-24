@@ -6,7 +6,12 @@
   "main": "main.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning main.js",
+    "dev": "node --disable-warning=ExperimentalWarning main.js --env=dev",
+    "prod": "node --disable-warning=ExperimentalWarning main.js --env=prod",
     "deploy": "node --disable-warning=ExperimentalWarning scripts/deploy.js",
+    "deploy:dev": "node --disable-warning=ExperimentalWarning scripts/deploy.js --env=dev",
+    "deploy:prod": "node --disable-warning=ExperimentalWarning scripts/deploy.js --env=prod",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
     "lint": "eslint .",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.js",
     "test": "npm run lint && npm run check"

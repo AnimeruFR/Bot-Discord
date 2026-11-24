@@ -58,7 +58,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
 
 ## 2. Plan par lots (dans l'ordre conseillé)
 
-### Lot D – Socle dev/prod et conformité (idées 1 à 4)
+### Lot D – Socle dev/prod et conformité (idées 1 à 4) ✅ fait
 - **But** : pouvoir faire tourner une version dev et une version prod sans risque, et être en règle.
 - **Tâches** :
   1. Lire `ENV_FILE` dans `Fonctions/env.js` (`process.loadEnvFile(process.env.ENV_FILE ?? ".env")`), avec `.env.dev.example` et `.env.prod.example`, et des scripts `npm run dev` / `npm run prod`.

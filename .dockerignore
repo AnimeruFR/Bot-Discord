@@ -1,0 +1,18 @@
+# Secrets et données : jamais dans l'image
+.env
+.env.*
+data/
+backups/
+**/config.js
+**/*.db
+**/*.db-*
+**/*.db.tmp
+
+# Inutile dans l'image
+node_modules/
+.git/
+.github/
+docs/
+*.pdf
+*.md
+eslint.config.js
