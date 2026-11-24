@@ -8,8 +8,9 @@
 | A – Robustesse | deploy séparé, `setContexts`, arrêt propre, ESLint + CI + Dependabot | ✅ Commité (`6e37ea6`) |
 | B – Modération persistante | warns en SQLite, `/warns`, `/unwarn`, `/setlogs`, logs, confirmation de ban, délai des tickets en base | ✅ Commité (`d6a0341`) |
 | C – Tickets | `/setticket`, panneau en message simple, confirmation + transcript + pièces jointes avant suppression | ✅ Commité (`38cbc75`) |
-| PR #1 | `securite/durcissement` → `main` | ✅ Ouverte, CI verte, **pas encore fusionnée** |
-| D à K | Voir `ROADMAP.md` (dev/prod, modération avancée, tickets pro, engagement, langues, croissance, monétisation, dashboard) | ⏳ À faire, dans l'ordre |
+| PR #1, #6, Dependabot #2 à #5 | Tout le travail précédent | ✅ Fusionné dans `main`, CI verte |
+| D – Socle dev/prod et conformité | `--env=dev/prod`, Docker durci + healthcheck, sauvegardes vérifiées, RGPD (purge à 30 jours, `/privacy`), pages légales, job CI Docker | ✅ Fait et testé sur la branche `lot-d/socle-dev-prod`, **pas encore commité** |
+| E à K | Voir `ROADMAP.md` (modération avancée, tickets pro, engagement, langues, croissance, monétisation, dashboard) | ⏳ À faire, dans l'ordre |
 
 ## Décisions prises
 - Token et rôle staff dans `.env` (`process.loadEnvFile`), plus de `config.js`.
@@ -23,14 +24,15 @@
 - `npm audit` bloquant en CI (volontaire : projet orienté sécurité).
 - Historique git non réécrit (pas de push forcé) : la vraie protection est de régénérer le token.
 - Dev/prod : deux applications Discord, deux serveurs, `.env.dev` / `.env.prod`, prod sur Oracle Always Free ou un VPS payé avec les crédits du Student Pack (voir `ROADMAP.md` §3).
+- Lot D : un fichier d'environnement choisi (`--env=dev`) est obligatoire et prime sur les variables déjà définies (jamais le token de prod en dev). Données d'un serveur quitté effacées 30 jours après (pas sur une simple panne). Sauvegardes par `VACUUM INTO` vérifiées, pas de sauvegarde au démarrage si la dernière est récente. Bot arrêté (code 1) en cas de déconnexion définitive pour que Docker le relance.
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
 ## À faire par Animeru
 1. Régénérer le token sur le Developer Portal (S1), le mettre dans `.env`.
 2. Tester sur un serveur de test : `npm run deploy -- --guild ID` puis `npm start`.
-3. Fusionner la PR #1 sur GitHub.
-4. Créer la 2e application Discord « Bot-Discord DEV » et un serveur de test (`ROADMAP.md` §3).
+3. Créer la 2e application Discord « Bot-Discord DEV » et un serveur de test, puis `.env.dev` (copie de `.env.dev.example`).
+4. Compléter les espaces réservés de `docs/conditions.md` et `docs/confidentialite.md` avant de les publier.
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Fusionner la PR #1, puis dans une nouvelle conversation : « Lis PROGRESS.md, ROADMAP.md et AUDIT.md, crée une branche depuis main et fais le lot D ».
+Commiter le lot D, PR vers `main` (la CI construit aussi l'image Docker), puis « fais le lot E » (modération avancée).

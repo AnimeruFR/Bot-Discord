@@ -46,11 +46,39 @@ Règles :
 
 - Les avertissements, le salon de logs de chaque serveur et le délai entre tickets sont stockés dans une base SQLite locale : `data/bot.db` (ignorée par git, à sauvegarder si tu héberges le bot). Elle utilise `node:sqlite`, intégré à Node : aucune dépendance native à compiler.
 - `/setlogs #salon` envoie dans ce salon un résumé de chaque action de modération (qui, quoi, sur qui, pourquoi). Choisis un salon privé : le bot prévient s'il est visible par tout le monde.
+- **Vie privée (RGPD)** : `/privacy` résume ce qui est conservé. Quand le bot quitte un serveur, ses données sont effacées 30 jours après (réinvitation par erreur possible sans perte). Un administrateur peut tout effacer tout de suite avec `/privacy supprimer:True`. Pages complètes : [docs/confidentialite.md](docs/confidentialite.md) et [docs/conditions.md](docs/conditions.md) (à compléter avant publication).
+
+## Dev et prod
+
+Utilise **deux applications Discord** (« Bot-Discord DEV » pour tester, et la vraie) avec deux tokens et deux bases séparées. Détails dans [ROADMAP.md](ROADMAP.md) §3.
+
+| | Dev (ton PC) | Prod (serveur d'hébergement) |
+|---|---|---|
+| Fichier | `.env.dev` (copie de `.env.dev.example`) | `.env.prod` (copie de `.env.prod.example`, `chmod 600`) |
+| Commandes | `npm run deploy:dev -- --guild ID_SERVEUR_TEST` | `npm run deploy:prod` |
+| Lancement | `npm run dev` | `npm run prod` ou `docker compose up -d --build` |
+
+`npm run dev` refuse de démarrer si `.env.dev` manque : il ne se rabat jamais sur un autre fichier, pour ne pas utiliser le token de prod par erreur.
+
+### Docker (prod)
+```
+cp .env.prod.example .env.prod && chmod 600 .env.prod   # puis remplir le token
+mkdir -p data backups && sudo chown 1000:1000 data backups
+docker compose up -d --build
+docker compose logs -f
+```
+L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.env.prod` n'est jamais copié dedans. Docker redémarre le bot s'il plante et le marque « unhealthy » s'il perd la connexion à Discord.
+
+### Sauvegardes
+- Automatiques toutes les `BACKUP_INTERVAL_HOURS` heures (24 par défaut en prod) dans `backups/`, en gardant les `BACKUP_KEEP` dernières (7). Chaque sauvegarde est vérifiée avant d'être gardée. Au démarrage, une sauvegarde n'est faite que si la dernière est trop ancienne (un bot qui redémarre en boucle n'écrase donc pas les bonnes sauvegardes).
+- Manuelle avec Docker : `docker compose exec bot node scripts/backup.js`. Sans Docker : `npm run backup -- --env=prod`. N'utilise pas `sudo npm run backup` sur une installation Docker : les fichiers créés appartiendraient à root et le bot ne pourrait plus ouvrir sa base.
+- **Copie régulièrement `backups/` hors du serveur** (ton PC, un stockage en ligne) : une sauvegarde sur la même machine ne protège pas d'une panne de disque.
+- Restauration : arrête le bot, remplace `data/bot.db` par la sauvegarde choisie, supprime `data/bot.db-wal` et `data/bot.db-shm` s'ils existent, relance.
 
 ## Vérification
 
 - `npm test` lance le lint (ESLint) puis `npm run check`, qui vérifie sans se connecter à Discord que toutes les commandes se chargent, que leurs définitions sont valides et que les règles de sécurité tiennent.
-- La CI GitHub Actions lance les mêmes vérifications et `npm audit` à chaque push sur `main` et à chaque pull request. Elle ne demande aucun secret.
+- La CI GitHub Actions lance les mêmes vérifications et `npm audit` à chaque push sur `main` et à chaque pull request, puis construit l'image Docker et vérifie qu'elle tourne sans root et sans aucun secret. Elle ne demande aucun secret.
 - Dependabot propose chaque semaine les mises à jour des dépendances.
 
 ## Commandes
@@ -70,3 +98,4 @@ Règles :
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
 | `/ticket` | Gérer les messages | Poste le panneau de création de tickets |
 | `/setticket [categorie] [staff] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie et rôle staff des tickets |
+| `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |

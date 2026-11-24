@@ -14,6 +14,8 @@ if (fichier !== ':memory:') fs.mkdirSync(path.dirname(fichier), { recursive: tru
 const db = new DatabaseSync(fichier)
 db.exec(`
     PRAGMA journal_mode = WAL;
+    -- Les données effacées sont écrasées dans le fichier (pas seulement marquées comme libres)
+    PRAGMA secure_delete = ON;
 
     CREATE TABLE IF NOT EXISTS warns (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +37,12 @@ db.exec(`
         user_id TEXT NOT NULL,
         opened_at INTEGER NOT NULL,
         PRIMARY KEY (guild_id, user_id)
+    );
+
+    -- Serveurs que le bot a quittés : leurs données sont effacées 30 jours après (RGPD)
+    CREATE TABLE IF NOT EXISTS guild_left (
+        guild_id TEXT PRIMARY KEY,
+        left_at INTEGER NOT NULL
     );
 `)
 
@@ -62,7 +70,17 @@ const requetes = {
     getCooldown: db.prepare("SELECT opened_at FROM ticket_cooldowns WHERE guild_id = ? AND user_id = ?"),
     setCooldown: db.prepare(`INSERT INTO ticket_cooldowns (guild_id, user_id, opened_at) VALUES (?, ?, ?)
         ON CONFLICT (guild_id, user_id) DO UPDATE SET opened_at = excluded.opened_at`),
-    purgeCooldowns: db.prepare("DELETE FROM ticket_cooldowns WHERE opened_at < ?")
+    purgeCooldowns: db.prepare("DELETE FROM ticket_cooldowns WHERE opened_at < ?"),
+
+    markLeft: db.prepare("INSERT OR IGNORE INTO guild_left (guild_id, left_at) VALUES (?, ?)"),
+    cancelLeft: db.prepare("DELETE FROM guild_left WHERE guild_id = ?"),
+    leftBefore: db.prepare("SELECT guild_id FROM guild_left WHERE left_at < ?"),
+    guildsWithData: db.prepare(`SELECT guild_id FROM warns UNION SELECT guild_id FROM guild_config
+        UNION SELECT guild_id FROM ticket_cooldowns`),
+    deleteWarns: db.prepare("DELETE FROM warns WHERE guild_id = ?"),
+    deleteConfig: db.prepare("DELETE FROM guild_config WHERE guild_id = ?"),
+    deleteCooldowns: db.prepare("DELETE FROM ticket_cooldowns WHERE guild_id = ?"),
+    backup: db.prepare("VACUUM INTO ?")
 }
 
 module.exports = {
@@ -86,9 +104,35 @@ module.exports = {
     setTicketConfig: (guildId, categoryId, staffRoleId) => requetes.setTicketConfig.run(guildId, categoryId, staffRoleId),
     resetTicketConfig: guildId => requetes.resetTicketConfig.run(guildId),
 
-    getTicketCooldown:(guildId, userId) => requetes.getCooldown.get(guildId, userId)?.opened_at ?? 0,
+    getTicketCooldown: (guildId, userId) => requetes.getCooldown.get(guildId, userId)?.opened_at ?? 0,
     setTicketCooldown: (guildId, userId) => requetes.setCooldown.run(guildId, userId, Date.now()),
     purgeTicketCooldowns: avant => requetes.purgeCooldowns.run(avant),
+
+    // Départ d'un serveur : on note la date (sans écraser une date déjà notée), ou on l'annule s'il revient
+    markGuildLeft: (guildId, date = Date.now()) => requetes.markLeft.run(guildId, date),
+    cancelGuildLeft: guildId => requetes.cancelLeft.run(guildId),
+    guildsLeftBefore: date => requetes.leftBefore.all(date).map(l => l.guild_id),
+    guildsWithData: () => requetes.guildsWithData.all().map(l => l.guild_id),
+
+    // Efface toutes les données d'un serveur, d'un seul bloc (tout ou rien)
+    deleteGuildData(guildId) {
+        db.exec("BEGIN")
+        try {
+            const total = requetes.deleteWarns.run(guildId).changes
+                + requetes.deleteConfig.run(guildId).changes
+                + requetes.deleteCooldowns.run(guildId).changes
+            requetes.cancelLeft.run(guildId)
+            db.exec("COMMIT")
+            return total
+        } catch (err) {
+            db.exec("ROLLBACK")
+            throw err
+        }
+    },
+
+    // Copie cohérente de la base, même pendant que le bot l'utilise
+    backupTo: destination => requetes.backup.run(destination),
+    fichier,
 
     close: () => db.close()
 }

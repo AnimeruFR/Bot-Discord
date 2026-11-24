@@ -194,3 +194,97 @@ sendAttachments(logsFactice, [
     assert.strictEqual(envois.length, 1, "fichier instable finalement envoyé")
     console.log("OK : téléchargement des pièces jointes (404, nouvel essai)")
 })
+
+// 10. Choix de l'environnement (dev / prod)
+const { envFile } = require('../Fonctions/env')
+assert.deepStrictEqual(envFile(["node", "main.js"], {}), { fichier: ".env", obligatoire: false, nom: "défaut" })
+assert.deepStrictEqual(envFile(["node", "main.js", "--env=dev"], {}), { fichier: ".env.dev", obligatoire: true, nom: "dev" }, "--env=dev obligatoire, sans repli")
+assert.strictEqual(envFile(["node", "main.js"], { ENV_FILE: ".env.prod" }).obligatoire, true)
+assert.strictEqual(envFile(["node", "main.js", "--env=dev"], { ENV_FILE: ".env.prod" }).fichier, ".env.dev", "--env prime sur ENV_FILE")
+assert.throws(() => envFile(["node", "main.js", "--env=../../secret"], {}), /invalide/, "pas de chemin dans --env")
+assert.throws(() => envFile(["node", "main.js", "--env="], {}), /invalide/)
+assert.throws(() => envFile(["node", "deploy.js", "--env", "dev", "--clear"], {}), /--env=dev/, "--env sans = refusé")
+const { appliquer } = require('../Fonctions/env')
+const envTest = { DISCORD_TOKEN: "TOKEN_PROD", AUTRE: "garde" }
+appliquer("DISCORD_TOKEN=TOKEN_DEV\nDATABASE_PATH=data/dev.db", true, envTest)
+assert.strictEqual(envTest.DISCORD_TOKEN, "TOKEN_DEV", "fichier explicite : il prime sur le token déjà défini")
+assert.strictEqual(envTest.AUTRE, "garde")
+const envDocker = { DISCORD_TOKEN: "TOKEN_DOCKER" }
+appliquer("DISCORD_TOKEN=TOKEN_FICHIER", false, envDocker)
+assert.strictEqual(envDocker.DISCORD_TOKEN, "TOKEN_DOCKER", ".env par défaut : les variables existantes priment")
+console.log("OK : choix de l'environnement")
+
+// 10 bis. Healthcheck : un shard déconnecté = bot non connecté
+const { estConnecte } = require('../Fonctions/heartbeat')
+const botFactice = statuts => ({ ws: { status: Discord.Status.Ready, shards: new Discord.Collection(statuts.map((s, i) => [i, { status: s }])) } })
+assert.strictEqual(estConnecte(botFactice([Discord.Status.Ready])), true)
+assert.strictEqual(estConnecte(botFactice([Discord.Status.Disconnected])), false, "shard déconnecté malgré ws.status Ready")
+assert.strictEqual(estConnecte(botFactice([Discord.Status.Ready, Discord.Status.Reconnecting])), false)
+assert.strictEqual(estConnecte(botFactice([])), false)
+console.log("OK : détection de la connexion (healthcheck)")
+
+// 11. RGPD : départ, panne, retour, purge à 30 jours
+const privacy = require('../Fonctions/privacy')
+const G3 = "555555555555555551", G4 = "555555555555555552"
+db.addWarn(G3, U, MOD, "a"); db.setLogChannel(G3, "666666666666666661"); db.setTicketCooldown(G3, U)
+db.addWarn(G4, U, MOD, "b")
+
+assert.strictEqual(privacy.onGuildDelete({ id: G3, available: false }), false, "panne : rien n'est noté")
+assert.strictEqual(db.guildsLeftBefore(Date.now() + 1).includes(G3), false)
+
+const ilYa31Jours = Date.now() - 31 * 24 * 3600 * 1000
+db.markGuildLeft(G3, ilYa31Jours)
+db.markGuildLeft(G3) // une 2e notification ne repousse pas la date
+assert.ok(db.guildsLeftBefore(Date.now() - 30 * 24 * 3600 * 1000).includes(G3), "date de départ conservée")
+
+assert.deepStrictEqual(privacy.purge(new Set([G3])), [], "revenu sur le serveur : rien n'est effacé")
+assert.strictEqual(db.countWarns(G3, U), 1)
+
+db.markGuildLeft(G3, ilYa31Jours)
+assert.deepStrictEqual(privacy.purge(new Set([G4])), [G3], "parti depuis 31 jours : effacé")
+assert.strictEqual(db.countWarns(G3, U), 0)
+assert.strictEqual(db.getLogChannel(G3), null)
+assert.strictEqual(db.getTicketCooldown(G3, U), 0)
+assert.strictEqual(db.countWarns(G4, U), 1, "les autres serveurs ne sont pas touchés")
+
+assert.strictEqual(privacy.reconcile(new Set([G1, G2])) >= 1, true, "serveur quitté pendant que le bot était éteint détecté")
+assert.ok(db.guildsLeftBefore(Date.now() + 1).includes(G4))
+assert.deepStrictEqual(privacy.purge(new Set([G1, G2])).includes(G4), false, "pas effacé avant 30 jours")
+privacy.onGuildCreate({ id: G4 })
+assert.ok(!db.guildsLeftBefore(Date.now() + 1).includes(G4), "retour sur le serveur : suppression annulée")
+assert.strictEqual(db.deleteGuildData(G4), 1)
+console.log("OK : RGPD (panne, retour, purge à 30 jours, isolation)")
+
+// 12. Sauvegarde sur une vraie base fichier (processus séparé), rotation et restauration
+const { execFileSync } = require('child_process')
+const fs = require('fs')
+const os = require('os')
+const path = require('path')
+const dossierTest = fs.mkdtempSync(path.join(os.tmpdir(), "bot-backup-"))
+try {
+    const sortie = execFileSync(process.execPath, ["--disable-warning=ExperimentalWarning", "-e", `
+        const db = require(${JSON.stringify(path.join(__dirname, "..", "Fonctions", "db.js"))})
+        const { makeBackup } = require(${JSON.stringify(path.join(__dirname, "..", "Fonctions", "backup.js"))})
+        const fs = require("fs"), path = require("path")
+        db.addWarn("1", "2", "3", "à sauvegarder")
+        const dossier = process.env.BACKUP_DIR
+        fs.mkdirSync(dossier, { recursive: true })
+        for (let i = 1; i <= 5; i++) fs.writeFileSync(path.join(dossier, "bot-2020010" + i + "-000000.db"), "ancienne")
+        fs.writeFileSync(path.join(dossier, "autre-fichier.txt"), "à garder")
+        fs.writeFileSync(path.join(dossier, "bot-20200101-000000.db.tmp"), "orphelin")
+        const fichier = makeBackup(dossier, 3)
+        console.log(JSON.stringify({ fichier, liste: fs.readdirSync(dossier).sort() }))
+    `], { env: { ...process.env, DATABASE_PATH: path.join(dossierTest, "bot.db"), BACKUP_DIR: path.join(dossierTest, "backups"), ENV_FILE: "" }, cwd: dossierTest, encoding: "utf8" }).trim()
+    const { fichier, liste } = JSON.parse(sortie.split("\n").pop())
+    assert.strictEqual(liste.filter(f => /^bot-/.test(f)).length, 3, "rotation : 3 sauvegardes gardées")
+    assert.ok(liste.includes("autre-fichier.txt"), "les autres fichiers ne sont pas touchés")
+    assert.ok(liste.includes(path.basename(fichier)), "la nouvelle sauvegarde est gardée")
+    assert.ok(!liste.some(f => f.endsWith(".tmp")), "pas de fichier temporaire restant (orphelin nettoyé)")
+    const { DatabaseSync } = require('node:sqlite')
+    const restauree = new DatabaseSync(fichier, { readOnly: true })
+    assert.strictEqual(restauree.prepare("SELECT reason FROM warns").get().reason, "à sauvegarder", "la sauvegarde se relit")
+    restauree.close()
+    console.log("OK : sauvegarde (vérifiée, rotation, restauration)")
+} finally {
+    fs.rmSync(dossierTest, { recursive: true, force: true })
+}

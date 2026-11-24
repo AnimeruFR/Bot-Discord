@@ -33,3 +33,34 @@ jobs:
       - run: npm run lint
       - run: npm run check
       - run: npm audit --omit=dev --audit-level=high
+
+  # Construit l'image Docker de prod et vérifie qu'elle est saine (sans token : le bot n'est pas lancé)
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: docker build -t bot-discord:ci .
+      - name: L'image tourne sans root
+        run: test "$(docker run --rm --entrypoint id bot-discord:ci -u)" = "1000"
+      - name: Aucun secret ni donnée dans l'image
+        run: |
+          set -e
+          docker run --rm --entrypoint sh bot-discord:ci -c 'ls -a /app' > contenu.txt
+          cat contenu.txt
+          grep -qx 'main.js' contenu.txt
+          ! grep -qE '^\.env|^\.git$|^config\.js$|\.db$' contenu.txt || (echo "Fichier interdit dans l'image" && exit 1)
+          # data/ et backups/ existent (créés vides pour les volumes) mais ne doivent rien contenir
+          vides="$(docker run --rm --entrypoint sh bot-discord:ci -c 'test -d /app/data && test -d /app/backups && ls -A /app/data /app/backups | grep -v ":$" | grep -c . || true')"
+          test "$vides" = "0"
+      - name: Les dépendances de prod se chargent
+        run: docker run --rm --entrypoint node bot-discord:ci -e "require('discord.js'); require('ms'); console.log('ok')"
+      - name: Le bot refuse de démarrer sans token
+        run: |
+          set +e
+          docker run --rm bot-discord:ci > sortie.txt 2>&1
+          code=$?
+          cat sortie.txt
+          test $code -eq 1 && grep -q "DISCORD_TOKEN manquant" sortie.txt

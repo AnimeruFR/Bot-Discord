@@ -1,10 +1,13 @@
 const Discord = require('discord.js')
-const { loadToken } = require('./Fonctions/env')
+const { loadToken, loadEnv } = require('./Fonctions/env')
+
+// Le .env doit être chargé avant tout le reste (la base lit DATABASE_PATH)
+const token = loadToken()
+console.log(`Environnement : ${loadEnv().nom} (${loadEnv().fichier})`)
+
 const db = require('./Fonctions/db')
 const loadCommands = require('./Loader/loadCommands')
 const loadEvents = require('./Loader/loadEvents')
-
-const token = loadToken()
 
 const bot = new Discord.Client({
     // Seul l'intent Guilds est nécessaire : les slash commandes n'ont pas besoin des intents privilégiés
@@ -20,6 +23,14 @@ loadCommands(bot)
 loadEvents(bot)
 
 bot.on('error', err => console.error("Erreur du client Discord :", err))
+
+// Déconnexion définitive (token réinitialisé, intents refusés…) : on quitte avec une erreur pour que
+// Docker (restart: unless-stopped) ou le gestionnaire de processus relance le bot, au lieu d'un bot zombie.
+bot.on('shardDisconnect', (event, shardId) => {
+    if (arretEnCours) return // arrêt volontaire (Ctrl+C, docker stop) : géré par arreter()
+    console.error(`Shard ${shardId} déconnecté définitivement (code ${event.code}), arrêt du bot.`)
+    process.exit(1)
+})
 process.on('unhandledRejection', err => console.error("Promesse rejetée non gérée :", err))
 
 // Arrêt propre (Ctrl+C, docker stop…) : on ferme la connexion à Discord avant de quitter
