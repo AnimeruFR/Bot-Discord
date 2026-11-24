@@ -89,7 +89,7 @@ module.exports = {
             const id = db.addGiveaway(guild.id, { channelId: channel.id, prix, gagnants: args.getInteger("gagnants") ?? 1, endsAt: Date.now() + duree, hostId: message.user.id })
 
             try {
-                const envoye = await channel.send(giveaways.contenuGiveaway(db.getGiveaway(guild.id, id)))
+                const envoye = await channel.send(giveaways.contenuGiveaway(db.getGiveaway(guild.id, id), { guild }))
                 db.setGiveawayMessage(id, envoye.id)
             } catch (err) {
                 db.deleteGiveaway(id) // pas de message : pas de giveaway fantôme

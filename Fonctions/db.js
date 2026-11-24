@@ -197,6 +197,11 @@ if (!colonnes.includes("ticket_inactivity_days")) db.exec("ALTER TABLE guild_con
 for (const colonne of ["welcome_channel_id", "welcome_message", "goodbye_channel_id", "goodbye_message"]) {
     if (!colonnes.includes(colonne)) db.exec(`ALTER TABLE guild_config ADD COLUMN ${colonne} TEXT`)
 }
+// Lot H : apparence et langue du serveur (NULL = valeur par défaut)
+for (const colonne of ["langue", "ticket_panel_title", "ticket_panel_description"]) {
+    if (!colonnes.includes(colonne)) db.exec(`ALTER TABLE guild_config ADD COLUMN ${colonne} TEXT`)
+}
+if (!colonnes.includes("couleur")) db.exec("ALTER TABLE guild_config ADD COLUMN couleur INTEGER")
 
 const requetes = {
     addWarn: db.prepare("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"),
@@ -314,6 +319,14 @@ const requetes = {
         ON CONFLICT (guild_id) DO UPDATE SET welcome_channel_id = excluded.welcome_channel_id, welcome_message = excluded.welcome_message`),
     setGoodbye: db.prepare(`INSERT INTO guild_config (guild_id, goodbye_channel_id, goodbye_message) VALUES (?, ?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET goodbye_channel_id = excluded.goodbye_channel_id, goodbye_message = excluded.goodbye_message`),
+
+    getApparence: db.prepare("SELECT langue, couleur, ticket_panel_title, ticket_panel_description FROM guild_config WHERE guild_id = ?"),
+    setLangue: db.prepare(`INSERT INTO guild_config (guild_id, langue) VALUES (?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET langue = excluded.langue`),
+    setCouleur: db.prepare(`INSERT INTO guild_config (guild_id, couleur) VALUES (?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET couleur = excluded.couleur`),
+    setPanneauTicket: db.prepare(`INSERT INTO guild_config (guild_id, ticket_panel_title, ticket_panel_description) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET ticket_panel_title = excluded.ticket_panel_title, ticket_panel_description = excluded.ticket_panel_description`),
 
     guildsWithInactivity: db.prepare("SELECT guild_id, ticket_inactivity_days FROM guild_config WHERE ticket_inactivity_days > 0"),
 
@@ -471,6 +484,20 @@ module.exports = {
     getTicketInactivity: guildId => requetes.getInactivity.get(guildId)?.ticket_inactivity_days ?? 0,
     setTicketInactivity: (guildId, jours) => requetes.setInactivity.run(guildId, jours),
     guildsWithTicketInactivity: () => requetes.guildsWithInactivity.all(),
+
+    // Apparence et langue (valeurs null = par défaut)
+    getApparence(guildId) {
+        const l = requetes.getApparence.get(guildId)
+        return {
+            langue: l?.langue ?? "auto",
+            couleur: l?.couleur ?? null,
+            panneauTitre: l?.ticket_panel_title ?? null,
+            panneauTexte: l?.ticket_panel_description ?? null
+        }
+    },
+    setLangue: (guildId, langue) => requetes.setLangue.run(guildId, langue === "auto" ? null : langue),
+    setCouleur: (guildId, couleur) => requetes.setCouleur.run(guildId, couleur),
+    setPanneauTicket: (guildId, titre, texte) => requetes.setPanneauTicket.run(guildId, titre || null, texte || null),
 
     // Rôles par boutons (guild_id toujours dans le WHERE)
     addRolePanel: (guildId, { messageId, channelId, titre, mode }) => requetes.addRolePanel.run(messageId, guildId, channelId, titre, mode),

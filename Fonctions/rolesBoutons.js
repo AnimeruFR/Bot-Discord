@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const db = require('./db')
 const { sendModLog } = require('./logs')
+const { t } = require('./i18n')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -76,12 +77,12 @@ async function onClicRole(bot, interaction) {
     // Tout est relu en base : le rôle doit être sur CE panneau (message du clic)
     const panel = db.getRolePanel(guild.id, interaction.message.id)
     const bouton = panel ? db.getRoleButton(guild.id, panel.message_id, roleId) : null
-    if (!bouton) return interaction.reply({ content: "Ce bouton n'est plus actif.", flags: EPHEMERAL })
+    if (!bouton) return interaction.reply({ content: t(interaction, "roles.inactif"), flags: EPHEMERAL })
 
     const role = guild.roles.cache.get(roleId)
     const refus = refusRole(guild, role) ?? (guild.members.me.permissions.has(Flags.ManageRoles) ? null : "il me manque la permission « Gérer les rôles »")
     if (refus) {
-        await interaction.reply({ content: "Ce rôle n'est plus disponible. Le staff a été prévenu.", flags: EPHEMERAL })
+        await interaction.reply({ content: t(interaction, "roles.indisponible"), flags: EPHEMERAL })
         // Une seule alerte par heure et par bouton : des clics répétés ne doivent pas inonder les logs
         const cleAlerte = `${panel.message_id}-${roleId}`
         if (Date.now() - (alertes.get(cleAlerte) ?? 0) < 3600000) return
@@ -90,7 +91,7 @@ async function onClicRole(bot, interaction) {
     }
 
     const cle = `${interaction.user.id}-${panel.message_id}`
-    if (enCours.has(cle)) return interaction.reply({ content: "Un instant, ton clic précédent est en cours.", flags: EPHEMERAL })
+    if (enCours.has(cle)) return interaction.reply({ content: t(interaction, "roles.patience"), flags: EPHEMERAL })
     enCours.add(cle)
     try {
         await interaction.deferReply({ flags: EPHEMERAL })
@@ -98,7 +99,7 @@ async function onClicRole(bot, interaction) {
         const raison = `Rôle par bouton (panneau ${panel.message_id})`
         if (member.roles.cache.has(roleId)) {
             await member.roles.remove(roleId, raison)
-            return interaction.editReply(`Rôle ${role} retiré.`)
+            return interaction.editReply(t(interaction, "roles.retire", { role }))
         }
         // Mode unique : on retire d'abord les autres rôles de ce panneau
         if (panel.mode === "unique") {
@@ -108,7 +109,7 @@ async function onClicRole(bot, interaction) {
             if (autres.length) await member.roles.remove(autres, raison)
         }
         await member.roles.add(roleId, raison)
-        await interaction.editReply(`Rôle ${role} ajouté.`)
+        await interaction.editReply(t(interaction, "roles.ajoute", { role }))
     } finally {
         enCours.delete(cle)
     }

@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { couleur } = require('./apparence')
+const { t, langueDe } = require('./i18n')
 const db = require('./db')
 const { getLogChannel, sendModLog } = require('./logs')
 const { buildTranscript, sendAttachments, messageContentActive } = require('./transcript')
@@ -90,26 +92,26 @@ function verifierOuverture(interaction, type = null) {
     const existant = tickets.find(c => c.topic === user.id)
     if (existant) {
         return existant.name.startsWith("ferme-")
-            ? "Ton ancien ticket n'a pas encore été traité par le staff, attends sa suppression."
-            : `Tu as déjà un ticket ouvert : ${existant}`
+            ? t(interaction, "tickets.ancien_en_attente")
+            : t(interaction, "tickets.deja_ouvert", { salon: existant })
     }
-    if (enCours.has(`${guild.id}-${user.id}`)) return "Ton ticket est en cours de création…"
+    if (enCours.has(`${guild.id}-${user.id}`)) return t(interaction, "tickets.en_creation")
 
     // Délai stocké en base : il survit à un redémarrage du bot
     const attente = db.getTicketCooldown(guild.id, user.id) + DELAI_ENTRE_TICKETS - Date.now()
-    if (attente > 0) return `Merci d'attendre ${Math.ceil(attente / 60000)} min avant d'ouvrir un nouveau ticket.`
-    if (tickets.size >= MAX_TICKETS_OUVERTS) return "Trop de tickets sont ouverts en ce moment, réessaie plus tard."
+    if (attente > 0) return t(interaction, "tickets.attendre", { minutes: Math.ceil(attente / 60000) })
+    if (tickets.size >= MAX_TICKETS_OUVERTS) return t(interaction, "tickets.trop")
 
     const categorie = ticketCategory(interaction, type)
-    if (categorie && categorie.children.cache.size >= MAX_SALONS_CATEGORIE) return "La catégorie des tickets est pleine, préviens le staff."
+    if (categorie && categorie.children.cache.size >= MAX_SALONS_CATEGORIE) return t(interaction, "tickets.categorie_pleine")
     return null
 }
 
 // Menu déroulant des types (panneau, ou réponse au bouton d'un ancien panneau)
-function menuTypes(types) {
+function menuTypes(types, langue = "fr") {
     return new Discord.ActionRowBuilder().addComponents(new Discord.StringSelectMenuBuilder()
         .setCustomId("ticket-type")
-        .setPlaceholder("Choisis le type de ta demande")
+        .setPlaceholder(t(langue, "tickets.menu_placeholder"))
         .addOptions(types.map(t => {
             const option = { label: t.nom.slice(0, 100), value: String(t.id) }
             if (t.description) option.description = t.description.slice(0, 100)
@@ -124,7 +126,7 @@ async function onBoutonTicket(bot, interaction) {
     if (types.length === 0) return montrerFormulaire(interaction, null)
     const erreur = verifierOuverture(interaction)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
-    return interaction.reply({ content: "Quel est le type de ta demande ?", components: [menuTypes(types)], flags: EPHEMERAL })
+    return interaction.reply({ content: t(interaction, "tickets.question_type"), components: [menuTypes(types, langueDe(interaction))], flags: EPHEMERAL })
 }
 
 // Menu des types : on relit le type en base (il a pu être supprimé depuis la pose du panneau)
@@ -132,7 +134,7 @@ async function onMenuType(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const id = Number(interaction.values[0])
     const type = Number.isInteger(id) ? db.getTicketType(interaction.guild.id, id) : null
-    if (!type) return interaction.reply({ content: "Ce type de ticket n'existe plus. Préviens le staff pour qu'il reposte le panneau.", flags: EPHEMERAL })
+    if (!type) return interaction.reply({ content: t(interaction, "tickets.type_disparu"), flags: EPHEMERAL })
     await montrerFormulaire(interaction, type)
     // Le menu du panneau garde l'option choisie affichée : on le remet à zéro pour pouvoir la rechoisir
     // (si le formulaire est annulé). Sans effet sur le menu éphémère des anciens panneaux.
@@ -148,13 +150,13 @@ async function montrerFormulaire(interaction, type) {
 
     const modal = new Discord.ModalBuilder()
         .setCustomId(`ticket-form:${type?.id ?? 0}`)
-        .setTitle(type ? `Ticket : ${type.nom}`.slice(0, 45) : "Ouvrir un ticket")
+        .setTitle((type ? t(interaction, "tickets.formulaire_titre_type", { type: type.nom }) : t(interaction, "tickets.formulaire_titre")).slice(0, 45))
         .addComponents(
             new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("sujet").setLabel("Sujet").setStyle(Discord.TextInputStyle.Short)
+                .setCustomId("sujet").setLabel(t(interaction, "tickets.formulaire_sujet")).setStyle(Discord.TextInputStyle.Short)
                 .setRequired(true).setMinLength(3).setMaxLength(100)),
             new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("details").setLabel("Détails (facultatif)").setStyle(Discord.TextInputStyle.Paragraph)
+                .setCustomId("details").setLabel(t(interaction, "tickets.formulaire_details")).setStyle(Discord.TextInputStyle.Paragraph)
                 .setRequired(false).setMaxLength(1000))
         )
     await interaction.showModal(modal)
@@ -170,14 +172,14 @@ async function onFormulaire(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const typeId = Number(interaction.customId.split(":")[1])
     const type = typeId ? db.getTicketType(interaction.guild.id, typeId) : null
-    if (typeId && !type) return interaction.reply({ content: "Ce type de ticket a été supprimé entre-temps, recommence depuis le panneau.", flags: EPHEMERAL })
+    if (typeId && !type) return interaction.reply({ content: t(interaction, "tickets.type_supprime"), flags: EPHEMERAL })
 
     const erreur = verifierOuverture(interaction, type)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
 
     const sujet = interaction.fields.getTextInputValue("sujet").trim()
     const details = interaction.fields.getTextInputValue("details")?.trim() ?? ""
-    if (!sujet) return interaction.reply({ content: "Le sujet ne peut pas être vide.", flags: EPHEMERAL })
+    if (!sujet) return interaction.reply({ content: t(interaction, "tickets.sujet_vide"), flags: EPHEMERAL })
 
     const { guild, user } = interaction
     const cle = `${guild.id}-${user.id}`
@@ -206,22 +208,22 @@ async function onFormulaire(bot, interaction) {
         db.addTicket(guild.id, channel.id, user.id, type?.id ?? null, { staffRoleId: staff })
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle(type ? `Ticket : ${type.nom}` : "Ticket")
+            .setColor(couleur(guild))
+            .setTitle(type ? t(guild, "tickets.formulaire_titre_type", { type: type.nom }) : t(guild, "tickets.bienvenue_titre"))
             .setThumbnail(bot.user.displayAvatarURL())
-            .setDescription(`Bienvenue ${user}, un membre du staff va te répondre.`)
-            .addFields({ name: "Sujet", value: texteSur(sujet).slice(0, 1024) })
+            .setDescription(t(guild, "tickets.bienvenue", { membre: user }))
+            .addFields({ name: t(guild, "tickets.champ_sujet"), value: texteSur(sujet).slice(0, 1024) })
             .setTimestamp()
             .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
-        if (details) embed.addFields({ name: "Détails", value: texteSur(details).slice(0, 1024) })
+        if (details) embed.addFields({ name: t(guild, "tickets.champ_details"), value: texteSur(details).slice(0, 1024) })
 
         const boutons = new Discord.ActionRowBuilder().addComponents(
-            new Discord.ButtonBuilder().setCustomId("claim").setLabel("Prendre en charge").setStyle(Discord.ButtonStyle.Success).setEmoji("🙋"),
-            new Discord.ButtonBuilder().setCustomId("close").setLabel("Fermer le ticket").setStyle(Discord.ButtonStyle.Danger).setEmoji("🗑️")
+            new Discord.ButtonBuilder().setCustomId("claim").setLabel(t(guild, "tickets.bouton_prendre")).setStyle(Discord.ButtonStyle.Success).setEmoji("🙋"),
+            new Discord.ButtonBuilder().setCustomId("close").setLabel(t(guild, "tickets.bouton_fermer")).setStyle(Discord.ButtonStyle.Danger).setEmoji("🗑️")
         )
 
         await channel.send({ embeds: [embed], components: [boutons] })
-        await interaction.editReply(`Votre ticket a correctement été créé : ${channel}`)
+        await interaction.editReply(t(interaction, "tickets.cree", { salon: channel }))
 
         // En dernier : une erreur de la base ne doit pas laisser un ticket sans bouton de fermeture
         try {

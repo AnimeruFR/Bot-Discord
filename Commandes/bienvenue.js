@@ -1,14 +1,13 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
+const { t } = require('../Fonctions/i18n')
 const { envoyer, salonUtilisable } = require('../Fonctions/bienvenue')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const NOMS = { bienvenue: "bienvenue", aurevoir: "au revoir" }
-const DEFAUTS = {
-    bienvenue: "Bienvenue {membre} sur **{serveur}** ! Nous sommes maintenant {nombre}.",
-    aurevoir: "{membre} a quitté le serveur. Nous sommes maintenant {nombre}."
-}
+// Messages par défaut dans la langue du serveur
+const DEFAUTS = { bienvenue: "bienvenue.defaut", aurevoir: "aurevoir.defaut" }
 
 module.exports = {
     name: "bienvenue",
@@ -86,7 +85,7 @@ module.exports = {
         const channel = args.getChannel("salon")
         if (!channel) return message.reply({ content: "Précise le salon (option `salon`).", flags: EPHEMERAL })
         if (!salonUtilisable(guild, channel.id)) return message.reply({ content: `Je ne peux pas écrire dans ${channel}.`, flags: EPHEMERAL })
-        const texte = args.getString("message")?.trim() || DEFAUTS[type]
+        const texte = args.getString("message")?.trim() || t(guild, DEFAUTS[type])
         db.setWelcome(guild.id, type, channel.id, texte)
         await message.reply({
             content: `Messages de ${NOMS[type]} envoyés dans ${channel}.\nAperçu : ${texte.slice(0, 300)}\n-# Seul le nouveau membre est mentionné ; @everyone et les rôles écrits dans le texte ne notifient personne. 10 messages par minute au maximum (anti-raid).`,

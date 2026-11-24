@@ -1,4 +1,5 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
 const { formatDuree } = require('../Fonctions/moderation')
 const db = require('../Fonctions/db')
 
@@ -40,7 +41,7 @@ module.exports = {
         if (s.total === 0) return message.reply({ content: "Aucun ticket ouvert ces 30 derniers jours.", flags: Discord.MessageFlags.Ephemeral })
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
+            .setColor(couleur(message.guild))
             .setTitle("Tickets – 30 derniers jours")
             .addFields(
                 { name: "Ouverts", value: String(s.total), inline: true },

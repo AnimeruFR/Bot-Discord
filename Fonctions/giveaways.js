@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const crypto = require('crypto')
 const db = require('./db')
 const { sendModLog } = require('./logs')
+const { t } = require('./i18n')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
@@ -34,16 +35,18 @@ async function choisirGagnants(guild, participants, n, exclure = []) {
 }
 
 // Message du giveaway (le prix est écrit par un modérateur : échappé, et aucune mention n'est jamais active)
-function contenuGiveaway(g, { termine = false, gagnants = [] } = {}) {
+// guild : pour la langue du serveur (message public)
+function contenuGiveaway(g, { termine = false, gagnants = [], guild = null } = {}) {
     const prix = Discord.escapeMarkdown(g.prix)
+    const l = guild ?? "fr"
     const embed = new Discord.EmbedBuilder()
         .setColor(termine ? 0x95A5A6 : 0xF1C40F)
-        .setTitle(`🎉 Giveaway : ${prix}`.slice(0, 256))
+        .setTitle(t(l, "giveaway.titre", { prix }).slice(0, 256))
         .setDescription(termine
-            ? `Terminé. ${gagnants.length ? `Gagnant(s) : ${gagnants.map(id => `<@${id}>`).join(", ")}` : "Aucun participant valide."}`
-            : `Clique sur le bouton pour participer (un 2e clic te retire).\nFin : <t:${Math.floor(g.ends_at / 1000)}:R>\nGagnant(s) : ${g.gagnants}`)
-        .setFooter({ text: `Giveaway n°${g.id}` })
-    const bouton = new Discord.ButtonBuilder().setCustomId(`giveaway:${g.id}`).setLabel("Participer").setEmoji("🎉")
+            ? (gagnants.length ? t(l, "giveaway.termine", { gagnants: gagnants.map(id => `<@${id}>`).join(", ") }) : t(l, "giveaway.termine_vide"))
+            : t(l, "giveaway.en_cours", { fin: `<t:${Math.floor(g.ends_at / 1000)}:R>`, gagnants: g.gagnants }))
+        .setFooter({ text: t(l, "giveaway.pied", { id: g.id }) })
+    const bouton = new Discord.ButtonBuilder().setCustomId(`giveaway:${g.id}`).setLabel(t(l, "giveaway.bouton")).setEmoji("🎉")
         .setStyle(Discord.ButtonStyle.Primary).setDisabled(termine)
     return { embeds: [embed], components: [new Discord.ActionRowBuilder().addComponents(bouton)] }
 }
@@ -70,11 +73,12 @@ async function publier(bot, g) {
     if (channel) {
         if (g.message_id) {
             const message = await channel.messages.fetch(g.message_id).catch(() => null)
-            await message?.edit(contenuGiveaway(g, { termine: true, gagnants })).catch(() => {})
+            await message?.edit(contenuGiveaway(g, { termine: true, gagnants, guild })).catch(() => {})
         }
+        const prix = Discord.escapeMarkdown(g.prix)
         const texte = gagnants.length
-            ? `🎉 Félicitations ${gagnants.map(id => `<@${id}>`).join(", ")} ! Vous gagnez **${Discord.escapeMarkdown(g.prix)}** (giveaway n°${g.id}).`
-            : `Giveaway n°${g.id} (**${Discord.escapeMarkdown(g.prix)}**) terminé sans participant valide.`
+            ? t(guild, "giveaway.felicitations", { gagnants: gagnants.map(id => `<@${id}>`).join(", "), prix, id: g.id })
+            : t(guild, "giveaway.sans_gagnant", { prix, id: g.id })
         // Seuls les gagnants sont mentionnés (jamais @everyone ni un rôle, même écrit dans le prix)
         await channel.send({ content: texte, allowedMentions: { parse: [], users: gagnants } }).catch(err => {
             console.error(`Annonce du giveaway ${g.id} impossible :`, err.message)
@@ -102,14 +106,14 @@ async function onClicGiveaway(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const id = Number(interaction.customId.slice("giveaway:".length))
     const g = Number.isInteger(id) ? db.getGiveaway(interaction.guild.id, id) : null
-    if (!g || g.message_id !== interaction.message.id) return interaction.reply({ content: "Ce giveaway n'existe plus.", flags: EPHEMERAL })
-    if (g.status !== "en_cours" || g.ends_at <= Date.now()) return interaction.reply({ content: "Ce giveaway est terminé.", flags: EPHEMERAL })
+    if (!g || g.message_id !== interaction.message.id) return interaction.reply({ content: t(interaction, "giveaway.inexistant"), flags: EPHEMERAL })
+    if (g.status !== "en_cours" || g.ends_at <= Date.now()) return interaction.reply({ content: t(interaction, "giveaway.fini"), flags: EPHEMERAL })
 
     if (db.addEntry(g.id, interaction.user.id)) {
-        return interaction.reply({ content: `Tu participes au giveaway ! (${db.countEntries(g.id)} participant(s)) Clique à nouveau pour te retirer.`, flags: EPHEMERAL })
+        return interaction.reply({ content: t(interaction, "giveaway.participe", { nombre: db.countEntries(g.id) }), flags: EPHEMERAL })
     }
     db.removeEntry(g.id, interaction.user.id)
-    return interaction.reply({ content: "Tu ne participes plus à ce giveaway.", flags: EPHEMERAL })
+    return interaction.reply({ content: t(interaction, "giveaway.retire"), flags: EPHEMERAL })
 }
 
 module.exports = { tirer, choisirGagnants, contenuGiveaway, terminer, publier, relancer, onClicGiveaway }

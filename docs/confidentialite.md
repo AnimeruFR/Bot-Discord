@@ -32,6 +32,7 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Types de tickets | Nom, description, ID de la catégorie et du rôle staff | Faire fonctionner le bot |
 | Giveaways | ID du serveur, du salon, de l'organisateur, des participants et des gagnants, prix, dates | Tirer au sort et publier le résultat. Effacé 30 jours après la fin du giveaway |
 | Annonces programmées | ID du serveur, du salon et de l'auteur, texte de l'annonce, date d'envoi | Publier l'annonce à la date prévue. Effacé dès l'envoi (ou l'annulation) |
+| Apparence et langue | Langue choisie, couleur des embeds, titre et texte du panneau de tickets | Faire fonctionner le bot |
 | Panneaux de rôles, bienvenue | ID des messages, salons et rôles, titres et textes écrits par les administrateurs | Faire fonctionner le bot |
 | Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |

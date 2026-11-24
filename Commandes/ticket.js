@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
+const { t, langueDe } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 const { gererMembre, menuTypes } = require('../Fonctions/tickets')
 
@@ -54,20 +56,21 @@ module.exports = {
         }
 
         const types = db.listTicketTypes(message.guild.id)
+        // Panneau public : langue du serveur ; titre et texte personnalisables avec /config
+        const guild = message.guild
+        const { panneauTitre, panneauTexte } = db.getApparence(guild.id)
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle("Besoin d'aide ?")
+            .setColor(couleur(guild))
+            .setTitle(panneauTitre ?? t(guild, "tickets.panneau_titre"))
             .setThumbnail(bot.user.displayAvatarURL())
-            .setDescription(types.length
-                ? "Choisis le type de ta demande dans le menu ci-dessous pour ouvrir un ticket privé avec le staff."
-                : "Clique sur le bouton ci-dessous pour ouvrir un ticket privé avec le staff.")
+            .setDescription(panneauTexte ?? t(guild, types.length ? "tickets.panneau_menu" : "tickets.panneau_bouton"))
             .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
 
         const composant = types.length
-            ? menuTypes(types)
+            ? menuTypes(types, langueDe(guild))
             : new Discord.ActionRowBuilder().addComponents(new Discord.ButtonBuilder()
                 .setCustomId("ticket")
-                .setLabel("Créer un ticket")
+                .setLabel(t(guild, "tickets.bouton_creer"))
                 .setStyle(Discord.ButtonStyle.Primary)
                 .setEmoji("🎫"))
 

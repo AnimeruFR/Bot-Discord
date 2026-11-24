@@ -1,4 +1,5 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
 const { formatReason } = require('../Fonctions/moderation')
 const db = require('../Fonctions/db')
 
@@ -29,7 +30,7 @@ module.exports = {
         })
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
+            .setColor(couleur(message.guild))
             .setTitle(`Avertissements de ${user.tag}`)
             .setThumbnail(user.displayAvatarURL())
             .setDescription(lignes.join("\n\n"))

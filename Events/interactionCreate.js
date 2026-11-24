@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const tickets = require('../Fonctions/tickets')
+const { t } = require('../Fonctions/i18n')
 const { onClicRole } = require('../Fonctions/rolesBoutons')
 const { onClicGiveaway } = require('../Fonctions/giveaways')
 
@@ -22,7 +23,7 @@ module.exports = async (bot, interaction) => {
             // Les permissions par défaut d'une slash commande peuvent être modifiées par un admin du serveur
             // (Paramètres > Intégrations) : on revérifie donc la permission réelle du membre à chaque appel
             if (typeof command.permission === "bigint" && interaction.inGuild() && !interaction.memberPermissions?.has(command.permission)) {
-                return await interaction.reply({ content: "Vous n'avez pas la permission d'utiliser cette commande !", flags: Discord.MessageFlags.Ephemeral })
+                return await interaction.reply({ content: t(interaction, "commun.permission"), flags: Discord.MessageFlags.Ephemeral })
             }
 
             return await command.run(bot, interaction, interaction.options)
@@ -44,7 +45,10 @@ module.exports = async (bot, interaction) => {
         console.error(`Erreur sur l'interaction ${interaction.commandName ?? interaction.customId ?? interaction.type} :`, err)
         if (!interaction.isRepliable()) return
 
-        const reponse = { content: "Une erreur est survenue, l'action n'a pas pu être effectuée.", flags: Discord.MessageFlags.Ephemeral }
+        // Sans traduction possible (base indisponible…), message en français
+        let texte = "Une erreur est survenue, l'action n'a pas pu être effectuée."
+        try { texte = t(interaction, "commun.erreur") } catch { /* repli ci-dessus */ }
+        const reponse = { content: texte, flags: Discord.MessageFlags.Ephemeral }
         if (interaction.replied || interaction.deferred) await interaction.followUp(reponse).catch(() => {})
         else await interaction.reply(reponse).catch(() => {})
     }

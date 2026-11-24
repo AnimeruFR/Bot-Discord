@@ -1,9 +1,13 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
+const { t, langueDe, traductionsCommande } = require('../Fonctions/i18n')
+
+// Description d'une commande dans la langue de la personne
+const description = (command, langue) => langue === "en" ? traductionsCommande(command.name)?.description ?? command.description : command.description
 
 module.exports = {
-
     name: "help",
-    description: "affiche les autres commandes avec leurs informations",
+    description: "Affiche les commandes avec leurs informations",
     permission: "Aucune",
     dm: true,
     category: "Information",
@@ -11,54 +15,47 @@ module.exports = {
         {
             type: "string",
             name: "commande",
-            description: "commande à afficher",
+            description: "Commande à afficher",
             required: false,
             autocomplete: true
         }
     ],
 
-    async run(bot,message, args) {
-        
-        let command;
-        if(args.getString("commande")) {
-            command = bot.commands.get(args.getString("commande"));
-            if(!command) return message.reply("Cette commande n'existe pas");
-        }
+    async run(bot, message, args) {
+        const langue = langueDe(message)
+        const nom = args.getString("commande")
+        const command = nom ? bot.commands.get(nom) : null
+        if (nom && !command) return message.reply({ content: t(langue, "help.inconnue"), flags: Discord.MessageFlags.Ephemeral })
 
-        if(!command) {
-            const categories = [];
-            bot.commands.forEach(command => {
-                if(!categories.includes(command.category)) categories.push(command.category)
-            })
-
-            const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle(`Commandes du bot`)
-            .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))
-            .setDescription(`Commandes disponibles : \`${bot.commands.size}\`\nCatégories disponibles : \`${categories.length}\``)
+        const embed = new Discord.EmbedBuilder()
+            .setColor(couleur(message.guild))
+            .setThumbnail(bot.user.displayAvatarURL())
             .setTimestamp()
-            .setFooter({text: "Commandes du robot"})
+            .setFooter({ text: t(langue, "help.pied") })
 
-            categories.sort().forEach(cat => {
-
-                const commands = bot.commands.filter(cmd => cmd.category === cat)
-                embed.addFields({name: `${cat}`,value: `${commands.map(cmd => `\`${cmd.name}\` : ${cmd.description}`).join("\n")}`})
-
-            })
-
-            await message.reply({embeds: [embed]})
-
+        if (!command) {
+            const categories = [...new Set(bot.commands.map(c => c.category))].sort()
+            embed.setTitle(t(langue, "help.titre"))
+                .setDescription(t(langue, "help.description", { commandes: bot.commands.size, categories: categories.length }))
+            for (const categorie of categories) {
+                let valeur = ""
+                for (const c of bot.commands.filter(c => c.category === categorie).values()) {
+                    const ligne = `\`${c.name}\` : ${description(c, langue)}`
+                    if (valeur.length + ligne.length + 1 > 1024) break // limite d'un champ d'embed : on ne coupe pas une ligne
+                    valeur += (valeur ? "\n" : "") + ligne
+                }
+                embed.addFields({ name: categorie, value: valeur || "—" })
+            }
         } else {
-            const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle(`Commandes \`${command.name}\``)
-            .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))
-            .setDescription(`Nom : \`${command.name}\`\nDescription : \`${command.description}\`\nPermission requise : \`${typeof command.permission !== "bigint" ? command.permission : new Discord.PermissionsBitField(command.permission).toArray(false)}\`\nCommande possible en DM : \`${command.dm ? "Oui" : "Non"}\`\nCatégorie : \`${command.category}\``)
-            .setTimestamp()
-            .setFooter({text: "Commandes du robot"})
-
-            await message.reply({embeds: [embed]})
-            
+            const permission = typeof command.permission === "bigint"
+                ? new Discord.PermissionsBitField(command.permission).toArray().join(", ")
+                : t(langue, "help.aucune")
+            embed.setTitle(t(langue, "help.commande_titre", { nom: command.name }))
+                .setDescription(t(langue, "help.commande_detail", {
+                    nom: command.name, description: description(command, langue), permission,
+                    dm: t(langue, command.dm ? "help.oui" : "help.non"), categorie: command.category
+                }))
         }
+        await message.reply({ embeds: [embed], flags: Discord.MessageFlags.Ephemeral })
     }
 }

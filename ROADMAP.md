@@ -96,7 +96,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
 - Rôles par boutons (en premier : pas d'intent privilégié), giveaways (tirage enregistré en base, qui survit au redémarrage), sondages, annonces programmées.
 - Bienvenue / au revoir **seulement si tu acceptes l'intent `GuildMembers`**, qui se coche dans le Developer Portal et que Discord justifie à la vérification.
 
-### Lot H – Configuration et langues (idées 18 à 20)
+### Lot H – Configuration et langues (idées 18 à 20) ✅ fait (traduction des réponses de modération : progressive)
 - `/config` interactive (boutons et menus) qui regroupe logs, tickets, sanctions et apparence.
 - Traductions FR/EN : `setNameLocalizations` / `setDescriptionLocalizations` pour les commandes, un dictionnaire `locales/fr.json` et `locales/en.json` pour les messages, langue lue depuis `interaction.locale` ou depuis la config du serveur.
 - Embeds personnalisables (couleur, texte du panneau de tickets).

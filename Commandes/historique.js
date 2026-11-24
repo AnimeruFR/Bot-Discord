@@ -1,4 +1,5 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
 const { formatReason, formatDuree } = require('../Fonctions/moderation')
 const db = require('../Fonctions/db')
 
@@ -38,7 +39,7 @@ module.exports = {
         if (tempban) lignes.unshift(`⏳ Ban temporaire en cours, fin <t:${Math.floor(tempban / 1000)}:R>`)
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
+            .setColor(couleur(message.guild))
             .setTitle(`Historique de ${user.tag}`)
             .setThumbnail(user.displayAvatarURL())
             .setDescription(lignes.join("\n\n").slice(0, 4096))

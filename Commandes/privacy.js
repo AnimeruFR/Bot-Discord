@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { couleur } = require('../Fonctions/apparence')
+const { t } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
 
@@ -29,31 +31,14 @@ module.exports = {
 
         const lien = process.env.PRIVACY_URL
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle("Données conservées par le bot")
-            .setDescription([
-                "Le bot n'utilise que des slash commandes : il **ne lit pas** les messages en continu.",
-                "",
-                "**Ce qui est enregistré, par serveur :**",
-                "• les avertissements (`/warn`) : membre, modérateur, raison, date ;",
-                "• l'historique des sanctions (warn, mute, kick, ban…) : membre, modérateur, raison, durée, date (2 ans maximum) ;",
-                "• les bans temporaires en cours (date de fin) ;",
-                "• les giveaways (participants, gagnants : 30 jours après la fin) et les annonces programmées (jusqu'à leur envoi) ;",
-                "• le suivi des tickets : auteur, staff qui l'a pris en charge, dates, note de 1 à 5 (90 jours après la suppression ; jamais le contenu) ;",
-                "• la configuration : salon de logs, tickets, sanctions automatiques, salons verrouillés ;",
-                "• la date de dernière ouverture d'un ticket (effacée dans les 24 h environ).",
-                "",
-                "Les transcripts de tickets ne sont pas gardés par le bot : ils sont envoyés dans le salon de logs du serveur.",
-                "",
-                "**Durée :** tant que le bot est sur le serveur. S'il est retiré, tout est effacé **30 jours** après. Les sauvegardes quotidiennes de la base sont gardées quelques jours (7 par défaut) puis remplacées.",
-                "**Effacement immédiat :** un administrateur peut utiliser `/privacy supprimer:True`.",
-                lien ? `\nPolitique de confidentialité complète : ${lien}` : ""
-            ].join("\n"))
+            .setColor(couleur(message.guild))
+            .setTitle(t(message, "privacy.titre"))
+            .setDescription(t(message, "privacy.description") + (lien ? `\n\n${t(message, "privacy.lien", { lien })}` : ""))
 
         if (message.inGuild()) {
             const mesWarns = db.countWarns(message.guild.id, message.user.id)
             const mesSanctions = db.countCases(message.guild.id, message.user.id)
-            embed.addFields({ name: "Te concernant sur ce serveur", value: `${mesWarns} avertissement(s) actif(s), ${mesSanctions} ligne(s) dans l'historique des sanctions` })
+            embed.addFields({ name: t(message, "privacy.vous_titre"), value: t(message, "privacy.vous", { warns: mesWarns, sanctions: mesSanctions }) })
         }
 
         await message.reply({ embeds: [embed], flags: EPHEMERAL })

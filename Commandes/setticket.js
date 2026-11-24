@@ -1,16 +1,15 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
-const { roleValide, categorieUtilisable } = require('../Fonctions/tickets')
+const { PERMISSION_TICKETS, refusCategorie, refusRoleStaff } = require('../Fonctions/config')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
-const P = Discord.PermissionFlagsBits
 
 module.exports = {
     name: "setticket",
     description: "Configure la catégorie et le rôle staff des tickets",
     // Le rôle staff obtient l'accès à tous les tickets : il faut pouvoir gérer le serveur, les salons ET les rôles
-    permission: P.ManageGuild | P.ManageChannels | P.ManageRoles,
+    permission: PERMISSION_TICKETS,
     dm: false,
     category: "Configuration",
     options: [
@@ -71,18 +70,8 @@ module.exports = {
             })
         }
 
-        if (categorie && !categorieUtilisable(categorie)) {
-            return message.reply({ content: `Je ne peux pas créer de salons dans ${categorie} (il me faut Voir les salons et Gérer les salons).`, flags: EPHEMERAL })
-        }
-        if (role) {
-            if (!roleValide(message.guild, role.id)) {
-                return message.reply({ content: "Ce rôle ne peut pas être le rôle staff (@everyone ou rôle d'un bot).", flags: EPHEMERAL })
-            }
-            // On ne peut pas donner l'accès aux tickets à un rôle égal ou supérieur au sien (ex : un rôle qu'on possède soi-même)
-            if (message.user.id !== message.guild.ownerId && role.comparePositionTo(message.member.roles.highest) >= 0) {
-                return message.reply({ content: "Vous ne pouvez choisir qu'un rôle inférieur à votre rôle le plus haut.", flags: EPHEMERAL })
-            }
-        }
+        const refus = (categorie && refusCategorie(categorie)) || (role && refusRoleStaff(message, role))
+        if (refus) return message.reply({ content: refus, flags: EPHEMERAL })
 
         db.setTicketConfig(message.guild.id, categorie?.id ?? null, role?.id ?? null)
         const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)

@@ -1,3 +1,5 @@
+const { t } = require('../Fonctions/i18n')
+
 module.exports = {
 
     name: "quoi",
@@ -7,6 +9,6 @@ module.exports = {
     category: "Information",
 
     async run(bot, message,args) {
-        await message.reply(`Feur`)
+        await message.reply(t(message, "quoi.reponse"))
     }
 }
