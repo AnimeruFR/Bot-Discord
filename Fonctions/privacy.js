@@ -2,6 +2,7 @@ const db = require('./db')
 
 const RETENTION = 30 * 24 * 60 * 60 * 1000 // données gardées 30 jours après le départ du bot (réinvitation par erreur)
 const JOUR = 24 * 60 * 60 * 1000
+const CONSERVATION_HISTORIQUE = 2 * 365 * JOUR
 
 // Le bot a quitté un serveur. Attention : Discord envoie aussi guildDelete quand un serveur
 // est seulement indisponible (panne) : dans ce cas on ne touche à rien.
@@ -51,6 +52,7 @@ function startPrivacySchedule(bot) {
             const quittes = bot.shard ? 0 : reconcile(serveurs)
             const effaces = purge(serveurs)
             db.purgeTicketCooldowns(Date.now() - 10 * 60 * 1000) // délais de tickets expirés
+            db.purgeOldCases(Date.now() - CONSERVATION_HISTORIQUE) // historique des sanctions de plus de 2 ans
             if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)
         } catch (err) {
             console.error("Erreur pendant la purge RGPD :", err.message)

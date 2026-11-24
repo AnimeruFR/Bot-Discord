@@ -252,7 +252,7 @@ assert.ok(db.guildsLeftBefore(Date.now() + 1).includes(G4))
 assert.deepStrictEqual(privacy.purge(new Set([G1, G2])).includes(G4), false, "pas effacé avant 30 jours")
 privacy.onGuildCreate({ id: G4 })
 assert.ok(!db.guildsLeftBefore(Date.now() + 1).includes(G4), "retour sur le serveur : suppression annulée")
-assert.strictEqual(db.deleteGuildData(G4), 1)
+assert.strictEqual(db.deleteGuildData(G4), 2, "le warn et sa ligne d'historique")
 console.log("OK : RGPD (panne, retour, purge à 30 jours, isolation)")
 
 // 12. Sauvegarde sur une vraie base fichier (processus séparé), rotation et restauration
@@ -288,3 +288,149 @@ try {
 } finally {
     fs.rmSync(dossierTest, { recursive: true, force: true })
 }
+
+// 13. Lot E : durées, historique des sanctions, seuils, verrouillage
+const { parseDuree, formatDuree } = require('../Fonctions/moderation')
+assert.strictEqual(parseDuree("1h", { max: 2 * 3600000 }).duree, 3600000)
+assert.ok(parseDuree("abc", { max: 1e9 }).erreur, "durée illisible refusée")
+assert.ok(parseDuree("30s", { max: 1e9 }).erreur, "moins d'une minute refusé par défaut")
+assert.ok(parseDuree("400d", { max: 365 * 86400000 }).erreur, "plus que le maximum refusé")
+assert.ok(parseDuree("-5m", { max: 1e9 }).erreur, "durée négative refusée")
+assert.strictEqual(formatDuree(90000000), "1 jour et 1 heure")
+assert.strictEqual(formatDuree(2 * 60000), "2 minutes")
+console.log("OK : durées")
+
+const G5 = "555555555555555553", U2 = "333333333333333334"
+const idWarn = db.addWarn(G5, U2, MOD, "insulte")
+const numeroKick = db.addCase(G5, { userId: U2, moderatorId: MOD, type: "kick", reason: "  " })
+let historique = db.listCases(G5, U2)
+assert.strictEqual(historique.length, 2, "le warn apparaît dans l'historique")
+assert.strictEqual(historique[0].id, numeroKick, "du plus récent au plus ancien")
+assert.strictEqual(historique[0].reason, "Aucune raison fournie")
+assert.strictEqual(historique[1].warn_id, idWarn)
+db.removeWarn(G5, idWarn)
+historique = db.listCases(G5, U2)
+assert.strictEqual(historique[1].reason, "(avertissement retiré)", "raison d'un warn retiré effacée de l'historique")
+assert.strictEqual(db.countCases(G2, U2), 0, "historique isolé par serveur")
+assert.strictEqual(db.purgeOldCases(Date.now() - 1000), 0, "rien de récent n'est purgé")
+console.log("OK : historique des sanctions")
+
+db.setThreshold(G5, 3, "mute", 3600000)
+db.setThreshold(G5, 3, "kick", null)
+assert.deepStrictEqual(db.listThresholds(G5).map(s => [s.warns, s.action]), [[3, "kick"]], "un seul seuil par nombre de warns")
+assert.strictEqual(db.getThreshold(G2, 3), null, "seuils isolés par serveur")
+
+db.setTempban(G5, U2, Date.now() + 1000)
+assert.ok(db.addLock(G5, "999999999999999990", { SendMessages: null }))
+assert.strictEqual(db.addLock(G5, "999999999999999990", {}), false, "un salon ne se verrouille qu'une fois")
+assert.strictEqual(db.deleteGuildData(G5), 5, "historique, seuils, tempbans et verrous effacés par /privacy")
+assert.strictEqual(db.listThresholds(G5).length, 0)
+console.log("OK : seuils, verrous et effacement RGPD des nouvelles tables")
+
+// Verrouillage : seuls les 5 droits de @everyone changent, et /unlock remet exactement l'état d'avant
+const verrou = require('../Fonctions/verrou')
+const { Flags } = Discord.PermissionsBitField
+const ow = (id, allow, deny) => ({ id, type: Discord.OverwriteType.Role, allow: new Discord.PermissionsBitField(allow), deny: new Discord.PermissionsBitField(deny) })
+const overwrites = new Discord.Collection([
+    [G5, ow(G5, Flags.AddReactions, Flags.CreatePrivateThreads)],
+    ["777777777777777770", ow("777777777777777770", Flags.SendMessages, 0n)]
+])
+const modifs = []
+const salonVerrou = {
+    id: "999999999999999991",
+    guild: { id: G5, roles: { everyone: { id: G5 } } },
+    permissionOverwrites: { cache: overwrites, edit: async (cible, droits) => modifs.push(droits) }
+}
+assert.deepStrictEqual(verrou.etatEveryone(salonVerrou), {
+    SendMessages: null, SendMessagesInThreads: null, CreatePublicThreads: null, CreatePrivateThreads: false, AddReactions: true
+})
+assert.deepStrictEqual(verrou.rolesQuiEcriventEncore(salonVerrou), ["<@&777777777777777770>"], "rôle qui garde le droit d'écrire signalé")
+
+// Tempbans, verrouillage et sanctions automatiques (asynchrones)
+const { traiterTempbans } = require('../Fonctions/tempbans')
+const { appliquerSeuil, marqueurTempban } = require('../Fonctions/sanctions')
+;(async () => {
+    assert.strictEqual(await verrou.verrouiller(salonVerrou, "test"), true)
+    assert.strictEqual(await verrou.verrouiller(salonVerrou, "test"), false, "double /lock refusé")
+    assert.deepStrictEqual(modifs[0], { SendMessages: false, SendMessagesInThreads: false, CreatePublicThreads: false, CreatePrivateThreads: false, AddReactions: false })
+    assert.strictEqual(await verrou.deverrouiller(salonVerrou, "test"), true)
+    assert.deepStrictEqual(modifs[1], { SendMessages: null, SendMessagesInThreads: null, CreatePublicThreads: null, CreatePrivateThreads: false, AddReactions: true }, "état d'avant restauré")
+    assert.strictEqual(await verrou.deverrouiller(salonVerrou, "test"), false, "rien à déverrouiller")
+    console.log("OK : /lock et /unlock")
+
+    const G6 = "555555555555555554", G7 = "555555555555555556"
+    const passe = Date.now() - 1000
+    const erreurDiscord = code => Object.assign(new Error(`code ${code}`), { code })
+    // A = tempban normal, B = re-banni à la main, C = déjà débanni, D = permission perdue,
+    // E = pas encore fini, F = marqueur imité (autre date que celle en base)
+    const bans = {
+        A: { user: { id: "A" }, reason: `${marqueurTempban(passe)} modo : spam` },
+        B: { user: { id: "B" }, reason: "modo : re-banni définitivement" },
+        D: { user: { id: "D" }, reason: `${marqueurTempban(passe)} modo : x` },
+        E: { user: { id: "E" }, reason: `${marqueurTempban(passe + 3600000)} modo : x` },
+        F: { user: { id: "F" }, reason: `${marqueurTempban(passe)} faux marqueur` }
+    }
+    const debannis = []
+    const guildTest = {
+        id: G6, available: true, channels: { cache: new Discord.Collection() },
+        bans: {
+            fetch: async ({ user }) => {
+                if (!bans[user]) throw erreurDiscord(Discord.RESTJSONErrorCodes.UnknownBan)
+                return bans[user]
+            },
+            remove: async user => {
+                if (user === "D") throw erreurDiscord(Discord.RESTJSONErrorCodes.MissingPermissions)
+                debannis.push(user)
+            }
+        }
+    }
+    for (const u of ["A", "B", "C", "D"]) db.setTempban(G6, u, passe)
+    db.setTempban(G6, "E", passe + 3600000)
+    db.setTempban(G6, "F", passe - 5)
+    db.setTempban(G7, "A", passe)
+    const botTest = { user: { id: "bot", tag: "bot" }, guilds: { cache: new Discord.Collection([[G6, guildTest]]) } }
+
+    assert.strictEqual(await traiterTempbans(botTest), 1, "un seul déban")
+    assert.deepStrictEqual(debannis, ["A"], "seul le vrai tempban expiré est levé")
+    assert.strictEqual(db.getTempban(G6, "A"), null)
+    assert.strictEqual(db.getTempban(G6, "B"), null, "re-banni à la main : entrée oubliée, pas de déban")
+    assert.strictEqual(db.getTempban(G6, "C"), null, "déjà débanni : on n'insiste pas")
+    assert.strictEqual(db.getTempban(G6, "D"), passe, "permission perdue : échéance d'origine gardée")
+    assert.ok(!db.expiredTempbans().some(t => t.user_id === "D"), "permission perdue : nouvel essai plus tard seulement")
+    assert.ok(db.getTempban(G6, "E"), "pas encore terminé : rien ne change")
+    assert.strictEqual(db.getTempban(G6, "F"), null, "marqueur imité : pas de déban")
+    assert.ok(db.getTempban(G7, "A"), "serveur absent : entrée gardée")
+    assert.strictEqual(db.listCases(G6, "A")[0].type, "unban")
+
+    // 6 h plus tard, la permission est revenue : le ban reporté est bien levé (le marqueur correspond toujours)
+    guildTest.bans.remove = async user => debannis.push(user)
+    assert.strictEqual(await traiterTempbans(botTest, Date.now() + 7 * 3600000), 2, "D (reporté) et E (arrivé à échéance) levés")
+    assert.deepStrictEqual(debannis.sort(), ["A", "D", "E"])
+    assert.strictEqual(db.getTempban(G6, "D"), null)
+    console.log("OK : débans automatiques (retard, déban manuel, re-ban, permission perdue puis retrouvée)")
+
+    // Seuil : le modérateur doit avoir lui-même le droit d'appliquer la sanction
+    db.setThreshold(G6, 2, "ban", null)
+    const membreCible = { id: U2, roles: { highest: role(1) }, bannable: true }
+    const interactionSeuil = perm => ({
+        guild: {
+            id: G6, ownerId: "owner", name: "test",
+            members: { fetch: async () => membreCible },
+            bans: { create: async () => { throw new Error("ne doit pas bannir") } }
+        },
+        user: { id: MOD, tag: "modo" }, client: { user: { id: "bot" } },
+        member: { roles: { highest: role(5) } },
+        memberPermissions: new Discord.PermissionsBitField(perm)
+    })
+    assert.strictEqual(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 1), null, "pas de seuil à 1 warn")
+    assert.match(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 2), /non appliquée.*permission/, "modérateur sans BanMembers : pas de ban")
+    assert.strictEqual(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 3), null, "seuil exact uniquement")
+    console.log("OK : sanctions automatiques (seuil exact, permission du modérateur)")
+
+    // Une erreur réseau ne doit jamais passer pour « membre absent » (la hiérarchie serait sautée)
+    const { fetchMember } = require('../Fonctions/moderation')
+    const guildErreur = code => ({ members: { fetch: async () => { throw erreurDiscord(code) } } })
+    assert.strictEqual(await fetchMember(guildErreur(Discord.RESTJSONErrorCodes.UnknownMember), U2), null)
+    await assert.rejects(fetchMember(guildErreur(500), U2), "erreur passagère relancée")
+    console.log("OK : relecture des membres (erreurs)")
+})()

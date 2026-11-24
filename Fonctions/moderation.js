@@ -1,4 +1,5 @@
 const Discord = require('discord.js')
+const ms = require('ms')
 
 // Raison affichée sans casser la mise en forme Discord (ni lien déguisé, ni titre, ni liste)
 function formatReason(reason) {
@@ -31,4 +32,37 @@ function checkHierarchy(interaction, target, action) {
     return null
 }
 
-module.exports = { formatReason, auditReason, checkHierarchy }
+// Relit le membre auprès de Discord (force : le cache peut avoir des rôles périmés). null s'il n'est pas sur le serveur.
+// Toute autre erreur (réseau, limite de débit) est relancée : la prendre pour « membre absent »
+// ferait sauter la vérification de hiérarchie.
+const ABSENT = [Discord.RESTJSONErrorCodes.UnknownMember, Discord.RESTJSONErrorCodes.UnknownUser]
+function fetchMember(guild, userId) {
+    return guild.members.fetch({ user: userId, force: true }).catch(err => {
+        if (ABSENT.includes(err.code)) return null
+        throw err
+    })
+}
+
+// "10m", "2h", "7d"… -> millisecondes. Renvoie { duree } ou { erreur }.
+function parseDuree(texte, { min = 60 * 1000, max }) {
+    const valeur = texte?.trim() ? ms(texte.trim()) : NaN
+    if (!Number.isFinite(valeur) || valeur <= 0) return { erreur: "Durée invalide ! Exemples : `10m`, `1h`, `2d`." }
+    if (valeur < min) return { erreur: `Durée trop courte (minimum ${formatDuree(min)}) !` }
+    if (valeur > max) return { erreur: `Durée trop longue (maximum ${formatDuree(max)}) !` }
+    return { duree: valeur }
+}
+
+// 90 000 000 ms -> "1 jour et 1 heure" (deux unités au plus, en français)
+const UNITES = [[86400000, "jour"], [3600000, "heure"], [60000, "minute"], [1000, "seconde"]]
+function formatDuree(duree) {
+    const parties = []
+    let reste = duree
+    for (const [taille, nom] of UNITES) {
+        const n = Math.floor(reste / taille)
+        if (n > 0 && parties.length < 2) parties.push(`${n} ${nom}${n > 1 ? "s" : ""}`)
+        reste -= n * taille
+    }
+    return parties.join(" et ") || "moins d'une seconde"
+}
+
+module.exports = { formatReason, auditReason, checkHierarchy, fetchMember, parseDuree, formatDuree }

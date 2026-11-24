@@ -68,7 +68,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
   5. Pages `docs/conditions.md` et `docs/confidentialite.md`, publiables avec GitHub Pages.
 - **Critères d'acceptation** : `npm test` vert ; `docker compose up` démarre le bot ; une sauvegarde se restaure ; quand le bot quitte un serveur, ses données sont supprimées (test en base mémoire).
 
-### Lot E – Modération avancée (idées 5 à 8, puis 10)
+### Lot E – Modération avancée (idées 5 à 8, puis 10) ✅ fait
 - **But** : un historique complet et des sanctions automatiques.
 - **Tâches** :
   - table `cases` (type, cible, modérateur, raison, durée, date d'expiration) alimentée par toutes les commandes ;

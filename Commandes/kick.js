@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
-const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { formatReason, auditReason, checkHierarchy, fetchMember } = require('../Fonctions/moderation')
 const { sendModLog } = require('../Fonctions/logs')
+const db = require('../Fonctions/db')
 
 module.exports = {
     name: "kick",
@@ -24,20 +25,25 @@ module.exports = {
     ],
 
     async run(bot, message, args) {
+        // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord
+        await message.deferReply()
         const user = args.getUser("membre")
-        const member = args.getMember("membre")
-        if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
+        const raisonBrute = args.getString("raison")
+        const reason = formatReason(raisonBrute)
 
-        const reason = formatReason(args.getString("raison"))
+        // Rôles relus auprès de Discord : la hiérarchie est vérifiée sur des données à jour
+        const member = await fetchMember(message.guild, user.id)
+        if (!member) return message.editReply("Ce membre n'est pas sur le serveur !")
 
         const erreur = checkHierarchy(message, member, "kick")
-        if (erreur) return message.reply(erreur)
-        if (!member.kickable) return message.reply("Je ne peux pas kick ce membre (rôle trop haut pour moi) !")
+        if (erreur) return message.editReply(erreur)
+        if (!member.kickable) return message.editReply("Je ne peux pas kick ce membre (rôle trop haut pour moi) !")
 
         await user.send(`Tu as été kick du serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
 
-        await member.kick(auditReason(message, args.getString("raison")))
-        await message.reply(`${message.user} a kick ${user} pour la raison : ***${reason}***`)
-        await sendModLog(message, { action: "kick", cible: user, raison: args.getString("raison") })
+        await member.kick(auditReason(message, raisonBrute))
+        const numero = db.addCase(message.guild.id, { userId: user.id, moderatorId: message.user.id, type: "kick", reason: raisonBrute })
+        await message.editReply(`${message.user} a kick ${user} pour la raison : ***${reason}*** (sanction n°${numero})`)
+        await sendModLog(message, { action: "kick", cible: user, raison: raisonBrute })
     }
 }

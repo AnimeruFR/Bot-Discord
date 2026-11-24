@@ -36,7 +36,9 @@ module.exports = {
                 "",
                 "**Ce qui est enregistré, par serveur :**",
                 "• les avertissements (`/warn`) : membre, modérateur, raison, date ;",
-                "• la configuration : salon de logs, catégorie et rôle staff des tickets ;",
+                "• l'historique des sanctions (warn, mute, kick, ban…) : membre, modérateur, raison, durée, date (2 ans maximum) ;",
+                "• les bans temporaires en cours (date de fin) ;",
+                "• la configuration : salon de logs, tickets, sanctions automatiques, salons verrouillés ;",
                 "• la date de dernière ouverture d'un ticket (effacée dans les 24 h environ).",
                 "",
                 "Les transcripts de tickets ne sont pas gardés par le bot : ils sont envoyés dans le salon de logs du serveur.",
@@ -48,7 +50,8 @@ module.exports = {
 
         if (message.inGuild()) {
             const mesWarns = db.countWarns(message.guild.id, message.user.id)
-            embed.addFields({ name: "Te concernant sur ce serveur", value: `${mesWarns} avertissement(s) enregistré(s)` })
+            const mesSanctions = db.countCases(message.guild.id, message.user.id)
+            embed.addFields({ name: "Te concernant sur ce serveur", value: `${mesWarns} avertissement(s) actif(s), ${mesSanctions} ligne(s) dans l'historique des sanctions` })
         }
 
         await message.reply({ embeds: [embed], flags: EPHEMERAL })
@@ -64,7 +67,7 @@ async function supprimer(interaction) {
         new Discord.ButtonBuilder().setCustomId(`privacy-non-${interaction.id}`).setLabel("Annuler").setStyle(Discord.ButtonStyle.Secondary)
     )
     const reponse = await interaction.reply({
-        content: "Effacer **définitivement** toutes les données de ce serveur (avertissements, salon de logs, configuration des tickets) ? Cette action est irréversible (seules les sauvegardes récentes les contiennent encore, jusqu'à leur remplacement).",
+        content: "Effacer **définitivement** toutes les données de ce serveur (avertissements, historique des sanctions, bans temporaires en cours, configuration) ? Les bans temporaires ne seront alors plus levés automatiquement. Cette action est irréversible (seules les sauvegardes récentes les contiennent encore, jusqu'à leur remplacement).",
         components: [boutons],
         flags: EPHEMERAL,
         withResponse: true
