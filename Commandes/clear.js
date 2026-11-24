@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { ticketOwnerId } = require('../Fonctions/tickets')
+const { sendModLog } = require('../Fonctions/logs')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -62,5 +63,6 @@ module.exports = {
         let texte = `Suppression de ${messages.size} message(s) effectuée dans le salon ${channel} !`
         if (messages.size < number) texte += "\nLes autres messages ont plus de 14 jours ou n'existent pas."
         await message.editReply(texte)
+        await sendModLog(message, { action: "clear", details: `${messages.size} message(s) supprimé(s) dans ${channel}` })
     }
 }

@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const db = require('./db')
+const { sendModLog } = require('./logs')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -8,7 +10,6 @@ const DELAI_ENTRE_TICKETS = 10 * 60 * 1000 // 10 minutes entre deux ouvertures p
 const MAX_TICKETS_OUVERTS = 50 // par serveur
 
 const enCours = new Set() // ouvertures/fermetures en cours (évite les doubles clics)
-const derniereOuverture = new Map() // "serveur-membre" -> date de la dernière ouverture
 
 // Le rôle staff configuré, s'il existe et n'est ni @everyone ni un rôle géré par une intégration
 function staffRoleId(guild) {
@@ -35,11 +36,6 @@ function allTickets(guild) {
     return guild.channels.cache.filter(c => ticketOwnerId(c))
 }
 
-function purgeCooldowns() {
-    const limite = Date.now() - DELAI_ENTRE_TICKETS
-    for (const [cle, date] of derniereOuverture) if (date < limite) derniereOuverture.delete(cle)
-}
-
 async function openTicket(bot, interaction) {
     if (!interaction.inCachedGuild()) return
 
@@ -56,8 +52,9 @@ async function openTicket(bot, interaction) {
     }
     if (enCours.has(cle)) return interaction.reply({ content: "Ton ticket est en cours de création…", flags: EPHEMERAL })
 
-    purgeCooldowns()
-    const attente = (derniereOuverture.get(cle) ?? 0) + DELAI_ENTRE_TICKETS - Date.now()
+    // Délai stocké en base : il survit à un redémarrage du bot
+    db.purgeTicketCooldowns(Date.now() - DELAI_ENTRE_TICKETS)
+    const attente = db.getTicketCooldown(guild.id, user.id) + DELAI_ENTRE_TICKETS - Date.now()
     if (attente > 0) return interaction.reply({ content: `Merci d'attendre ${Math.ceil(attente / 60000)} min avant d'ouvrir un nouveau ticket.`, flags: EPHEMERAL })
     if (tickets.size >= MAX_TICKETS_OUVERTS) return interaction.reply({ content: "Trop de tickets sont ouverts en ce moment, réessaie plus tard.", flags: EPHEMERAL })
 
@@ -83,7 +80,6 @@ async function openTicket(bot, interaction) {
             permissionOverwrites,
             reason: `Ticket ouvert par ${user.tag}`
         })
-        derniereOuverture.set(cle, Date.now())
 
         const embed = new Discord.EmbedBuilder()
             .setColor(bot.color)
@@ -101,6 +97,13 @@ async function openTicket(bot, interaction) {
 
         await channel.send({ embeds: [embed], components: [btn] })
         await interaction.editReply(`Votre ticket a correctement été créé : ${channel}`)
+
+        // En dernier : une erreur de la base ne doit pas laisser un ticket sans bouton de fermeture
+        try {
+            db.setTicketCooldown(guild.id, user.id)
+        } catch (err) {
+            console.error("Impossible d'enregistrer le délai du ticket :", err.message)
+        }
     } finally {
         enCours.delete(cle)
     }
@@ -141,6 +144,7 @@ async function closeTicket(bot, interaction) {
         await owner?.send(`Votre ticket sur le serveur ${interaction.guild.name} a été fermé.`).catch(() => {})
 
         await channel.delete(`Ticket supprimé par ${interaction.user.tag}`)
+        await sendModLog(interaction, { action: "ticket", cible: owner, details: `Ticket \`#${channel.name}\` supprimé` })
     } finally {
         enCours.delete(cle)
     }

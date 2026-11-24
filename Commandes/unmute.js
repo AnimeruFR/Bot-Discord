@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
     name: "unmute",
@@ -36,6 +37,7 @@ module.exports = {
 
         await member.timeout(null, auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a unmute ${user} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "unmute", cible: user, raison: args.getString("raison") })
         await user.send(`Tu as été unmute sur le serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
     }
 }

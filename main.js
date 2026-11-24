@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { loadToken } = require('./Fonctions/env')
+const db = require('./Fonctions/db')
 const loadCommands = require('./Loader/loadCommands')
 const loadEvents = require('./Loader/loadEvents')
 
@@ -31,6 +32,7 @@ async function arreter(signal) {
     setTimeout(() => process.exit(1), 5000).unref()
     try {
         await bot.destroy()
+        db.close()
         process.exit(0)
     } catch (err) {
         console.error("Erreur pendant l'arrêt :", err)

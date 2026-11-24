@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const ms = require('ms')
 const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 const DUREE_MAX = 28 * 24 * 60 * 60 * 1000 // limite de Discord : 28 jours
 
@@ -51,6 +52,7 @@ module.exports = {
 
         await member.timeout(duree, auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a mute ${user} pendant ${temps} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "mute", cible: user, raison: args.getString("raison"), details: `Durée : ${temps}` })
         await user.send(`Tu as été mute sur le serveur ${message.guild.name} pendant ${temps} pour la raison : ***${reason}***`).catch(() => {})
     }
 }

@@ -33,7 +33,7 @@
 Points de la revue **volontairement reportés** (ce sont des fonctionnalités, pas des failles) :
 - Confirmation avant suppression d'un ticket + transcript → lot C. Le transcript demande l'intent privilégié `MessageContent`.
 - Liens bruts dans les raisons relayées en MP : seuls les modérateurs écrivent les raisons, et ils sont de confiance. Lien déguisé et mentions sont déjà neutralisés.
-- Cooldown de ticket perdu au redémarrage : il serait persisté avec la base SQLite du lot B.
+- ~~Cooldown de ticket perdu au redémarrage~~ : corrigé au lot B.
 - MP envoyé avant le kick/ban : c'est obligatoire. Après l'action, le bot ne partage plus de serveur avec la personne et le MP échoue.
 
 ### Ce que tu dois faire toi-même pour S1
@@ -51,7 +51,7 @@ Déjà faites dans ce lot (en plus de la sécurité) :
 - Le propriétaire du serveur ne pouvait pas modérer un membre plus haut que lui dans les rôles.
 - Le token se lit dans `.env` (`process.loadEnvFile`), avec un message clair s'il manque.
 - `ready` → `clientReady` (ancien nom déprécié), `ephemeral: true` → `flags` (API déprécié), `@discordjs/rest` retiré (inclus dans discord.js).
-- README réécrit (il était encodé en UTF-16, illisible sur GitHub).
+- README réécrit (il était encodé en UTF-16 ; la conversion en UTF-8 n'a réellement été faite qu'au lot B).
 - `npm run check` : vérifie hors ligne les commandes et les fonctions de sécurité.
 
 À faire, par lots (dis « fais le lot N ») :
@@ -63,10 +63,24 @@ Déjà faites dans ce lot (en plus de la sécurité) :
 4. ✅ ESLint (`npm run lint`, règles anti-`eval`), `npm test`, CI GitHub Actions (Node 20 et 22, lint + check + `npm audit`, droits en lecture seule, sans secret) et Dependabot.
    Prettier écarté : il réécrirait tous les fichiers (guillemets mélangés) pour un gain faible.
 
-**Lot B – Modération persistante**
-5. `/warn` n'enregistre rien : stocker les avertissements (SQLite via `better-sqlite3`) + `/warns membre` et `/unwarn`.
-6. Salon de logs de modération (qui a fait quoi, quand, pourquoi).
-7. Confirmation par bouton avant un `/ban`.
+**Lot B – Modération persistante** ✅ fait
+5. ✅ Warns enregistrés en SQLite (`node:sqlite`, sans dépendance native) + `/warns membre` et `/unwarn numero`. Requêtes préparées (pas d'injection SQL) et toujours filtrées par serveur : un serveur ne voit ni ne supprime les warns d'un autre. Un modérateur ne peut retirer ni ses propres warns, ni ceux d'un supérieur.
+6. ✅ Salon de logs par serveur (`/setlogs`) : ban, unban, kick, mute, unmute, warn, unwarn, clear, suppression de ticket. Tout changement du salon de logs est lui-même tracé dans l'ancien et le nouveau salon. Un log raté ne bloque jamais l'action.
+7. ✅ Confirmation par bouton (éphémère, 30 s, réservée au modérateur) avant un `/ban`. Après le clic, la permission, la hiérarchie et l'état du ban sont revérifiés.
+- ✅ Le délai entre deux tickets est stocké en base et survit au redémarrage.
+- Node 22.13 minimum (Node 20 n'est plus maintenu depuis avril 2026), CI sur Node 22 et 24.
+
+Revue critique du lot B, points corrigés :
+- `DATABASE_PATH` du `.env` était ignoré ;
+- les rôles étaient lus dans un cache périmé, ce qui permettait de contourner la hiérarchie avec `/unwarn` ;
+- la permission de bannir n'était pas revérifiée après la confirmation ;
+- on pouvait couper les logs sans laisser de trace ;
+- deux modérateurs pouvaient retirer le même warn ;
+- un ticket pouvait rester sans bouton de fermeture.
+
+Points écartés :
+- numéros de warn propres à chaque serveur (fuite négligeable du volume) ;
+- détection des rôles « pour tout le monde » sur le salon de logs (impossible à rendre fiable, le cas `@everyone` est couvert).
 
 **Lot C – Tickets**
 8. Transcript du ticket (fichier .txt envoyé dans un salon de logs) avant suppression.

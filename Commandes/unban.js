@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
     name: "unban",
@@ -30,5 +31,6 @@ module.exports = {
 
         await message.guild.members.unban(user, auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a unban ${user.tag} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "unban", cible: user, raison: args.getString("raison") })
     }
 }

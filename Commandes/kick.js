@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
     name: "kick",
@@ -37,5 +38,6 @@ module.exports = {
 
         await member.kick(auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a kick ${user} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "kick", cible: user, raison: args.getString("raison") })
     }
 }

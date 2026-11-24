@@ -1,4 +1,7 @@
 // Vérifications hors ligne : aucune connexion à Discord, aucun token nécessaire
+// Base en mémoire : les tests ne touchent jamais à data/bot.db
+process.env.DATABASE_PATH = ":memory:"
+
 const assert = require('assert')
 const Discord = require('discord.js')
 const loadCommands = require('../Loader/loadCommands')
@@ -48,3 +51,34 @@ assert.strictEqual(ticketOwnerId(salon("ticket-bob", "123456789012345678", Disco
 assert.strictEqual(ticketOwnerId(salon("ferme-bob", "123456789012345678")), "123456789012345678")
 assert.strictEqual(ticketOwnerId(null), null)
 console.log("OK : détection des tickets")
+
+// 5. Base de données
+const db = require('../Fonctions/db')
+const G1 = "111111111111111111", G2 = "222222222222222222", U = "333333333333333333", MOD = "444444444444444444"
+
+const w1 = db.addWarn(G1, U, MOD, "spam")
+const w2 = db.addWarn(G1, U, MOD, "'); DROP TABLE warns; --")
+db.addWarn(G2, U, MOD, "autre serveur")
+assert.strictEqual(db.countWarns(G1, U), 2)
+assert.strictEqual(db.listWarns(G1, U)[0].reason, "'); DROP TABLE warns; --", "injection SQL stockée comme simple texte")
+assert.strictEqual(db.listWarns(G1, U, 1).length, 1, "limite respectée")
+assert.strictEqual(db.getWarn(G2, w1), undefined, "un serveur ne voit pas les warns d'un autre")
+assert.strictEqual(db.removeWarn(G2, w1), false, "un serveur ne supprime pas les warns d'un autre")
+assert.strictEqual(db.removeWarn(G1, w2), true)
+assert.strictEqual(db.countWarns(G1, U), 1)
+assert.strictEqual(db.countWarns(G2, U), 1)
+console.log("OK : warns (isolation par serveur, injection SQL)")
+
+assert.strictEqual(db.getLogChannel(G1), null)
+db.setLogChannel(G1, "555555555555555555")
+assert.strictEqual(db.getLogChannel(G1), "555555555555555555")
+db.setLogChannel(G1, null)
+assert.strictEqual(db.getLogChannel(G1), null)
+console.log("OK : salon de logs")
+
+assert.strictEqual(db.getTicketCooldown(G1, U), 0)
+db.setTicketCooldown(G1, U)
+assert.ok(Date.now() - db.getTicketCooldown(G1, U) < 1000)
+db.purgeTicketCooldowns(Date.now() + 1)
+assert.strictEqual(db.getTicketCooldown(G1, U), 0, "purge des vieux délais")
+console.log("OK : délai des tickets")
