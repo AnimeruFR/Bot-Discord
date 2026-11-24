@@ -1,8 +1,11 @@
 const Discord = require('discord.js')
 const ms = require('ms')
+const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
+
+const DUREE_MAX = 28 * 24 * 60 * 60 * 1000 // limite de Discord : 28 jours
 
 module.exports = {
-
     name: "mute",
     description: "mute un membre",
     permission: Discord.PermissionFlagsBits.ModerateMembers,
@@ -13,49 +16,43 @@ module.exports = {
             type: "user",
             name: "membre",
             description: "Le membre à mute",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "temps",
-            description: "Le temps à mute",
+            description: "Le temps du mute (ex : 10m, 1h, 2d)",
             required: true,
-            autocomplete: false
+            maxLength: 20
         }, {
             type: "string",
             name: "raison",
             description: "La raison du mute",
             required: false,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
-    async run(bot,message, args) {
-        
-        let user = args.getUser("membre")
-        if(!user) return message.reply("Le membre n'existe pas !")
-        let member = message.guild.members.cache.get(user.id)
-        if(!member) return message.reply("Pas de membre à mute !")
+    async run(bot, message, args) {
+        const user = args.getUser("membre")
+        const member = args.getMember("membre")
+        if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
 
-        let time = args.getString("temps")
-        if(!time) return message.reply("Pas de temps indiqué !")
-        if(isNaN(ms(time))) return message.reply("Le temps n'est pas un nombre!")
-        if(ms(time) > 2419200000) return message.reply("Le temps est trop long !")
+        const texteTemps = args.getString("temps").trim()
+        const duree = texteTemps ? ms(texteTemps) : NaN
+        if (!Number.isFinite(duree) || duree < 1000) return message.reply("Durée invalide ! Exemples : `10m`, `1h`, `2d`.")
+        if (duree > DUREE_MAX) return message.reply("Le temps est trop long (28 jours maximum) !")
+        const temps = ms(duree, { long: true })
 
-        let reason = args.getString("raison")
-        if(!reason) reason = "Aucune raison fournie !"
+        const reason = formatReason(args.getString("raison"))
 
-        if(message.user.id === user.id) return message.reply("Vous ne pouvez vous mute vous-même !!!")
-        if((await message.guild.fetchOwner()).id === user.id) return message.reply("Vous ne pouvez pas mute le propriétaire du serveur !")
-        if(!member.moderatable) return message.reply("Impossible de mute ce membre !")
-        if(member.roles.highest.position >= message.member.roles.highest.position) return message.reply("Vous ne pouvez pas mute ce membre!")
-        if(member.isCommunicationDisabled()) return message.reply("Ce membre est déjà mute !")
+        const erreur = checkHierarchy(message, member, "mute")
+        if (erreur) return message.reply(erreur)
+        if (!member.moderatable) return message.reply("Je ne peux pas mute ce membre (rôle trop haut pour moi) !")
+        if (member.isCommunicationDisabled()) return message.reply("Ce membre est déjà mute !")
 
-        try{await user.send(`Tu as été mute du serveur ${message.guild.name} par ${message.user.tag} pendant ${time} pour la raison : ***${reason}*** !`)} catch(err) {}
-
-        await message.reply(`${message.user} a mute ${user} pendant ${time} pour la raison : ***${reason}***`)
-
-        await member.timeout(ms(time), reason)
-
+        await member.timeout(duree, auditReason(message, args.getString("raison")))
+        await message.reply(`${message.user} a mute ${user} pendant ${temps} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "mute", cible: user, raison: args.getString("raison"), details: `Durée : ${temps}` })
+        await user.send(`Tu as été mute sur le serveur ${message.guild.name} pendant ${temps} pour la raison : ***${reason}***`).catch(() => {})
     }
 }

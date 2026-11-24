@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
     name: "kick",
@@ -11,36 +13,31 @@ module.exports = {
             type: "user",
             name: "membre",
             description: "Le membre à kick",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "raison",
             description: "La raison du kick",
             required: true,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
     async run(bot, message, args) {
-        let user = args.getUser("membre")
-        if(!user) return message.reply("Le membre n'existe pas !")
-        let member = message.guild.members.cache.get(user.id)
-        if(!member) return message.reply("Pas de membre à kick !")
+        const user = args.getUser("membre")
+        const member = args.getMember("membre")
+        if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
 
-        let reason = args.getString("raison")
-        if(!reason) reason = "Aucune raison fournie";
+        const reason = formatReason(args.getString("raison"))
 
-        if(message.user.id === user.id) return message.reply("Vous ne pouvez pas vous kick vous-même !")
-        if((await message.guild.fetchOwner()).id === user.id) return message.reply("Ne kick pas le propriétaire du serv !")
-        if(member && !member.kickable) return message.reply("Ce membre ne peut pas être kick !")
-        if(member && message.member.roles.highest.position <= member.roles.highest.position) return message.reply("Vous ne pouvez pas kick cette personne !")
+        const erreur = checkHierarchy(message, member, "kick")
+        if (erreur) return message.reply(erreur)
+        if (!member.kickable) return message.reply("Je ne peux pas kick ce membre (rôle trop haut pour moi) !")
 
-        try{await user.send(`Tu as été kick du serveur ${message.guild.name} par ${message.user.tag} pour la raison : ***${reason}*** !`)} catch(err) {}
+        await user.send(`Tu as été kick du serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
 
+        await member.kick(auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a kick ${user} pour la raison : ***${reason}***`)
-
-        await member.kick(reason)
-        
+        await sendModLog(message, { action: "kick", cible: user, raison: args.getString("raison") })
     }
 }

@@ -1,77 +1,41 @@
 const Discord = require('discord.js')
+const { openTicket, closeTicket } = require('../Fonctions/tickets')
 
-module.exports = async(bot, interaction) => {
-
-    if(interaction.type === Discord.InteractionType.ApplicationCommandAutocomplete){
-
-        let entry = interaction.options.getFocused()
-
-        if(interaction.commandName){
-            let choices = bot.commands.filter(cmd => cmd.name.includes(entry))
-            await interaction.respond(entry === "" ? bot.commands.map(cmd => ({name: cmd.name, value: cmd.name})) : choices.map(choice => ({name: choice, value: choice})))
-        }
-    }
-
-    if(interaction.type === Discord.InteractionType.ApplicationCommand) {
-        let command = require(`../Commandes/${interaction.commandName}`)
-        command.run(bot, interaction, interaction.options)
-    }
-
-    if(interaction.isButton()) {
-        if(interaction.customId === "ticket"){
-
-            let channel = await interaction.guild.channels.create({
-                name : `ticket-${interaction.user.username}`,
-                type : Discord.ChannelType.GuildText
-            })
-            
-            await channel.setParent(interaction.channel.parent.id)
-
-            await channel.permissionOverwrites.create(interaction.guild.roles.everyone, {
-                ViewChannel: false
-            })
-
-            await channel.permissionOverwrites.create(interaction.user, {
-                ViewChannel: true,
-                SendMessages: true,
-                ReadMessageHistory: true,
-                AttachFiles: true,
-                EmbedLinks: true
-            })
-
-            await channel.permissionOverwrites.create("1105190954710868070", {
-                ViewChannel: true,
-                SendMessages: true,
-                ReadMessageHistory: true,
-                AttachFiles: true,
-                EmbedLinks: true
-            })
-
-            await channel.setTopic(interaction.user.id)
-            await interaction.reply({content: `Votre ticket a correctement été créé : ${channel}`, ephemeral: true})
-
-            let Embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle("Ticket")
-            .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))
-            .setDescription("Bienvenue dans votre ticket woullah")
-            .setTimestamp()
-            .setFooter({text: bot.user.username, iconURL: bot.user.displayAvatarURL({dynamic: true})})
-
-            const btn = new Discord.ActionRowBuilder().addComponents(new Discord.ButtonBuilder()
-            .setCustomId("close")
-            .setLabel("Fermer le ticket")
-            .setStyle(Discord.ButtonStyle.Danger)
-            .setEmoji("🗑️"))
-
-            await channel.send({embeds: [Embed], components: [btn]})
+module.exports = async (bot, interaction) => {
+    try {
+        if (interaction.isAutocomplete()) {
+            const entry = interaction.options.getFocused().toLowerCase()
+            const choices = bot.commands
+                .filter(cmd => cmd.name.includes(entry))
+                .first(25)
+                .map(cmd => ({ name: cmd.name, value: cmd.name }))
+            return await interaction.respond(choices)
         }
 
-        if(interaction.customId === "close"){
-            let user = bot.users.cache.get(interaction.channel.topic)
-            try{await user.send(`Votre ticker a été fermé`)} catch(err) {}
+        if (interaction.isChatInputCommand()) {
+            // On ne charge que les commandes connues (jamais un require construit depuis l'interaction)
+            const command = bot.commands.get(interaction.commandName)
+            if (!command) return
 
-            await interaction.channel.delete()
+            // Les permissions par défaut d'une slash commande peuvent être modifiées par un admin du serveur
+            // (Paramètres > Intégrations) : on revérifie donc la permission réelle du membre à chaque appel
+            if (typeof command.permission === "bigint" && interaction.inGuild() && !interaction.memberPermissions?.has(command.permission)) {
+                return await interaction.reply({ content: "Vous n'avez pas la permission d'utiliser cette commande !", flags: Discord.MessageFlags.Ephemeral })
+            }
+
+            return await command.run(bot, interaction, interaction.options)
         }
+
+        if (interaction.isButton()) {
+            if (interaction.customId === "ticket") return await openTicket(bot, interaction)
+            if (interaction.customId === "close") return await closeTicket(bot, interaction)
+        }
+    } catch (err) {
+        console.error(`Erreur sur l'interaction ${interaction.commandName ?? interaction.customId ?? interaction.type} :`, err)
+        if (!interaction.isRepliable()) return
+
+        const reponse = { content: "Une erreur est survenue, l'action n'a pas pu être effectuée.", flags: Discord.MessageFlags.Ephemeral }
+        if (interaction.replied || interaction.deferred) await interaction.followUp(reponse).catch(() => {})
+        else await interaction.reply(reponse).catch(() => {})
     }
 }

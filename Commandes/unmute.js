@@ -1,8 +1,8 @@
 const Discord = require('discord.js')
-const ms = require('ms')
+const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
-
     name: "unmute",
     description: "unmute un membre",
     permission: Discord.PermissionFlagsBits.ModerateMembers,
@@ -13,35 +13,31 @@ module.exports = {
             type: "user",
             name: "membre",
             description: "Le membre à unmute",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "raison",
             description: "La raison du unmute",
             required: false,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
-    async run(bot,message, args) {
-        
-        let user = args.getUser("membre")
-        if(!user) return message.reply("Le membre n'existe pas !")
-        let member = message.guild.members.cache.get(user.id)
-        if(!member) return message.reply("Pas de membre à unmute !")
+    async run(bot, message, args) {
+        const user = args.getUser("membre")
+        const member = args.getMember("membre")
+        if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
 
-        let reason = args.getString("raison")
-        if(!reason) reason = "Aucune raison fournie !"
+        const reason = formatReason(args.getString("raison"))
 
-        if(!member.moderatable) return message.reply("Impossible de unmute ce membre !")
-        if(message.member.roles.highest.comparePositionTo(member.roles.highest) <= 0) return message.reply("Vous ne pouvez pas unmute ce membre !")
-        if(!member.isCommunicationDisabled()) return message.reply("Ce membre n'est pas mute !")
+        const erreur = checkHierarchy(message, member, "unmute")
+        if (erreur) return message.reply(erreur)
+        if (!member.moderatable) return message.reply("Je ne peux pas unmute ce membre (rôle trop haut pour moi) !")
+        if (!member.isCommunicationDisabled()) return message.reply("Ce membre n'est pas mute !")
 
-        try {await user.send(`Vous avez été unmute par ${message.user.tag} pour la raison : ***${reason}*** !`)} catch(err) {}
-
+        await member.timeout(null, auditReason(message, args.getString("raison")))
         await message.reply(`${message.user} a unmute ${user} pour la raison : ***${reason}***`)
-        
-        await member.timeout(null, reason)
+        await sendModLog(message, { action: "unmute", cible: user, raison: args.getString("raison") })
+        await user.send(`Tu as été unmute sur le serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
     }
 }

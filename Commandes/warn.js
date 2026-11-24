@@ -1,9 +1,12 @@
 const Discord = require('discord.js')
+const { formatReason, checkHierarchy } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
+const db = require('../Fonctions/db')
 
 module.exports = {
     name: "warn",
     description: "Warn un membre",
-    permission: Discord.PermissionFlagsBits.ManageMessages,
+    permission: Discord.PermissionFlagsBits.ModerateMembers,
     dm: false,
     category: "Modération",
     options: [
@@ -11,35 +14,36 @@ module.exports = {
             type: "user",
             name: "membre",
             description: "Le membre à warn",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "raison",
             description: "La raison du warn",
             required: false,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
     async run(bot, message, args) {
-        let user = args.getUser("membre")
-        if(!user) return message.reply("Pas de membre !")
-        let member = message.guild.members.cache.get(user.id)
-        if(!member) return message.reply("Pas de membre !")
+        const user = args.getUser("membre")
+        const member = args.getMember("membre")
+        if (!member) return message.reply("Ce membre n'est pas sur le serveur !")
 
-        let reason = args.getString("raison")
-        if(!reason) reason = "Pas de raison fournis."
+        const reason = formatReason(args.getString("raison"))
 
-        if(message.user.id === user.id) return message.reply("Vous ne pouvez pas vous warn vous-même !")
-        if((await message.guild.fetchOwner()).id === user.id) return message.reply("Ne warn pas le propriétaire du serv !")
-        if(member && message.member.roles.highest.position <= member.roles.highest.position) return message.reply("Vous ne pouvez pas warn cette personne !")
+        const erreur = checkHierarchy(message, member, "warn")
+        if (erreur) return message.reply(erreur)
 
-        try{
-            await user.send(`${message.user.tag} vous a warn sur le serveur ${message.guild.name}, pour la raison : \`${reason}\``)
-        }
-        catch(error){}
-        
-        await message.reply(`Vous avez warn ${user} pour la raison : \`${reason}\` avec succès !`)
+        // On enregistre la raison brute : elle est échappée au moment de l'affichage
+        const raisonBrute = args.getString("raison")?.trim() || "Aucune raison fournie"
+        const id = db.addWarn(message.guild.id, user.id, message.user.id, raisonBrute)
+        const total = db.countWarns(message.guild.id, user.id)
+
+        const prevenu = await user.send(`Tu as reçu un avertissement sur le serveur ${message.guild.name} pour la raison : ***${reason}***`)
+            .then(() => true)
+            .catch(() => false)
+
+        await message.reply(`${message.user} a warn ${user} pour la raison : ***${reason}*** (warn n°${id}, ${total} au total)${prevenu ? "" : "\n(Le membre n'a pas pu être prévenu en MP.)"}`)
+        await sendModLog(message, { action: "warn", cible: user, raison: raisonBrute, details: `Warn n°${id}, ${total} au total` })
     }
 }

@@ -1,0 +1,79 @@
+const Discord = require('discord.js')
+const db = require('../Fonctions/db')
+const { sendModLog } = require('../Fonctions/logs')
+const { roleValide, categorieUtilisable } = require('../Fonctions/tickets')
+
+const EPHEMERAL = Discord.MessageFlags.Ephemeral
+const P = Discord.PermissionFlagsBits
+
+module.exports = {
+    name: "setticket",
+    description: "Configure la catégorie et le rôle staff des tickets",
+    // Le rôle staff obtient l'accès à tous les tickets : il faut pouvoir gérer le serveur, les salons ET les rôles
+    permission: P.ManageGuild | P.ManageChannels | P.ManageRoles,
+    dm: false,
+    category: "Configuration",
+    options: [
+        {
+            type: "channel",
+            name: "categorie",
+            description: "La catégorie où créer les tickets",
+            required: false,
+            channelTypes: [Discord.ChannelType.GuildCategory]
+        }, {
+            type: "role",
+            name: "staff",
+            description: "Le rôle qui voit et gère les tickets",
+            required: false
+        }, {
+            type: "boolean",
+            name: "reinitialiser",
+            description: "Revenir aux valeurs par défaut (catégorie du panneau, rôle du .env)",
+            required: false
+        }
+    ],
+
+    async run(bot, message, args) {
+        const categorie = args.getChannel("categorie")
+        const role = args.getRole("staff")
+
+        if (args.getBoolean("reinitialiser")) {
+            if (categorie || role) return message.reply({ content: "Utilise `reinitialiser` seul, sans catégorie ni rôle.", flags: EPHEMERAL })
+            db.resetTicketConfig(message.guild.id)
+            await message.reply({ content: "Configuration des tickets réinitialisée (catégorie du panneau, rôle du .env).", flags: EPHEMERAL })
+            return sendModLog(message, { action: "config", details: "Configuration des tickets réinitialisée" })
+        }
+        if (!categorie && !role) {
+            const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)
+            return message.reply({
+                content: `Configuration actuelle – Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`,
+                flags: EPHEMERAL
+            })
+        }
+
+        if (categorie && !categorieUtilisable(categorie)) {
+            return message.reply({ content: `Je ne peux pas créer de salons dans ${categorie} (il me faut Voir les salons et Gérer les salons).`, flags: EPHEMERAL })
+        }
+        if (role) {
+            if (!roleValide(message.guild, role.id)) {
+                return message.reply({ content: "Ce rôle ne peut pas être le rôle staff (@everyone ou rôle d'un bot).", flags: EPHEMERAL })
+            }
+            // On ne peut pas donner l'accès aux tickets à un rôle égal ou supérieur au sien (ex : un rôle qu'on possède soi-même)
+            if (message.user.id !== message.guild.ownerId && role.comparePositionTo(message.member.roles.highest) >= 0) {
+                return message.reply({ content: "Vous ne pouvez choisir qu'un rôle inférieur à votre rôle le plus haut.", flags: EPHEMERAL })
+            }
+        }
+
+        db.setTicketConfig(message.guild.id, categorie?.id ?? null, role?.id ?? null)
+        const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)
+
+        const details = `Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`
+        // Réponse d'abord (Discord exige une réponse en moins de 3 s), log ensuite
+        await message.reply({
+            content: `Tickets configurés.\n${details}\nLes tickets déjà ouverts gardent leurs permissions actuelles.`
+                + (role ? "\nTous les membres ayant ce rôle verront les nouveaux tickets." : ""),
+            flags: EPHEMERAL
+        })
+        await sendModLog(message, { action: "config", details: `Tickets configurés. ${details}` })
+    }
+}

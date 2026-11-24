@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { formatReason, auditReason } = require('../Fonctions/moderation')
+const { sendModLog } = require('../Fonctions/logs')
 
 module.exports = {
     name: "unban",
@@ -11,37 +13,24 @@ module.exports = {
             type: "user",
             name: "utilisateur",
             description: "L'utilisateur à débannir",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "raison",
             description: "La raison du débannissement",
             required: false,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
     async run(bot, message, args) {
-        try{
-            let user = args.getUser("utilisateur")
-            if(!user) return message.reply("L'utilisateur n'existe pas !")
+        const user = args.getUser("utilisateur")
+        const reason = formatReason(args.getString("raison"))
 
-            let reason = args.getString("raison")
-            if(!reason) reason = "Aucune raison fournie";
-            
-            if(!(await message.guild.bans.fetch()).get(user.id)) return message.reply("Cet utilisateur n'est pas banni !")
+        if (!await message.guild.bans.fetch(user.id).catch(() => null)) return message.reply("Cet utilisateur n'est pas banni !")
 
-            try{await user.send(`Tu as été unban par ${message.user.tag} pour la raison : ***${reason}***.`)} catch (err) {}
-            
-            await message.reply(`${message.user} a unban ${user.tag} pour la raison : ***${reason}***.`)
-
-            await message.guild.members.unban(user, reason)
-
-        } catch (err) {
-
-            return message.reply("L'utilisateur n'existe pas !")
-
-        }
+        await message.guild.members.unban(user, auditReason(message, args.getString("raison")))
+        await message.reply(`${message.user} a unban ${user.tag} pour la raison : ***${reason}***`)
+        await sendModLog(message, { action: "unban", cible: user, raison: args.getString("raison") })
     }
 }
