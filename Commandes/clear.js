@@ -1,4 +1,8 @@
 const Discord = require('discord.js')
+const { ticketOwnerId } = require('../Fonctions/tickets')
+
+const { Flags } = Discord.PermissionsBitField
+const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
 module.exports = {
     name: "clear",
@@ -8,42 +12,55 @@ module.exports = {
     category: "Modération",
     options: [
         {
-            type: "number",
+            type: "integer",
             name: "nombre",
-            description: "Nombre de message à effacer",
+            description: "Nombre de messages à effacer (1 à 100)",
             required: true,
-            autocomplete: false
+            minValue: 1,
+            maxValue: 100
         },
         {
             type: "channel",
             name: "salon",
             description: "Le salon dans lequel les messages seront effacés",
             required: false,
-            autocomplete: true
-        } 
+            channelTypes: [
+                Discord.ChannelType.GuildText,
+                Discord.ChannelType.GuildAnnouncement,
+                Discord.ChannelType.GuildVoice,
+                Discord.ChannelType.PublicThread,
+                Discord.ChannelType.PrivateThread
+            ]
+        }
     ],
 
     async run(bot, message, args) {
-        let channel = args.getChannel("salon")
-        if(!channel) channel = message.channel
-        if(channel.id !== message.channel.id && !message.guild.channels.cache.get(channel.id)) return message.reply("Pas de salon !")
-
-        let number = args.getNumber("nombre")
-        if(parseInt(number) <= 0 || parseInt(number) > 100) return message.reply("Veuillez saisir un nombre entre 0 et 100 !")
-
-        try {
-
-            let messages = await channel.bulkDelete(parseInt(number))
-            await message.reply({content: `Suppression de ${messages.size} messages effectué dans le salon ${channel} !`, ephemeral: true})
-
-        } catch(err){
-
-            let messages = [...(await channel.messages.fetch()).filter(msg => (Date.now() - msg.createdAt) <= 1209600000).values()]
-            if(messages.length <= 0) return message.reply("Aucun message à effacer car ils ont tous une datation de plus de 14j !")
-            await channel.bulkDelete(messages)
-
-            await message.reply({content: `Suppression de seulement ${messages.length} messages effectué dans le salon ${channel} car les autres messages ont une datation supérieur à 14j !`, ephemeral: true})
-            
+        const channel = args.getChannel("salon") ?? message.channel
+        if (!channel?.isTextBased() || typeof channel.bulkDelete !== "function") {
+            return message.reply({ content: "Impossible d'effacer des messages dans ce salon !", flags: EPHEMERAL })
         }
+
+        // Un ticket sert de preuve : on ne le vide pas
+        if (ticketOwnerId(channel)) return message.reply({ content: "Impossible de vider un salon de ticket !", flags: EPHEMERAL })
+
+        // La permission de la commande n'est vérifiée que dans le salon courant : on la vérifie aussi dans le salon ciblé
+        if (!channel.permissionsFor(message.member)?.has([Flags.ViewChannel, Flags.ManageMessages])) {
+            return message.reply({ content: `Vous n'avez pas la permission de gérer les messages dans ${channel} !`, flags: EPHEMERAL })
+        }
+        if (!channel.permissionsFor(message.guild.members.me)?.has([Flags.ViewChannel, Flags.ReadMessageHistory, Flags.ManageMessages])) {
+            return message.reply({ content: `Je n'ai pas la permission de gérer les messages dans ${channel} !`, flags: EPHEMERAL })
+        }
+
+        const number = args.getInteger("nombre")
+        if (number < 1 || number > 100) return message.reply({ content: "Veuillez saisir un nombre entre 1 et 100 !", flags: EPHEMERAL })
+
+        await message.deferReply({ flags: EPHEMERAL })
+
+        // true : on ignore les messages de plus de 14 jours (Discord refuse de les supprimer en masse)
+        const messages = await channel.bulkDelete(number, true)
+
+        let texte = `Suppression de ${messages.size} message(s) effectuée dans le salon ${channel} !`
+        if (messages.size < number) texte += "\nLes autres messages ont plus de 14 jours ou n'existent pas."
+        await message.editReply(texte)
     }
 }

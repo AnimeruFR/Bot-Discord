@@ -39,8 +39,8 @@ module.exports = {
             .setTimestamp()
             .setFooter({text: "Commandes du robot"})
 
-            await categories.sort().forEach(async cat => {
-                
+            categories.sort().forEach(cat => {
+
                 let commands = bot.commands.filter(cmd => cmd.category === cat)
                 embed.addFields({name: `${cat}`,value: `${commands.map(cmd => `\`${cmd.name}\` : ${cmd.description}`).join("\n")}`})
 

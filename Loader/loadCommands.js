@@ -1,10 +1,13 @@
 const fs = require('fs')
-module.exports = async bot => {
+const path = require('path')
 
-    fs.readdirSync('./Commandes').filter(f => f.endsWith('.js')).forEach(async file => {
-        
-        let command = require(`../Commandes/${file}`)
-        if(!command.name || typeof command.name !== 'string') throw new TypeError(`La commande ${file.slice(0,file.length-3)} n'est pas un nom de commande valide !`)
+module.exports = bot => {
+    const dossier = path.join(__dirname, '..', 'Commandes')
+
+    fs.readdirSync(dossier).filter(f => f.endsWith('.js')).forEach(file => {
+        const command = require(path.join(dossier, file))
+        if (!command.name || typeof command.name !== 'string') throw new TypeError(`La commande ${file} n'a pas de nom valide !`)
+        if (typeof command.run !== 'function') throw new TypeError(`La commande ${file} n'a pas de fonction run !`)
         bot.commands.set(command.name, command)
         console.log(`Commande ${file} chargée avec succès !`)
     })

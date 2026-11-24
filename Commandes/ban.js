@@ -1,4 +1,5 @@
 const Discord = require('discord.js')
+const { formatReason, auditReason, checkHierarchy } = require('../Fonctions/moderation')
 
 module.exports = {
     name: "ban",
@@ -11,42 +12,37 @@ module.exports = {
             type: "user",
             name: "membre",
             description: "Le membre à bannir",
-            required: true,
-            autocomplete: true
+            required: true
         }, {
             type: "string",
             name: "raison",
             description: "La raison du bannissement",
             required: true,
-            autocomplete: false
+            maxLength: 400
         }
     ],
 
     async run(bot, message, args) {
-        try{
-            let user = await bot.users.fetch(args._hoistedOptions[0].value)
-            if(!user) return message.reply("Le membre n'existe pas !")
-            let member = message.guild.members.cache.get(user.id)
+        const user = args.getUser("membre")
+        const reason = formatReason(args.getString("raison"))
 
-            let reason = args.get("raison").value;
-            if(!reason) reason = "Aucune raison fournie";
+        // On récupère toujours le membre (même hors cache) pour ne jamais sauter la vérification de hiérarchie
+        const member = args.getMember("membre") ?? await message.guild.members.fetch(user.id).catch(() => null)
 
-            if(message.user.id === user.id) return message.reply("Vous ne pouvez pas vous bannir vous-même !")
-            if((await message.guild.fetchOwner()).id === user.id) return message.reply("Ne ban pas le propriétaire du serv !")
-            if(member && !member.bannable) return message.reply("Ce membre n'est pas bannissable !")
-            if(member && message.member.roles.highest.position <= member.roles.highest.position) return message.reply("Vous ne pouvez pas bannir cette personne !")
-            if((await message.guild.bans.fetch()).get(user.id)) return message.reply("Ce membre est déjà ban !!!")
-
-            try{await user.send(`Tu as été banni du serveur ${message.guild.name} par ${message.user.tag} pour la raison : ***${reason}*** !`)} catch(err) {}
-
-            await message.reply(`${message.user} a banni ${user} pour la raison : ***${reason}***`)
-
-            await message.guild.bans.create(user.id, {reason: reason})
-
-        } catch (err) {
-
-            return message.reply("L'utilisateur n'existe pas !")
-
+        if (member) {
+            const erreur = checkHierarchy(message, member, "bannir")
+            if (erreur) return message.reply(erreur)
+            if (!member.bannable) return message.reply("Je ne peux pas bannir ce membre (rôle trop haut pour moi) !")
+        } else if (user.id === message.user.id) {
+            return message.reply("Vous ne pouvez pas vous bannir vous-même !")
         }
+
+        if (await message.guild.bans.fetch(user.id).catch(() => null)) return message.reply("Ce membre est déjà banni !")
+
+        // Le MP doit partir avant le ban, sinon le bot ne partage plus de serveur avec lui
+        if (member) await user.send(`Tu as été banni du serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
+
+        await message.guild.bans.create(user.id, { reason: auditReason(message, args.getString("raison")) })
+        await message.reply(`${message.user} a banni ${user} pour la raison : ***${reason}***`)
     }
 }
