@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const db = require('./db')
-const { sendModLog } = require('./logs')
+const { getLogChannel } = require('./logs')
+const { buildTranscript, sendAttachments, messageContentActive } = require('./transcript')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -8,19 +9,41 @@ const PERMS_TICKET = [Flags.ViewChannel, Flags.SendMessages, Flags.ReadMessageHi
 
 const DELAI_ENTRE_TICKETS = 10 * 60 * 1000 // 10 minutes entre deux ouvertures pour un même membre
 const MAX_TICKETS_OUVERTS = 50 // par serveur
+const MAX_SALONS_CATEGORIE = 50 // limite de Discord
+const DELAI_CONFIRMATION = 30 * 1000
 
 const enCours = new Set() // ouvertures/fermetures en cours (évite les doubles clics)
 
-// Le rôle staff configuré, s'il existe et n'est ni @everyone ni un rôle géré par une intégration
+// Un rôle staff valable : il existe et n'est ni @everyone ni un rôle géré par une intégration
+function roleValide(guild, id) {
+    const role = id ? guild.roles.cache.get(id) : null
+    return role && role.id !== guild.id && !role.managed ? role : null
+}
+
+// Rôle staff : celui choisi avec /setticket, sinon celui du .env
 function staffRoleId(guild) {
-    const role = guild.roles.cache.get(process.env.TICKET_STAFF_ROLE_ID ?? "")
-    if (!role || role.id === guild.id || role.managed) return null
-    return role.id
+    const { staffRoleId } = db.getTicketConfig(guild.id)
+    return roleValide(guild, staffRoleId)?.id ?? roleValide(guild, process.env.TICKET_STAFF_ROLE_ID)?.id ?? null
 }
 
 function isStaff(interaction) {
     const staff = staffRoleId(interaction.guild)
     return interaction.memberPermissions.has(Flags.ManageChannels) || Boolean(staff && interaction.member.roles.cache.has(staff))
+}
+
+// Catégorie des tickets : celle choisie avec /setticket, sinon celle du panneau
+function ticketCategory(interaction) {
+    const { categoryId } = db.getTicketConfig(interaction.guild.id)
+    const choisie = categoryId ? interaction.guild.channels.cache.get(categoryId) : null
+    if (categorieUtilisable(choisie)) return choisie
+    const parent = interaction.channel?.parent
+    return categorieUtilisable(parent) ? parent : null
+}
+
+// Une catégorie où le bot peut réellement créer des salons
+function categorieUtilisable(categorie) {
+    if (categorie?.type !== Discord.ChannelType.GuildCategory) return false
+    return Boolean(categorie.permissionsFor(categorie.guild.members.me)?.has([Flags.ViewChannel, Flags.ManageChannels]))
 }
 
 // Un ticket est un salon texte "ticket-..." (ouvert) ou "ferme-..." (fermé par son auteur)
@@ -58,6 +81,11 @@ async function openTicket(bot, interaction) {
     if (attente > 0) return interaction.reply({ content: `Merci d'attendre ${Math.ceil(attente / 60000)} min avant d'ouvrir un nouveau ticket.`, flags: EPHEMERAL })
     if (tickets.size >= MAX_TICKETS_OUVERTS) return interaction.reply({ content: "Trop de tickets sont ouverts en ce moment, réessaie plus tard.", flags: EPHEMERAL })
 
+    const categorie = ticketCategory(interaction)
+    if (categorie && categorie.children.cache.size >= MAX_SALONS_CATEGORIE) {
+        return interaction.reply({ content: "La catégorie des tickets est pleine, préviens le staff.", flags: EPHEMERAL })
+    }
+
     enCours.add(cle)
     try {
         await interaction.deferReply({ flags: EPHEMERAL })
@@ -74,8 +102,7 @@ async function openTicket(bot, interaction) {
         const channel = await guild.channels.create({
             name: `ticket-${user.username}`,
             type: Discord.ChannelType.GuildText,
-            // Seulement si le bouton est dans une catégorie (pas dans un fil ou un forum)
-            parent: interaction.channel?.parent?.type === Discord.ChannelType.GuildCategory ? interaction.channel.parentId : null,
+            parent: categorie?.id ?? null,
             topic: user.id,
             permissionOverwrites,
             reason: `Ticket ouvert par ${user.tag}`
@@ -110,7 +137,7 @@ async function openTicket(bot, interaction) {
 }
 
 // L'auteur qui ferme son ticket perd seulement l'accès (le staff garde l'historique).
-// Le staff, lui, supprime le salon.
+// Le staff, lui, supprime le salon après confirmation, avec un transcript envoyé dans le salon de logs.
 async function closeTicket(bot, interaction) {
     if (!interaction.inCachedGuild()) return
 
@@ -138,16 +165,81 @@ async function closeTicket(bot, interaction) {
             return
         }
 
-        await interaction.reply("Suppression du ticket…")
-
-        const owner = await bot.users.fetch(ownerId).catch(() => null)
-        await owner?.send(`Votre ticket sur le serveur ${interaction.guild.name} a été fermé.`).catch(() => {})
-
-        await channel.delete(`Ticket supprimé par ${interaction.user.tag}`)
-        await sendModLog(interaction, { action: "ticket", cible: owner, details: `Ticket \`#${channel.name}\` supprimé` })
+        await supprimerTicket(bot, interaction, channel, ownerId)
     } finally {
         enCours.delete(cle)
     }
 }
 
-module.exports = { openTicket, closeTicket, ticketOwnerId }
+async function supprimerTicket(bot, interaction, channel, ownerId) {
+    const logs = getLogChannel(interaction.guild)
+    const peutJoindre = logs?.permissionsFor(interaction.guild.members.me)?.has(Flags.AttachFiles)
+    const contenu = await messageContentActive(bot)
+    let avertissement = !logs
+        ? "\n⚠️ Aucun salon de logs (`/setlogs`) : l'historique de ce ticket sera **perdu définitivement**."
+        : !peutJoindre
+            ? `\n⚠️ Je ne peux pas joindre de fichier dans ${logs} : l'historique sera **perdu définitivement**.`
+            : `\nUn transcript et les pièces jointes seront envoyés dans ${logs}.`
+    if (logs && peutJoindre && !contenu) {
+        avertissement += "\n⚠️ Le **Message Content Intent** n'est pas activé : le transcript ne contiendra **pas le texte** des messages des membres."
+    }
+
+    // Confirmation par bouton, visible seulement par la personne qui a cliqué
+    const boutons = new Discord.ActionRowBuilder().addComponents(
+        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-oui-${interaction.id}`).setLabel("Supprimer").setStyle(Discord.ButtonStyle.Danger),
+        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-non-${interaction.id}`).setLabel("Annuler").setStyle(Discord.ButtonStyle.Secondary)
+    )
+    const reponse = await interaction.reply({
+        content: `Supprimer définitivement ce ticket ?${avertissement}`,
+        components: [boutons],
+        flags: EPHEMERAL,
+        withResponse: true
+    })
+
+    const clic = await reponse.resource.message.awaitMessageComponent({
+        componentType: Discord.ComponentType.Button,
+        filter: i => i.user.id === interaction.user.id && i.customId.endsWith(interaction.id),
+        time: DELAI_CONFIRMATION
+    }).catch(() => null)
+
+    if (!clic) return interaction.editReply({ content: "Temps écoulé, suppression annulée.", components: [] })
+    if (clic.customId.startsWith("ticket-suppr-non")) return clic.update({ content: "Suppression annulée.", components: [] })
+    await clic.update({ content: "Suppression du ticket…", components: [] })
+
+    // Les droits ont pu changer pendant la confirmation : on revérifie avec le clic (données à jour)
+    if (!isStaff(clic)) return interaction.editReply({ content: "Vous n'avez plus le droit de supprimer ce ticket." })
+
+    const owner = await bot.users.fetch(ownerId).catch(() => null)
+
+    // Le transcript sert de preuve : s'il ne peut pas être envoyé, on ne supprime pas
+    if (logs && peutJoindre) {
+        try {
+            const { texte, nombre, pieces } = await buildTranscript(channel, { fermePar: interaction.user, auteurId: ownerId })
+            const embed = new Discord.EmbedBuilder()
+                .setColor(0x9B59B6)
+                .setTitle("Ticket supprimé")
+                .addFields(
+                    { name: "Ticket", value: `\`#${channel.name}\``, inline: true },
+                    { name: "Auteur", value: owner ? `${owner} (\`${owner.id}\`)` : `\`${ownerId}\``, inline: true },
+                    { name: "Supprimé par", value: `${interaction.user} (\`${interaction.user.id}\`)`, inline: true },
+                    { name: "Messages", value: String(nombre), inline: true },
+                    { name: "Pièces jointes", value: String(pieces.length), inline: true }
+                )
+                .setTimestamp()
+            if (!contenu) embed.addFields({ name: "⚠️ Attention", value: "Message Content Intent désactivé : le texte des messages des membres est absent du transcript." })
+            const fichier = new Discord.AttachmentBuilder(Buffer.from(texte, "utf8"), { name: `transcript-${channel.name}.txt` })
+            await logs.send({ embeds: [embed], files: [fichier] })
+
+            const ignorees = await sendAttachments(logs, pieces, channel.name)
+            if (ignorees.length) await logs.send(`Pièces jointes non conservées (trop lourdes ou indisponibles) : ${ignorees.length}`)
+        } catch (err) {
+            console.error("Transcript impossible :", err)
+            return interaction.editReply({ content: "Impossible d'enregistrer le transcript ou les pièces jointes : suppression annulée pour ne pas perdre l'historique (un envoi partiel a pu avoir lieu dans les logs)." })
+        }
+    }
+
+    await owner?.send(`Votre ticket sur le serveur ${interaction.guild.name} a été fermé.`).catch(() => {})
+    await channel.delete(`Ticket supprimé par ${interaction.user.tag}`)
+}
+
+module.exports = { openTicket, closeTicket, ticketOwnerId, roleValide, categorieUtilisable }

@@ -32,10 +32,15 @@ Les commandes ne sont plus enregistrées à chaque démarrage. Relance `npm run 
 
 ## Tickets
 
-`/ticket` poste un bouton « Créer un ticket ». Chaque membre peut avoir **un** ticket ouvert à la fois (10 min minimum entre deux, 50 tickets ouverts max par serveur). Le salon n'est visible que par son auteur, le bot, le rôle `TICKET_STAFF_ROLE_ID` et les administrateurs.
+1. `/setticket categorie:<catégorie> staff:<rôle>` (optionnel, demande Gérer le serveur + Gérer les salons + Gérer les rôles) : choisit où créer les tickets et quel rôle les gère. On ne peut choisir qu'un rôle inférieur au sien. Sans configuration, les tickets vont dans la catégorie du panneau et le rôle staff est `TICKET_STAFF_ROLE_ID` du `.env`. `/setticket` seul affiche la configuration, `reinitialiser:True` la remet par défaut.
+2. `/ticket` poste dans le salon un panneau avec le bouton « Créer un ticket ».
 
-- Si `TICKET_STAFF_ROLE_ID` est vide, seuls les administrateurs (et les membres avec « Gérer les salons ») voient les tickets.
-- Quand l'auteur ferme son ticket, il perd seulement l'accès : le salon est renommé `ferme-…` et le staff garde l'historique. Le staff supprime le salon avec le même bouton.
+Règles :
+- **Un** ticket ouvert par membre, 10 min minimum entre deux, 50 tickets max par serveur.
+- Le salon n'est visible que par son auteur, le bot, le rôle staff et les administrateurs. Sans rôle staff, seuls les administrateurs (et les membres avec « Gérer les salons ») voient les tickets.
+- Quand l'auteur ferme son ticket, il perd seulement l'accès : le salon est renommé `ferme-…` et le staff garde l'historique.
+- Quand le staff supprime un ticket, le bot demande une confirmation puis envoie un **transcript** (.txt, 1000 derniers messages, 7 Mo max) et une copie des **pièces jointes** (40 Mo max) dans le salon de logs (`/setlogs`) avant de supprimer. Si l'envoi échoue, le ticket n'est pas supprimé.
+- Pour que le transcript contienne le texte des messages, active **Message Content Intent** dans le Developer Portal (*Bot > Privileged Gateway Intents*). Sans lui, le transcript garde les auteurs, les dates et les pièces jointes, mais pas le texte.
 
 ## Données et logs
 
@@ -63,4 +68,5 @@ Les commandes ne sont plus enregistrées à chaque démarrage. Relance `npm run 
 | `/unwarn numero` | Exclure temporairement | Retire un avertissement (pas les siens, ni ceux d'un supérieur) |
 | `/setlogs [salon]` | Gérer le serveur | Salon des logs de modération (sans salon : désactive) |
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
-| `/ticket` | Gérer les messages | Poste le bouton de création de ticket |
+| `/ticket` | Gérer les messages | Poste le panneau de création de tickets |
+| `/setticket [categorie] [staff] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie et rôle staff des tickets |

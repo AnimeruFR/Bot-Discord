@@ -82,10 +82,23 @@ Points écartés :
 - numéros de warn propres à chaque serveur (fuite négligeable du volume) ;
 - détection des rôles « pour tout le monde » sur le salon de logs (impossible à rendre fiable, le cas `@everyone` est couvert).
 
-**Lot C – Tickets**
-8. Transcript du ticket (fichier .txt envoyé dans un salon de logs) avant suppression.
-9. Catégorie de tickets configurable au lieu de « catégorie du salon où est le bouton ».
-10. Le bouton « Créer un ticket » posté par `/ticket` devrait être un simple message, pas une réponse à la commande.
+**Lot C – Tickets** ✅ fait
+8. ✅ Suppression d'un ticket par le staff :
+   - confirmation par bouton, puis revérification des droits ;
+   - transcript `.txt` (1000 derniers messages, 7 Mo max) et copie des pièces jointes (seulement depuis le CDN de Discord, 40 Mo max), envoyés dans le salon de logs avant la suppression ;
+   - si l'envoi échoue, rien n'est supprimé ;
+   - avertissement avant la suppression s'il n'y a pas de salon de logs ou si le Message Content Intent est désactivé (le transcript n'aurait pas le texte des messages).
+9. ✅ `/setticket` : catégorie et rôle staff des tickets par serveur, stockés en base, avec migration automatique des bases existantes. Il demande Gérer le serveur + les salons + les rôles, et on ne peut choisir qu'un rôle inférieur au sien. Une catégorie où le bot ne peut pas créer de salon est refusée.
+10. ✅ `/ticket` poste le panneau comme simple message (il n'affiche plus quel modérateur l'a posté).
+
+Revue critique du lot C, points corrigés :
+- **escalade** : un membre avec seulement « Gérer le serveur » pouvait se donner l'accès à tous les tickets en choisissant son propre rôle comme staff ;
+- transcript vide sans prévenir avant la suppression ;
+- pièces jointes perdues (les liens du CDN expirent) ;
+- transcript trop lourd pour Discord, qui rendait le ticket impossible à supprimer ;
+- une option de `/setticket` effaçait l'autre ;
+- catégorie inutilisable par le bot ;
+- 2e tour : une pièce jointe perdue sur une erreur réseau passagère (maintenant retentée, et suppression annulée si l'échec persiste), redirections non suivies, taille réelle des fichiers vérifiée, pièces les plus récentes gardées en priorité.
 
 ## 3. Suggestions (nouvelles fonctionnalités)
 

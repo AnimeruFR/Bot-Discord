@@ -38,6 +38,11 @@ db.exec(`
     );
 `)
 
+// Migration : colonnes ajoutées au lot C (les bases créées avant ne les ont pas)
+const colonnes = db.prepare("PRAGMA table_info(guild_config)").all().map(c => c.name)
+if (!colonnes.includes("ticket_category_id")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_category_id TEXT")
+if (!colonnes.includes("ticket_staff_role_id")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_staff_role_id TEXT")
+
 const requetes = {
     addWarn: db.prepare("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"),
     listWarns: db.prepare("SELECT * FROM warns WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT ?"),
@@ -48,6 +53,12 @@ const requetes = {
     getLogChannel: db.prepare("SELECT log_channel_id FROM guild_config WHERE guild_id = ?"),
     setLogChannel: db.prepare(`INSERT INTO guild_config (guild_id, log_channel_id) VALUES (?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET log_channel_id = excluded.log_channel_id`),
+    getTicketConfig: db.prepare("SELECT ticket_category_id, ticket_staff_role_id FROM guild_config WHERE guild_id = ?"),
+    setTicketConfig: db.prepare(`INSERT INTO guild_config (guild_id, ticket_category_id, ticket_staff_role_id) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET
+            ticket_category_id = COALESCE(excluded.ticket_category_id, ticket_category_id),
+            ticket_staff_role_id = COALESCE(excluded.ticket_staff_role_id, ticket_staff_role_id)`),
+    resetTicketConfig: db.prepare("UPDATE guild_config SET ticket_category_id = NULL, ticket_staff_role_id = NULL WHERE guild_id = ?"),
     getCooldown: db.prepare("SELECT opened_at FROM ticket_cooldowns WHERE guild_id = ? AND user_id = ?"),
     setCooldown: db.prepare(`INSERT INTO ticket_cooldowns (guild_id, user_id, opened_at) VALUES (?, ?, ?)
         ON CONFLICT (guild_id, user_id) DO UPDATE SET opened_at = excluded.opened_at`),
@@ -67,7 +78,15 @@ module.exports = {
     getLogChannel: guildId => requetes.getLogChannel.get(guildId)?.log_channel_id ?? null,
     setLogChannel: (guildId, channelId) => requetes.setLogChannel.run(guildId, channelId),
 
-    getTicketCooldown: (guildId, userId) => requetes.getCooldown.get(guildId, userId)?.opened_at ?? 0,
+    getTicketConfig(guildId) {
+        const ligne = requetes.getTicketConfig.get(guildId)
+        return { categoryId: ligne?.ticket_category_id ?? null, staffRoleId: ligne?.ticket_staff_role_id ?? null }
+    },
+    // Une valeur null garde la valeur actuelle (changer la catégorie ne remet pas le rôle à zéro)
+    setTicketConfig: (guildId, categoryId, staffRoleId) => requetes.setTicketConfig.run(guildId, categoryId, staffRoleId),
+    resetTicketConfig: guildId => requetes.resetTicketConfig.run(guildId),
+
+    getTicketCooldown:(guildId, userId) => requetes.getCooldown.get(guildId, userId)?.opened_at ?? 0,
     setTicketCooldown: (guildId, userId) => requetes.setCooldown.run(guildId, userId, Date.now()),
     purgeTicketCooldowns: avant => requetes.purgeCooldowns.run(avant),
 
