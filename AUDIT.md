@@ -56,11 +56,12 @@ Déjà faites dans ce lot (en plus de la sécurité) :
 
 À faire, par lots (dis « fais le lot N ») :
 
-**Lot A – Robustesse**
-1. Enregistrer les slash commandes via un script séparé (`npm run deploy`) au lieu de le faire à chaque démarrage (évite les rate limits).
-2. Remplacer `setDMPermission` (déprécié) par `setContexts`.
-3. Arrêt propre (`SIGINT`/`SIGTERM` → `bot.destroy()`).
-4. Ajouter ESLint + Prettier et une CI GitHub Actions (lint + `npm run check` + `npm audit`).
+**Lot A – Robustesse** ✅ fait
+1. ✅ Slash commandes enregistrées par `npm run deploy` (option `--guild ID` pour tester, `--clear` pour retirer) au lieu de chaque démarrage.
+2. ✅ `setDMPermission` (déprécié) remplacé par `setContexts` + `setIntegrationTypes`.
+3. ✅ Arrêt propre (`SIGINT`/`SIGTERM` → `bot.destroy()`, arrêt forcé au bout de 5 s) et message clair si le token est invalide.
+4. ✅ ESLint (`npm run lint`, règles anti-`eval`), `npm test`, CI GitHub Actions (Node 20 et 22, lint + check + `npm audit`, droits en lecture seule, sans secret) et Dependabot.
+   Prettier écarté : il réécrirait tous les fichiers (guillemets mélangés) pour un gain faible.
 
 **Lot B – Modération persistante**
 5. `/warn` n'enregistre rien : stocker les avertissements (SQLite via `better-sqlite3`) + `/warns membre` et `/unwarn`.

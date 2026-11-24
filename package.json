@@ -6,7 +6,10 @@
   "main": "main.js",
   "scripts": {
     "start": "node main.js",
-    "check": "node scripts/check.js"
+    "deploy": "node scripts/deploy.js",
+    "lint": "eslint .",
+    "check": "node scripts/check.js",
+    "test": "npm run lint && npm run check"
   },
   "engines": {
     "node": ">=20.12"
@@ -16,5 +19,10 @@
   "dependencies": {
     "discord.js": "^14.28.1",
     "ms": "^2.1.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0"
   }
 }

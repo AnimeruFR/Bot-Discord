@@ -9,7 +9,7 @@ module.exports = {
     options: [],
 
     async run(bot, message, args) {
-        let Embed = new Discord.EmbedBuilder()
+        const Embed = new Discord.EmbedBuilder()
         .setColor(bot.color)
         .setTitle("Création d'un ticket")
         .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))

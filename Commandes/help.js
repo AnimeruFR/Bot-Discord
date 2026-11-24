@@ -26,12 +26,12 @@ module.exports = {
         }
 
         if(!command) {
-            let categories = [];
+            const categories = [];
             bot.commands.forEach(command => {
                 if(!categories.includes(command.category)) categories.push(command.category)
             })
 
-            let embed = new Discord.EmbedBuilder()
+            const embed = new Discord.EmbedBuilder()
             .setColor(bot.color)
             .setTitle(`Commandes du bot`)
             .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))
@@ -41,7 +41,7 @@ module.exports = {
 
             categories.sort().forEach(cat => {
 
-                let commands = bot.commands.filter(cmd => cmd.category === cat)
+                const commands = bot.commands.filter(cmd => cmd.category === cat)
                 embed.addFields({name: `${cat}`,value: `${commands.map(cmd => `\`${cmd.name}\` : ${cmd.description}`).join("\n")}`})
 
             })
@@ -49,7 +49,7 @@ module.exports = {
             await message.reply({embeds: [embed]})
 
         } else {
-            let embed = new Discord.EmbedBuilder()
+            const embed = new Discord.EmbedBuilder()
             .setColor(bot.color)
             .setTitle(`Commandes \`${command.name}\``)
             .setThumbnail(bot.user.displayAvatarURL({dynamic: true}))

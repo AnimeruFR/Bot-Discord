@@ -3,12 +3,12 @@ const assert = require('assert')
 const Discord = require('discord.js')
 const loadCommands = require('../Loader/loadCommands')
 const { buildSlashCommand } = require('../Loader/loadSlashCommands')
-const { checkHierarchy, formatReason, auditReason } =require('../Fonctions/moderation')
+const { checkHierarchy, formatReason, auditReason } = require('../Fonctions/moderation')
 const { ticketOwnerId } = require('../Fonctions/tickets')
 
 // 1. Toutes les commandes se chargent et produisent une définition valide
 const bot = { commands: new Discord.Collection() }
-loadCommands(bot)
+loadCommands(bot, { silencieux: true })
 for (const command of bot.commands.values()) buildSlashCommand(command).toJSON()
 console.log(`OK : ${bot.commands.size} commandes valides`)
 
