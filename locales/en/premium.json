@@ -1,0 +1,13 @@
+{
+  "premium.requis": "✨ **{fonction}** is part of this server's premium plan. Moderation and security always stay free.",
+  "premium.fonction.types": "Creating ticket types",
+  "premium.fonction.html": "HTML ticket transcripts",
+  "premium.fonction.stats": "Ticket statistics",
+  "premium.fonction.apparence": "Customisation (colour, panel text)",
+  "premium.titre": "Premium",
+  "premium.desactive": "Premium is not enabled on this bot: every feature is free.",
+  "premium.actif": "✨ This server has premium. Thanks for your support!",
+  "premium.inactif": "This server doesn't have premium.",
+  "premium.offert": "✨ This server has premium (granted).",
+  "premium.liste": "**Premium features:**\n• ticket types (`/tickettype`)\n• HTML ticket transcripts\n• statistics (`/stats`)\n• embed colour and panel text (`/config`)\n\n**Always free:** moderation, tickets with text transcripts, giveaways, button roles, polls, announcements, welcome messages, privacy."
+}

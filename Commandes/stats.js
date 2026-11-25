@@ -3,6 +3,7 @@ const { couleur } = require('../Fonctions/apparence')
 const { formatDuree } = require('../Fonctions/moderation')
 const { t, langueDe } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
+const { exigerPremium } = require('../Fonctions/premium')
 
 const JOUR = 24 * 60 * 60 * 1000
 
@@ -37,6 +38,7 @@ module.exports = {
     calculerStats,
 
     async run(bot, message) {
+        if (!await exigerPremium(message, "stats")) return
         const guildId = message.guild.id
         const s = calculerStats(db.ticketsSince(guildId, Date.now() - 30 * JOUR), db.listTicketTypes(guildId), t(message, "tk.sta_sans_type"))
         if (s.total === 0) return message.reply({ content: t(message, "tk.sta_aucun"), flags: Discord.MessageFlags.Ephemeral })

@@ -331,5 +331,10 @@
     "description": "About the bot (servers, version, links)",
     "options": {},
     "choix": {}
+  },
+  "premium": {
+    "description": "Premium plan of this server (status and features)",
+    "options": {},
+    "choix": {}
   }
 }
