@@ -1,0 +1,22 @@
+{
+  "mac.hors_ticket": "This command can only be used in an open ticket.",
+  "mac.staff_seul": "Only this ticket's staff can send a canned reply.",
+  "mac.introuvable": "No canned reply has this name.",
+  "mac.nom_requis": "Please give the name of the reply.",
+  "mac.signature": "Reply from the team",
+  "mac.perm_gestion": "You need the \"Manage Server\" permission to add or remove a reply.",
+  "mac.nom_invalide": "Invalid name: use letters, digits and dashes.",
+  "mac.texte_invalide": "The text must be between 1 and {max} characters long.",
+  "mac.doublon": "A reply named \"{nom}\" already exists. Remove it first to replace it.",
+  "mac.limite": "Limit reached: {max} replies per server at most.",
+  "mac.ajoute": "Reply \"{nom}\" added.",
+  "mac.retire": "Reply \"{nom}\" removed.",
+  "mac.vide": "No canned replies on this server. Add one with /reponse ajouter.",
+  "mac.liste_titre": "**Canned replies** ({n}/{max})",
+  "mac.form_titre": "New canned reply",
+  "mac.form_nom": "Name (letters, digits, dashes)",
+  "mac.form_texte": "Reply text",
+  "mac.log_envoi": "Canned reply \"{nom}\" sent in {salon}",
+  "mac.log_ajout": "Canned reply \"{nom}\" added",
+  "mac.log_retrait": "Canned reply \"{nom}\" removed"
+}
