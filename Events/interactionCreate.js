@@ -3,6 +3,7 @@ const tickets = require('../Fonctions/tickets')
 const { t } = require('../Fonctions/i18n')
 const { onClicRole } = require('../Fonctions/rolesBoutons')
 const { onClicGiveaway } = require('../Fonctions/giveaways')
+const { traiterErreur } = require('../Fonctions/erreurs')
 
 module.exports = async (bot, interaction) => {
     try {
@@ -42,14 +43,7 @@ module.exports = async (bot, interaction) => {
         if (interaction.isStringSelectMenu() && interaction.customId === "ticket-type") return await tickets.onMenuType(bot, interaction)
         if (interaction.isModalSubmit() && interaction.customId.startsWith("ticket-form:")) return await tickets.onFormulaire(bot, interaction)
     } catch (err) {
-        console.error(`Erreur sur l'interaction ${interaction.commandName ?? interaction.customId ?? interaction.type} :`, err)
-        if (!interaction.isRepliable()) return
-
-        // Sans traduction possible (base indisponible…), message en français
-        let texte = "Une erreur est survenue, l'action n'a pas pu être effectuée."
-        try { texte = t(interaction, "commun.erreur") } catch { /* repli ci-dessus */ }
-        const reponse = { content: texte, flags: Discord.MessageFlags.Ephemeral }
-        if (interaction.replied || interaction.deferred) await interaction.followUp(reponse).catch(() => {})
-        else await interaction.reply(reponse).catch(() => {})
+        // Erreur attendue (ErreurUtilisateur) : message clair ; sinon numéro d'incident montré au membre et écrit dans les logs
+        await traiterErreur(interaction, err)
     }
 }

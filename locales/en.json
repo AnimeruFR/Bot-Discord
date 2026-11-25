@@ -1,5 +1,6 @@
 {
   "commun.erreur": "Something went wrong, the action could not be completed.",
+  "commun.erreur_incident": "Something went wrong, the action could not be completed. If it keeps happening, give this number to support: #{incident}",
   "commun.permission": "You don't have permission to use this command!",
   "commun.session_expiree": "Session expired: run /config again.",
 

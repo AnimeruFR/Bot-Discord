@@ -1,5 +1,6 @@
 {
   "commun.erreur": "Une erreur est survenue, l'action n'a pas pu être effectuée.",
+  "commun.erreur_incident": "Une erreur est survenue, l'action n'a pas pu être effectuée. Si le problème continue, donnez ce numéro au support : #{incident}",
   "commun.permission": "Vous n'avez pas la permission d'utiliser cette commande !",
   "commun.session_expiree": "Session expirée : relancez /config.",
 
