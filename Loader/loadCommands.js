@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { verifierDeclaration } = require('../Fonctions/staff')
 
 const RACINE = path.join(__dirname, '..', 'Commandes')
 
@@ -45,6 +46,7 @@ module.exports = (bot, { silencieux = false } = {}) => {
         if (bot.commands.has(command.name)) throw new Error(`Deux commandes s'appellent « ${command.name} » (${nomFichier})`)
         command.module = module
         command.sousModule = sousModule
+        verifierDeclaration(command)
         bot.commands.set(command.name, command)
         if (!silencieux) console.log(`Commande ${nomFichier} chargée avec succès !`)
     }

@@ -2,7 +2,7 @@ const Discord = require('discord.js')
 const { couleur } = require('../../Fonctions/apparence')
 const { t, langueDe } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
-const { gererMembre, menuTypes } = require('../../Fonctions/tickets')
+const { gererMembre, menuTypes, isStaff } = require('../../Fonctions/tickets')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -10,9 +10,11 @@ const EPHEMERAL = Discord.MessageFlags.Ephemeral
 module.exports = {
     name: "ticket",
     description: "Tickets : poster le panneau, ajouter ou retirer un membre d'un ticket",
-    // Pas de permission par défaut : le staff des tickets n'a pas forcément « Gérer les messages ».
-    // Chaque action vérifie elle-même les droits (voir run).
-    permission: "Aucune",
+    // Visible par défaut pour « Gérer les messages » (commande staff). Le staff des tickets qui n'a pas ce droit
+    // y a quand même accès (acces ci-dessous) ; un admin peut lui afficher la commande dans Paramètres > Intégrations.
+    // Chaque action revérifie ensuite ses propres droits (voir run).
+    permission: Discord.PermissionFlagsBits.ManageMessages,
+    acces: interaction => isStaff(interaction, interaction.channel),
     dm: false,
     category: "Modération",
     options: [

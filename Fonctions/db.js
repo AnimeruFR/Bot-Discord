@@ -147,6 +147,9 @@ const requetes = {
     setGoodbye: db.prepare(`INSERT INTO guild_config (guild_id, goodbye_channel_id, goodbye_message) VALUES (?, ?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET goodbye_channel_id = excluded.goodbye_channel_id, goodbye_message = excluded.goodbye_message`),
 
+    getStaffRole: db.prepare("SELECT staff_role_id FROM guild_config WHERE guild_id = ?"),
+    setStaffRole: db.prepare(`INSERT INTO guild_config (guild_id, staff_role_id) VALUES (?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET staff_role_id = excluded.staff_role_id`),
     getApparence: db.prepare("SELECT langue, couleur, ticket_panel_title, ticket_panel_description FROM guild_config WHERE guild_id = ?"),
     setLangue: db.prepare(`INSERT INTO guild_config (guild_id, langue) VALUES (?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET langue = excluded.langue`),
@@ -213,6 +216,10 @@ module.exports = {
 
     getLogChannel: guildId => requetes.getLogChannel.get(guildId)?.log_channel_id ?? null,
     setLogChannel: (guildId, channelId) => requetes.setLogChannel.run(guildId, channelId),
+
+    // Rôle staff du serveur (null = aucun) : voir Fonctions/staff.js
+    getStaffRole: guildId => requetes.getStaffRole.get(guildId)?.staff_role_id ?? null,
+    setStaffRole: (guildId, roleId) => requetes.setStaffRole.run(guildId, roleId ?? null),
 
     getTicketConfig(guildId) {
         const ligne = requetes.getTicketConfig.get(guildId)

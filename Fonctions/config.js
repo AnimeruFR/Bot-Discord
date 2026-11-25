@@ -14,6 +14,11 @@ const P = Discord.PermissionFlagsBits
 const PERMISSION_TICKETS = P.ManageGuild | P.ManageChannels | P.ManageRoles
 const peutConfigurerTickets = interaction => Boolean(interaction.memberPermissions?.has(PERMISSION_TICKETS))
 
+// Rôle staff du serveur (idée #1) : il ouvre des commandes de modération (warn, historique…),
+// donc seul quelqu'un qui a lui-même « Gérer le serveur » et « Exclure temporairement » peut le choisir
+const PERMISSION_STAFF = P.ManageGuild | P.ModerateMembers
+const peutConfigurerStaff = interaction => Boolean(interaction.memberPermissions?.has(PERMISSION_STAFF))
+
 // Salon de logs valable ? Renvoie un message d'erreur, ou null.
 // cible : interaction (langue du membre) ; sans elle, français.
 function refusSalonLogs(guild, channel, cible = null) {
@@ -60,4 +65,4 @@ function refusRoleStaff(interaction, role) {
     return null
 }
 
-module.exports = { PERMISSION_TICKETS, peutConfigurerTickets, refusSalonLogs, changerSalonLogs, refusCategorie, refusRoleStaff }
+module.exports = { PERMISSION_TICKETS, PERMISSION_STAFF, peutConfigurerTickets, peutConfigurerStaff, refusSalonLogs, changerSalonLogs, refusCategorie, refusRoleStaff }

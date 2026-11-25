@@ -4,13 +4,13 @@ const { exigerPremium } = require('../../Fonctions/premium')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t, langueDe } = require('../../Fonctions/i18n')
 const { couleur, lireCouleur, formatCouleur } = require('../../Fonctions/apparence')
-const { peutConfigurerTickets, changerSalonLogs, refusCategorie, refusRoleStaff } = require('../../Fonctions/config')
+const { peutConfigurerTickets, peutConfigurerStaff, changerSalonLogs, refusCategorie, refusRoleStaff } = require('../../Fonctions/config')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DUREE_SESSION = 5 * 60 * 1000
 const { INACTIVITES, LANGUES } = require('../../Fonctions/constantes')
-const SECTIONS = ["resume", "general", "logs", "tickets", "panneau"]
+const SECTIONS = ["resume", "general", "staff", "logs", "tickets", "panneau"]
 
 // Une seule fenêtre /config par membre et par serveur : ouvrir la 2e ferme la 1re (pas d'état périmé)
 const sessions = new Map()
@@ -34,6 +34,16 @@ function vue(i, section) {
         lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-langue")
             .addOptions(LANGUES.map(l => ({ label: t(L, `config.langue_${l}`), value: l, default: l === app.langue })))))
         lignes.push(row(bouton("cfg-couleur", t(L, "config.bouton_couleur"), Discord.ButtonStyle.Primary), bouton("cfg-couleur-defaut", t(L, "config.bouton_couleur_defaut"))))
+    } else if (section === "staff") {
+        const actuel = db.getStaffRole(guild.id)
+        embed.setDescription([
+            t(L, "config.staff_actuel", { role: actuel ? `<@&${actuel}>` : t(L, "config.aucun") }),
+            "", `-# ${t(L, "config.staff_note")}`
+        ].join("\n"))
+        const choix = new Discord.RoleSelectMenuBuilder().setCustomId("cfg-role-staff").setPlaceholder(t(L, "config.choisir_role_staff"))
+        if (actuel && guild.roles.cache.has(actuel)) choix.setDefaultRoles(actuel)
+        lignes.push(row(choix))
+        if (actuel) lignes.push(row(bouton("cfg-role-staff-off", t(L, "config.bouton_retirer_staff"), Discord.ButtonStyle.Danger)))
     } else if (section === "logs") {
         const actuel = db.getLogChannel(guild.id)
         embed.setDescription(t(L, "config.logs_actuel", { salon: actuel ? `<#${actuel}>` : t(L, "config.aucun") }))
@@ -186,6 +196,21 @@ module.exports = {
                     db.setCouleur(guild.id, null)
                     await afficher(i, t(i, "config.enregistre"))
                     return sendModLog(i, { action: "config", details: "Couleur des embeds : par défaut" })
+
+                case "cfg-role-staff":
+                case "cfg-role-staff-off": {
+                    // Donner le rôle staff délègue des droits de modération : il faut les avoir soi-même
+                    if (!peutConfigurerStaff(i)) return i.reply({ content: t(i, "config.staff_permission"), flags: EPHEMERAL })
+                    let role = null
+                    if (i.customId === "cfg-role-staff") {
+                        role = guild.roles.cache.get(i.values[0])
+                        const refus = role ? refusRoleStaff(i, role) : t(i, "tk.role_introuvable")
+                        if (refus) return refuser(i, refus)
+                    }
+                    db.setStaffRole(guild.id, role?.id ?? null)
+                    await afficher(i, t(i, "config.enregistre"))
+                    return sendModLog(i, { action: "config", details: `Rôle staff du serveur : ${role ?? "aucun"}` })
+                }
 
                 case "cfg-logs":
                 case "cfg-logs-off": {

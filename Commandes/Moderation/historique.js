@@ -11,6 +11,8 @@ module.exports = {
     name: "historique",
     description: "Affiche l'historique des sanctions d'un membre",
     permission: Discord.PermissionFlagsBits.ModerateMembers,
+    // Le rôle staff du serveur (/config) suffit : aucune action avec les pouvoirs propres du bot
+    roleStaffSuffit: true,
     dm: false,
     category: "Modération",
     options: [

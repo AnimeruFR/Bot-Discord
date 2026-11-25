@@ -5,6 +5,7 @@ const { onClicRole } = require('../Fonctions/rolesBoutons')
 const { onClicGiveaway } = require('../Fonctions/giveaways')
 const { traiterErreur } = require('../Fonctions/erreurs')
 const { verifierCommande } = require('../Fonctions/cooldowns')
+const { verifierAcces } = require('../Fonctions/staff')
 
 module.exports = async (bot, interaction) => {
     try {
@@ -23,8 +24,8 @@ module.exports = async (bot, interaction) => {
             if (!command) return
 
             // Les permissions par défaut d'une slash commande peuvent être modifiées par un admin du serveur
-            // (Paramètres > Intégrations) : on revérifie donc la permission réelle du membre à chaque appel
-            if (typeof command.permission === "bigint" && interaction.inGuild() && !interaction.memberPermissions?.has(command.permission)) {
+            // (Paramètres > Intégrations) : on revérifie donc les droits réels du membre à chaque appel (garde staff, #1)
+            if (!await verifierAcces(interaction, command)) {
                 return await interaction.reply({ content: t(interaction, "commun.permission"), flags: Discord.MessageFlags.Ephemeral })
             }
 
