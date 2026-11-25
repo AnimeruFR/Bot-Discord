@@ -5,7 +5,7 @@ const assert = require('node:assert')
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const { traiterTempbans } = require('../Fonctions/tempbans')
-const { appliquerSeuil, marqueurTempban } = require('../Fonctions/sanctions')
+const { appliquerSeuil, sanctionInterdite, marqueurTempban } = require('../Fonctions/sanctions')
 const { role, erreurDiscord } = require('./aides')
 
 const { Flags } = Discord.PermissionsBitField
@@ -106,4 +106,34 @@ test("sanctions automatiques (seuil exact, permission du modérateur)", async ()
     assert.strictEqual(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 1), null, "pas de seuil à 1 warn")
     assert.match(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 2), /non appliquée.*permission/, "modérateur sans BanMembers : pas de ban")
     assert.strictEqual(await appliquerSeuil(interactionSeuil(Flags.ModerateMembers), { id: U2 }, 3), null, "seuil exact uniquement")
+})
+
+test("warn refusé si le seuil atteint est une sanction que l'auteur ne peut pas appliquer", async () => {
+    const G8 = "555555555555555557"
+    db.setThreshold(G8, 2, "ban", null)
+    const interaction = perm => ({ guild: { id: G8 }, memberPermissions: new Discord.PermissionsBitField(perm) })
+    assert.match(sanctionInterdite(interaction(Flags.ModerateMembers), 2), /ban/, "sans BanMembers : refusé")
+    assert.strictEqual(sanctionInterdite(interaction(Flags.ModerateMembers | Flags.BanMembers), 2), null, "avec la permission : accepté")
+    assert.strictEqual(sanctionInterdite(interaction(Flags.ModerateMembers), 1), null, "pas de seuil à ce total")
+})
+
+test("unwarn d'un membre absent : le rôle staff seul ne suffit pas", async () => {
+    const G9 = "555555555555555558"
+    const unwarn = require('../Commandes/Moderation/unwarn')
+    const idWarn = db.addWarn(G9, U2, "admin", "spam")
+    const reponses = []
+    const interaction = perm => ({
+        guild: { id: G9, members: { fetch: async () => { throw new Error("absent") } } },
+        user: { id: MOD }, memberPermissions: new Discord.PermissionsBitField(perm),
+        reply: async r => reponses.push(r)
+    })
+    const args = { getInteger: () => idWarn, getString: () => null }
+    const bot = { users: { fetch: async () => null } }
+
+    await unwarn.run(bot, interaction(0n), args)
+    assert.ok(db.getWarn(G9, idWarn), "refusé : le warn est toujours là")
+    assert.match(reponses[0].content, /rôle staff/)
+
+    await unwarn.run(bot, interaction(Flags.ModerateMembers), args)
+    assert.ok(!db.getWarn(G9, idWarn), "avec la permission : le warn est retiré")
 })

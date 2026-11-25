@@ -1,6 +1,6 @@
 const Discord = require('discord.js')
 const { formatReason, checkHierarchy, fetchMember } = require('../../Fonctions/moderation')
-const { appliquerSeuil } = require('../../Fonctions/sanctions')
+const { appliquerSeuil, sanctionInterdite } = require('../../Fonctions/sanctions')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
@@ -39,6 +39,15 @@ module.exports = {
 
         const erreur = checkHierarchy(message, member, "warn")
         if (erreur) return message.editReply(erreur)
+
+        // Un warn qui atteindrait un seuil dont l'auteur ne peut pas appliquer la sanction est refusé :
+        // sinon le seuil serait consommé sans effet (pas de déclenchement au warn suivant)
+        const interdite = sanctionInterdite(message, db.countWarns(message.guild.id, user.id) + 1)
+        if (interdite) {
+            // La réponse différée est publique : on la retire et le refus part en éphémère (seul l'auteur le voit)
+            await message.deleteReply().catch(() => {})
+            return message.followUp({ content: t(message, "mod.warn.seuil_interdit", { sanction: interdite }), flags: Discord.MessageFlags.Ephemeral })
+        }
 
         // On enregistre la raison brute : elle est échappée au moment de l'affichage.
         // Ajout et comptage sans "await" entre les deux : chaque warn obtient un total différent,

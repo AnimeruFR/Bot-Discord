@@ -136,6 +136,15 @@ async function banAvecConfirmation(interaction, { user, raisonBrute, duree = nul
     })
 }
 
+// Avant un warn : renvoie le libellé de la sanction automatique que ce warn (le n°total) déclencherait
+// si l'auteur n'a pas la permission de l'appliquer, sinon null. Même règle que dans appliquerSeuil.
+function sanctionInterdite(interaction, total) {
+    const seuil = db.getThreshold(interaction.guild.id, total)
+    if (!seuil || interaction.memberPermissions?.has(PERMISSIONS[seuil.action])) return null
+    const duree = seuil.duration_ms
+    return `${t(interaction, `mod.libelle.${seuil.action}`)}${duree ? t(interaction, "mod.auto.de_duree", { duree: formatDuree(duree, langueDe(interaction)) }) : ""}`
+}
+
 // Après un warn : applique la sanction dont le seuil est exactement le nouveau nombre de warns.
 // "Exactement" : chaque warn a un total différent (SQLite est synchrone), donc un seuil ne se déclenche
 // qu'une fois, même si deux modérateurs warnent en même temps. Renvoie un texte à afficher, ou null.
@@ -188,6 +197,6 @@ async function appliquerSeuil(interaction, user, total) {
 }
 
 module.exports = {
-    verifierBan, bannir, banAvecConfirmation, appliquerSeuil,
+    verifierBan, bannir, banAvecConfirmation, appliquerSeuil, sanctionInterdite,
     marqueurTempban, DUREE_MAX_MUTE, DUREE_MAX_TEMPBAN, PERMISSIONS, LIBELLES
 }

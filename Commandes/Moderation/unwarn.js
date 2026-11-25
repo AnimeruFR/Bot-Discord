@@ -45,6 +45,9 @@ module.exports = {
         if (member) {
             const erreur = checkHierarchy(message, member, "unwarn")
             if (erreur) return message.reply({ content: erreur, flags: Discord.MessageFlags.Ephemeral })
+        } else if (!message.memberPermissions?.has(Discord.PermissionFlagsBits.ModerateMembers)) {
+            // Hiérarchie invérifiable : le rôle staff seul ne suffit pas
+            return message.reply({ content: t(message, "mod.unwarn.membre_absent"), flags: Discord.MessageFlags.Ephemeral })
         }
 
         // Si deux modérateurs retirent le même warn en même temps, un seul réussit
