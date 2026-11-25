@@ -122,7 +122,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
 - **Ne jamais rendre payante une fonction de sécurité de base** (modération, protection des tickets) : seulement le confort (types de tickets, transcript HTML, personnalisation, statistiques).
 - **Alternative sans vérification** : Ko-fi ou Patreon avec un rôle « premium » sur ton serveur de support. C'est plus simple mais plus manuel.
 
-### Lot K – Tableau de bord web (idée 21, en dernier)
+### Lot K – Tableau de bord web (idée 21, en dernier) ✅ fait (`dashboard/`, voir README)
 - Petit site (Vue ou Angular, que tu connais déjà, ou Express) avec connexion Discord OAuth2, qui lit et écrit la même base que le bot (ou passe par une API interne).
 - Sécurité :
   - vérifier côté serveur que l'utilisateur a « Gérer le serveur » sur le serveur qu'il configure (protection contre l'IDOR) ;

@@ -32,3 +32,39 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  # Tableau de bord web (facultatif) : même image, même base. Il n'écoute que sur la machine :
+  # place un reverse proxy HTTPS devant (Caddy ou Nginx) et mets DASHBOARD_TRUST_PROXY=1.
+  dashboard:
+    image: bot-discord:latest
+    container_name: bot-discord-dashboard
+    restart: unless-stopped
+    depends_on:
+      - bot
+    command: ["node", "--disable-warning=ExperimentalWarning", "dashboard/index.js"]
+    env_file: .env.prod
+    environment:
+      DATABASE_PATH: /app/data/bot.db
+      DASHBOARD_PORT: "3000"
+      # Le site est derrière un reverse proxy : l'IP du visiteur est lue dans X-Forwarded-For
+      DASHBOARD_TRUST_PROXY: "1"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    # Le contrôle de santé de l'image concerne le bot (fichier heartbeat) : désactivé ici
+    healthcheck:
+      disable: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

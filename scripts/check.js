@@ -167,7 +167,8 @@ buildTranscript(gros, { fermePar: { tag: "modo", id: MOD }, auteurId: U }).then(
 // 9. Pièces jointes : seul le CDN de Discord est téléchargé, rien de trop lourd
 const envois = []
 const logsFactice = { send: async m => envois.push(m) }
-sendAttachments(logsFactice, [
+// Promesse gardée : les tests du tableau de bord attendent sa fin (ce test remplace fetch le temps de son exécution)
+const testPieces = sendAttachments(logsFactice, [
     { name: "piege.png", url: "http://169.254.169.254/latest/meta-data", size: 10 },
     { name: "enorme.mp4", url: "https://cdn.discordapp.com/x/enorme.mp4", size: 50 * 1024 * 1024 }
 ], "ticket-bob").then(ignorees => {
@@ -178,6 +179,7 @@ sendAttachments(logsFactice, [
     // fetch simulé : 404 -> ignorée, 503 puis 200 -> retentée et envoyée, redirection interdite
     const appels = []
     const reponses = { "/supprime.png": [404], "/instable.png": [503, 200] }
+    const fetchOriginal = global.fetch
     global.fetch = async (url, options) => {
         assert.strictEqual(options.redirect, "error", "pas de redirection suivie")
         appels.push(url.pathname)
@@ -185,13 +187,17 @@ sendAttachments(logsFactice, [
         return { ok: status === 200, status, headers: new Map(), arrayBuffer: async () => new ArrayBuffer(4) }
     }
     envois.length = 0
-    const ignorees = await sendAttachments(logsFactice, [
-        { name: "supprime.png", url: "https://cdn.discordapp.com/supprime.png", size: 4 },
-        { name: "instable.png", url: "https://cdn.discordapp.com/instable.png", size: 4 }
-    ], "ticket-bob")
-    assert.deepStrictEqual(ignorees, ["supprime.png"], "fichier supprimé ignoré")
-    assert.strictEqual(appels.filter(a => a === "/instable.png").length, 2, "erreur passagère retentée")
-    assert.strictEqual(envois.length, 1, "fichier instable finalement envoyé")
+    try {
+        const ignorees = await sendAttachments(logsFactice, [
+            { name: "supprime.png", url: "https://cdn.discordapp.com/supprime.png", size: 4 },
+            { name: "instable.png", url: "https://cdn.discordapp.com/instable.png", size: 4 }
+        ], "ticket-bob")
+        assert.deepStrictEqual(ignorees, ["supprime.png"], "fichier supprimé ignoré")
+        assert.strictEqual(appels.filter(a => a === "/instable.png").length, 2, "erreur passagère retentée")
+        assert.strictEqual(envois.length, 1, "fichier instable finalement envoyé")
+    } finally {
+        global.fetch = fetchOriginal // les tests suivants (tableau de bord) utilisent le vrai fetch
+    }
     console.log("OK : téléchargement des pièces jointes (404, nouvel essai)")
 })
 
@@ -440,6 +446,13 @@ const { appliquerSeuil, marqueurTempban } = require('../Fonctions/sanctions')
     testsLotI()
     testsFichiersSuivis()
     await testsLotJ()
+
+    // 20. Lot K : tableau de bord web (tests propres à chaque module), après le test qui simule fetch
+    await testPieces
+    for (const module of ["discord-actions", "pages", "serveur"]) {
+        await require(`../dashboard/tests/${module}.js`).tester()
+        console.log(`OK : tableau de bord (${module})`)
+    }
 })()
 
 // 19. Lot J : premium par serveur
