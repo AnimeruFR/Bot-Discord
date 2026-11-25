@@ -453,5 +453,9 @@ module.exports = {
     backupTo: destination => requetes.backup.run(destination),
     fichier,
 
-    close: () => db.close()
+    close: () => db.close(),
+
+    // Requêtes génériques (RGPD par membre) : le SQL vient uniquement de Fonctions/registreRgpd.js, les valeurs sont en paramètres
+    sqlAll: (sql, params = []) => db.prepare(sql).all(...params),
+    sqlRun: (sql, params = []) => db.prepare(sql).run(...params).changes
 }

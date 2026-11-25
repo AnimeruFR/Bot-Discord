@@ -195,4 +195,4 @@ Animation (`Communaute/Animation/`) :
 | `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
 | `/premium` | aucune | Statut premium du serveur, fonctions premium, bouton d'achat |
 | `/about` | aucune | Serveurs, version, durée en ligne, liens (support, confidentialité, conditions) |
-| `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |
+| `/privacy [supprimer] [moi]` | aucune (suppression : administrateur) | Données conservées, export ou effacement de vos données (`moi`), effacement immédiat des données du serveur |

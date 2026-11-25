@@ -1,0 +1,13 @@
+{
+  "rgpd.serveur": "This option is used in a server: your data is stored per server.",
+  "rgpd.export_ok": "Here is your data on this server (JSON file). Only you can see this message.",
+  "rgpd.question": "Erase **your data** on this server?\n• **Erased**: data with no reason to be kept (for example your ticket cooldowns, your giveaway entries).\n• **Anonymised**: your ID is removed from items that are used by others (tickets, giveaways, announcements, sanctions you issued).\n• **Kept**: sanctions you received (2 years, moderation) and any temporary ban in progress.\nThis cannot be undone (only recent backups, up to 7 days, still contain this data).",
+  "rgpd.confirmer": "Erase my data",
+  "rgpd.annuler": "Cancel",
+  "rgpd.temps": "Time is up, nothing was erased.",
+  "rgpd.annule": "Cancelled, nothing was erased.",
+  "rgpd.en_cours": "Erasing…",
+  "rgpd.ok": "Your data on this server has been processed: {resume}.",
+  "rgpd.differe": "Your erasure is postponed: {motif}",
+  "rgpd.echec": "Erasure failed: nothing was changed (the operation is rolled back as a whole). Try again later."
+}

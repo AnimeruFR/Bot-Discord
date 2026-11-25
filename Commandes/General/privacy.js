@@ -3,6 +3,7 @@ const { couleur } = require('../../Fonctions/apparence')
 const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
 const { sendModLog } = require('../../Fonctions/logs')
+const donneesMembre = require('../../Fonctions/donneesMembre')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DELAI_CONFIRMATION = 30 * 1000
@@ -13,7 +14,7 @@ function estAdmin(interaction) {
 
 module.exports = {
     name: "privacy",
-    description: "Données conservées par le bot (et suppression pour les administrateurs)",
+    description: "Données conservées par le bot (export et effacement de vos données)",
     permission: "Aucune",
     dm: true,
     category: "Information",
@@ -23,11 +24,23 @@ module.exports = {
             name: "supprimer",
             description: "Administrateurs : effacer tout de suite toutes les données de ce serveur",
             required: false
+        }, {
+            type: "string",
+            name: "moi",
+            description: "Vos données sur ce serveur : les exporter ou les effacer",
+            required: false,
+            choices: [
+                { name: "Exporter mes données", value: "exporter" },
+                { name: "Effacer mes données", value: "effacer" }
+            ]
         }
     ],
 
     async run(bot, message, args) {
         if (args.getBoolean("supprimer")) return supprimer(message)
+        const moi = args.getString("moi")
+        if (moi === "exporter") return exporterMoi(message)
+        if (moi === "effacer") return effacerMoi(message)
 
         const lien = process.env.PRIVACY_URL
         const embed = new Discord.EmbedBuilder()
@@ -83,5 +96,55 @@ async function supprimer(interaction) {
     } catch (err) {
         console.error("Échec de l'effacement /privacy :", err)
         await interaction.editReply({ content: t(interaction, "tk.pv_echec") })
+    }
+}
+
+// Export des données du membre sur ce serveur : fichier JSON visible de lui seul
+async function exporterMoi(interaction) {
+    if (!interaction.inCachedGuild()) return interaction.reply({ content: t(interaction, "rgpd.serveur"), flags: EPHEMERAL })
+    const donnees = donneesMembre.exporter(interaction.guild.id, interaction.user.id)
+    const fichier = new Discord.AttachmentBuilder(Buffer.from(JSON.stringify(donnees, null, 2), "utf8"), { name: `mes-donnees-${interaction.guild.id}.json` })
+    await interaction.reply({ content: t(interaction, "rgpd.export_ok"), files: [fichier], flags: EPHEMERAL })
+}
+
+// Effacement des données du membre sur ce serveur, après confirmation par bouton
+async function effacerMoi(interaction) {
+    if (!interaction.inCachedGuild()) return interaction.reply({ content: t(interaction, "rgpd.serveur"), flags: EPHEMERAL })
+
+    const differe = donneesMembre.refusEffacement(interaction.guild.id, interaction.user.id)
+    if (differe) return interaction.reply({ content: t(interaction, "rgpd.differe", { motif: differe }), flags: EPHEMERAL })
+
+    const boutons = new Discord.ActionRowBuilder().addComponents(
+        new Discord.ButtonBuilder().setCustomId(`rgpdmoi-oui-${interaction.id}`).setLabel(t(interaction, "rgpd.confirmer")).setStyle(Discord.ButtonStyle.Danger),
+        new Discord.ButtonBuilder().setCustomId(`rgpdmoi-non-${interaction.id}`).setLabel(t(interaction, "rgpd.annuler")).setStyle(Discord.ButtonStyle.Secondary)
+    )
+    const reponse = await interaction.reply({
+        content: t(interaction, "rgpd.question"),
+        components: [boutons],
+        flags: EPHEMERAL,
+        withResponse: true
+    })
+
+    const clic = await reponse.resource.message.awaitMessageComponent({
+        componentType: Discord.ComponentType.Button,
+        filter: i => i.user.id === interaction.user.id && i.customId.endsWith(interaction.id),
+        time: DELAI_CONFIRMATION
+    }).catch(() => null)
+
+    if (!clic) return interaction.editReply({ content: t(interaction, "rgpd.temps"), components: [] })
+    if (clic.customId.startsWith("rgpdmoi-non")) return clic.update({ content: t(interaction, "rgpd.annule"), components: [] })
+
+    await clic.update({ content: t(interaction, "rgpd.en_cours"), components: [] })
+
+    try {
+        const resume = donneesMembre.effacer(interaction.guild.id, interaction.user.id)
+        const texte = donneesMembre.resumeTexte(resume)
+        // Le log ne contient que l'identifiant du membre et le résumé (des nombres par table)
+        await sendModLog(interaction, { action: "config", details: `Effacement RGPD du membre ${interaction.user.id} (/privacy moi) : ${texte}` })
+        await interaction.editReply({ content: t(interaction, "rgpd.ok", { resume: texte }) })
+    } catch (err) {
+        if (err.code === "RGPD_DIFFERE") return interaction.editReply({ content: t(interaction, "rgpd.differe", { motif: err.motif }) })
+        console.error("Échec de l'effacement /privacy moi :", err)
+        await interaction.editReply({ content: t(interaction, "rgpd.echec") })
     }
 }

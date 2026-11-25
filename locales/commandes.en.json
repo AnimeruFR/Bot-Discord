@@ -135,11 +135,17 @@
     "choix": {}
   },
   "privacy": {
-    "description": "Data kept by the bot (and deletion for administrators)",
+    "description": "Data kept by the bot (export and erasure of your data)",
     "options": {
-      "supprimer": "Administrators: delete all of this server's data right now"
+      "supprimer": "Administrators: delete all of this server's data right now",
+      "moi": "Your data on this server: export or erase it"
     },
-    "choix": {}
+    "choix": {
+      "moi": {
+        "exporter": "Export my data",
+        "effacer": "Erase my data"
+      }
+    }
   },
   "quoi": {
     "description": "Replies with a French joke",
