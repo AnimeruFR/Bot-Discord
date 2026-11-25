@@ -1,12 +1,24 @@
 # Bot-Discord
 
-Bot Discord de modération (ban, kick, mute, warn, clear), de tickets et d'animation (rôles à boutons, giveaways, sondages, annonces, bienvenue), en slash commandes.
+**Bot Discord tout-en-un, sécurisé, en français et en anglais** : modération, tickets, animation. Tout se configure avec `/config`, et le bot ne demande jamais la permission Administrateur.
+
+| 🛡️ Modération | 🎫 Tickets | 🎉 Animation |
+|---|---|---|
+| Ban avec confirmation, ban temporaire (déban automatique), kick, mute, warns | Types de tickets, formulaire à l'ouverture, prise en charge | Giveaways (tirage équitable, survit aux redémarrages) |
+| Historique par membre, sanctions automatiques | Transcript texte + HTML, pièces jointes, note de 1 à 5 | Rôles à boutons, sondages natifs |
+| `/lock`, `/slowmode`, règles AutoMod natives | Fermeture des tickets inactifs, `/stats` | Annonces programmées, bienvenue / au revoir |
+
+**Sécurité** : hiérarchie des rôles revérifiée à chaque action, aucune mention @everyone possible, transcripts sans XSS, données effacées 30 jours après le départ du bot (`/privacy`), CI avec tests, lint, audit des dépendances et image Docker non root.
+
+![Aperçu d'un transcript de ticket](docs/apercu-transcript.png)
+
+> Mettre le bot en avant (top.gg, serveur de support, vérification) : voir [docs/vitrine.md](docs/vitrine.md).
 
 ## Installation
 
 1. Crée une application sur le [Discord Developer Portal](https://discord.com/developers/applications), ajoute-lui un bot et récupère son token (*Bot > Reset Token*).
    **Obligatoire** : dans *Bot > Privileged Gateway Intents*, coche **Server Members Intent** (messages de bienvenue, giveaways). Sans lui, Discord refuse la connexion (code 4014) et le bot l'indique dans la console.
-2. Invite le bot sur ton serveur avec les scopes `bot` et `applications.commands` et les permissions : Gérer les salons, Gérer les messages, Gérer les rôles, Expulser, Bannir, Exclure temporairement des membres, Voir les salons, Envoyer des messages, Lire l'historique, **Joindre des fichiers**, **Intégrer des liens** (ces deux dernières sont nécessaires aux tickets).
+2. Invite le bot avec le lien donné par `npm run invite` (après l'étape 3) : il demande seulement les **permissions minimales** et affiche à quoi sert chacune (jamais Administrateur). Une fois le bot en ligne, `/invite` donne le même lien.
    Le rôle du bot doit être placé **au-dessus** des rôles qu'il doit modérer.
 3. Copie `.env.example` en `.env` et remplis-le :
    ```
@@ -52,6 +64,13 @@ Règles :
 - Quand l'auteur ferme son ticket, il perd seulement l'accès : le salon est renommé `ferme-…` et le staff garde l'historique.
 - Quand le staff supprime un ticket, le bot demande une confirmation puis envoie un **transcript** (.txt et .html lisible, 1000 derniers messages, 7 Mo max ; dans le HTML, tout le texte des membres est échappé et la page ne charge rien d'extérieur, voir [l'aperçu](docs/apercu-transcript.png)) et une copie des **pièces jointes** (40 Mo max) dans le salon de logs (`/setlogs`) avant de supprimer. Si l'envoi échoue, le ticket n'est pas supprimé.
 - Pour que le transcript contienne le texte des messages, active **Message Content Intent** dans le Developer Portal (*Bot > Privileged Gateway Intents*). Sans lui, le transcript garde les auteurs, les dates et les pièces jointes, mais pas le texte.
+
+## Configuration et langues
+
+- **`/config`** (Gérer le serveur) ouvre une fenêtre privée avec des menus : langue, couleur des embeds, salon de logs, tickets (catégorie, rôle staff, fermeture des inactifs), texte du panneau de tickets, et un résumé du reste. Elle applique exactement les mêmes règles que les commandes (`/setlogs`, `/setticket`) : par exemple, changer la config des tickets demande toujours Gérer le serveur + les salons + les rôles. Une seule fenêtre par membre, fermée au bout de 5 minutes.
+- **Langues** : le bot parle français ou anglais. Par défaut, il répond dans la langue du client Discord de chaque membre (les messages publics suivent la langue du serveur) ; `/config` permet d'imposer une langue. Les descriptions des commandes sont traduites en anglais (fichier `locales/commandes.en.json`), les messages dans `locales/fr.json` et `locales/en.json`.
+  Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
+- **Apparence** : couleur des embeds (`#RRGGBB`) et titre/texte du panneau de tickets, à appliquer en repostant le panneau avec `/ticket`.
 
 ## Animation
 
@@ -132,4 +151,7 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/sondage question choix` | Gérer les messages | Sondage natif (2 à 10 choix, 1 h à 32 jours) |
 | `/annonce action …` | Gérer les messages | Annonces programmées (20 en attente, 60 jours max) |
 | `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
+| `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs, tickets, panneau |
+| `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
+| `/about` | aucune | Serveurs, version, durée en ligne, liens (support, confidentialité, conditions) |
 | `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |

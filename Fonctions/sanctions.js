@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const db = require('./db')
 const { formatReason, auditReason, checkHierarchy, fetchMember, formatDuree } = require('./moderation')
 const { sendModLog } = require('./logs')
+const { t, langueDe } = require('./i18n')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DELAI_CONFIRMATION = 30 * 1000
@@ -22,6 +23,7 @@ const PERMISSIONS = {
     ban: Discord.PermissionFlagsBits.BanMembers,
     tempban: Discord.PermissionFlagsBits.BanMembers
 }
+// Libellés français : utilisés dans les logs (l'affichage aux membres passe par les clés mod.libelle.*)
 const LIBELLES = { mute: "mute", kick: "kick", ban: "ban définitif", tempban: "ban temporaire" }
 
 // Vérifie qu'on peut bannir l'utilisateur. Renvoie { erreur } ou { member } (null s'il n'est pas sur le serveur).
@@ -29,11 +31,11 @@ const LIBELLES = { mute: "mute", kick: "kick", ban: "ban définitif", tempban: "
 async function verifierBan(interaction, user, duree) {
     const member = await fetchMember(interaction.guild, user.id)
     if (member) {
-        const erreur = checkHierarchy(interaction, member, "bannir")
+        const erreur = checkHierarchy(interaction, member, "ban")
         if (erreur) return { erreur }
-        if (!member.bannable) return { erreur: "Je ne peux pas bannir ce membre (rôle trop haut pour moi) !" }
+        if (!member.bannable) return { erreur: t(interaction, "mod.ban.pas_bannable") }
     } else if (user.id === interaction.user.id) {
-        return { erreur: "Vous ne pouvez pas vous bannir vous-même !" }
+        return { erreur: t(interaction, "mod.hierarchie.soi", { verbe: t(interaction, "mod.verbe.ban") }) }
     }
     const ban = await interaction.guild.bans.fetch({ user: user.id, force: true }).catch(err => {
         if (err.code === Discord.RESTJSONErrorCodes.UnknownBan) return null
@@ -41,7 +43,7 @@ async function verifierBan(interaction, user, duree) {
     })
     if (ban) {
         if (!duree && db.getTempban(interaction.guild.id, user.id)) return { member: null, conversion: true }
-        return { erreur: "Ce membre est déjà banni !" }
+        return { erreur: t(interaction, "mod.ban.deja") }
     }
     return { member }
 }
@@ -51,8 +53,8 @@ async function bannir(guild, user, { moderateur, raisonBrute, duree = null, auto
     const reason = formatReason(raisonBrute)
     // Le MP doit partir avant le ban, sinon le bot ne partage plus de serveur avec lui
     if (member) {
-        const pendant = duree ? ` pendant ${formatDuree(duree)}` : ""
-        await user.send(`Tu as été banni du serveur ${guild.name}${pendant} pour la raison : ***${reason}***`).catch(() => {})
+        const pendant = duree ? t(guild, "mod.ban.mp_pendant", { duree: formatDuree(duree, langueDe(guild)) }) : ""
+        await user.send(t(guild, "mod.ban.mp", { serveur: guild.name, pendant, reason })).catch(() => {})
     }
 
     const audit = auditReason({ user: moderateur }, raisonBrute)
@@ -77,7 +79,7 @@ async function bannir(guild, user, { moderateur, raisonBrute, duree = null, auto
 // /ban et /tempban : confirmation par bouton, puis revérification complète avant d'agir
 async function banAvecConfirmation(interaction, { user, raisonBrute, duree = null }) {
     const reason = formatReason(raisonBrute)
-    const pendant = duree ? ` pendant **${formatDuree(duree)}**` : ""
+    const pendant = duree ? t(interaction, "mod.ban.pendant", { duree: formatDuree(duree, langueDe(interaction)) }) : ""
 
     // Réponse différée : les vérifications font des appels à Discord, qui peuvent dépasser les 3 s permises
     await interaction.deferReply({ flags: EPHEMERAL })
@@ -85,12 +87,12 @@ async function banAvecConfirmation(interaction, { user, raisonBrute, duree = nul
     if (premier.erreur) return interaction.editReply({ content: premier.erreur })
 
     const boutons = new Discord.ActionRowBuilder().addComponents(
-        new Discord.ButtonBuilder().setCustomId(`ban-oui-${interaction.id}`).setLabel("Bannir").setStyle(Discord.ButtonStyle.Danger),
-        new Discord.ButtonBuilder().setCustomId(`ban-non-${interaction.id}`).setLabel("Annuler").setStyle(Discord.ButtonStyle.Secondary)
+        new Discord.ButtonBuilder().setCustomId(`ban-oui-${interaction.id}`).setLabel(t(interaction, "mod.ban.bouton_ban")).setStyle(Discord.ButtonStyle.Danger),
+        new Discord.ButtonBuilder().setCustomId(`ban-non-${interaction.id}`).setLabel(t(interaction, "mod.ban.bouton_annuler")).setStyle(Discord.ButtonStyle.Secondary)
     )
     const question = premier.conversion
-        ? `${user} est en ban temporaire. Le transformer en ban **définitif** pour la raison : ***${reason}*** ?`
-        : `Confirmer le bannissement de ${user} (\`${user.id}\`)${pendant} pour la raison : ***${reason}*** ?`
+        ? t(interaction, "mod.ban.question_conversion", { user, reason })
+        : t(interaction, "mod.ban.question", { user, id: user.id, pendant, reason })
     const reponse = await interaction.editReply({ content: question, components: [boutons] })
 
     const clic = await reponse.awaitMessageComponent({
@@ -99,17 +101,17 @@ async function banAvecConfirmation(interaction, { user, raisonBrute, duree = nul
         time: DELAI_CONFIRMATION
     }).catch(() => null)
 
-    if (!clic) return interaction.editReply({ content: "Temps écoulé, bannissement annulé.", components: [] })
-    if (clic.customId.startsWith("ban-non")) return clic.update({ content: "Bannissement annulé.", components: [] })
+    if (!clic) return interaction.editReply({ content: t(interaction, "mod.ban.temps_ecoule"), components: [] })
+    if (clic.customId.startsWith("ban-non")) return clic.update({ content: t(interaction, "mod.ban.annule"), components: [] })
 
-    await clic.update({ content: "Bannissement en cours…", components: [] })
+    await clic.update({ content: t(interaction, "mod.ban.en_cours"), components: [] })
 
     // La situation a pu changer pendant la confirmation : permission (celle du clic est à jour), hiérarchie, état du ban
     if (!clic.memberPermissions?.has(Discord.PermissionFlagsBits.BanMembers)) {
-        return interaction.editReply({ content: "Vous n'avez plus la permission de bannir." })
+        return interaction.editReply({ content: t(interaction, "mod.ban.plus_permission") })
     }
     // clic : ses rôles sont ceux du modérateur au moment du clic (pas ceux d'avant la confirmation)
-    const second = await verifierBan(clic, user, duree).catch(err => ({ erreur: `Vérification impossible (${err.message}), rien n'a été fait.` }))
+    const second = await verifierBan(clic, user, duree).catch(err => ({ erreur: t(interaction, "mod.ban.verif_impossible", { erreur: err.message }) }))
     if (second.erreur) return interaction.editReply({ content: second.erreur })
 
     let numero
@@ -123,10 +125,11 @@ async function banAvecConfirmation(interaction, { user, raisonBrute, duree = nul
         }
     } catch (err) {
         console.error("Échec du bannissement :", err)
-        return interaction.editReply({ content: "Échec du bannissement (permissions du bot ?)." })
+        return interaction.editReply({ content: t(interaction, "mod.ban.echec") })
     }
-    await interaction.editReply({ content: `Bannissement effectué (sanction n°${numero}).` })
-    await interaction.followUp(`${interaction.user} a banni ${user}${pendant} pour la raison : ***${reason}***`)
+    await interaction.editReply({ content: t(interaction, "mod.ban.effectue", { numero }) })
+    const pendantPublic = duree ? t(interaction.guild, "mod.ban.pendant", { duree: formatDuree(duree, langueDe(interaction.guild)) }) : ""
+    await interaction.followUp(t(interaction.guild, "mod.ban.annonce", { moderateur: interaction.user, user, pendant: pendantPublic, reason }))
     await sendModLog(interaction, {
         action: duree ? "tempban" : "ban", cible: user, raison: raisonBrute,
         details: duree ? `Durée : ${formatDuree(duree)} (fin <t:${Math.floor((Date.now() + duree) / 1000)}:f>)` : undefined
@@ -141,44 +144,47 @@ async function appliquerSeuil(interaction, user, total) {
     if (!seuil) return null
     const { action } = seuil
     const duree = seuil.duration_ms
-    const libelle = `${LIBELLES[action]}${duree ? ` de ${formatDuree(duree)}` : ""}`
+    // libelleLog : français, pour les logs ; libelle : dans la langue de l'interaction
+    const libelleLog = `${LIBELLES[action]}${duree ? ` de ${formatDuree(duree)}` : ""}`
+    const libelle = `${t(interaction, `mod.libelle.${action}`)}${duree ? t(interaction, "mod.auto.de_duree", { duree: formatDuree(duree, langueDe(interaction)) }) : ""}`
     const raisonBrute = `Sanction automatique : ${total} avertissements`
-    const echec = motif => `Sanction automatique (${libelle}) **non appliquée** : ${motif}`
+    const raisonMp = t(interaction.guild, "mod.auto.raison", { total })
+    const echec = motif => t(interaction, "mod.auto.echec", { libelle, motif })
 
     // Sans cette vérification, un modérateur qui peut seulement warn pourrait faire bannir quelqu'un
     if (!interaction.memberPermissions?.has(PERMISSIONS[action])) {
-        return echec("vous n'avez pas vous-même la permission de faire cette sanction.")
+        return echec(t(interaction, "mod.auto.pas_permission"))
     }
     const member = await fetchMember(interaction.guild, user.id)
-    if (!member) return echec("le membre n'est plus sur le serveur.")
+    if (!member) return echec(t(interaction, "mod.auto.absent"))
     const erreur = checkHierarchy(interaction, member, "sanctionner")
     if (erreur) return echec(erreur)
 
     const audit = auditReason(interaction, raisonBrute)
     try {
         if (action === "mute") {
-            if (!member.moderatable) return echec("je ne peux pas mute ce membre (rôle trop haut pour moi).")
+            if (!member.moderatable) return echec(t(interaction, "mod.auto.pas_moderatable"))
             // On ne raccourcit jamais un mute déjà en cours
-            if ((member.communicationDisabledUntilTimestamp ?? 0) >= Date.now() + duree) return echec("le membre est déjà mute plus longtemps.")
+            if ((member.communicationDisabledUntilTimestamp ?? 0) >= Date.now() + duree) return echec(t(interaction, "mod.auto.deja_mute"))
             await member.timeout(duree, audit)
             db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "mute", reason: raisonBrute, durationMs: duree, auto: true })
-            await user.send(`Tu as été mute sur le serveur ${interaction.guild.name} pendant ${formatDuree(duree)} (${raisonBrute}).`).catch(() => {})
+            await user.send(t(interaction.guild, "mod.auto.mp_mute", { serveur: interaction.guild.name, duree: formatDuree(duree, langueDe(interaction.guild)), raison: raisonMp })).catch(() => {})
         } else if (action === "kick") {
-            if (!member.kickable) return echec("je ne peux pas kick ce membre (rôle trop haut pour moi).")
-            await user.send(`Tu as été kick du serveur ${interaction.guild.name} (${raisonBrute}).`).catch(() => {})
+            if (!member.kickable) return echec(t(interaction, "mod.auto.pas_kickable"))
+            await user.send(t(interaction.guild, "mod.auto.mp_kick", { serveur: interaction.guild.name, raison: raisonMp })).catch(() => {})
             await member.kick(audit)
             db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "kick", reason: raisonBrute, auto: true })
         } else {
-            if (!member.bannable) return echec("je ne peux pas bannir ce membre (rôle trop haut pour moi).")
+            if (!member.bannable) return echec(t(interaction, "mod.auto.pas_bannable"))
             await bannir(interaction.guild, user, { moderateur: interaction.user, raisonBrute, duree: action === "tempban" ? duree : null, auto: true, member })
         }
     } catch (err) {
         console.error("Échec de la sanction automatique :", err)
-        return echec("Discord a refusé l'action (permissions du bot ?).")
+        return echec(t(interaction, "mod.auto.refuse"))
     }
 
-    await sendModLog(interaction, { action, cible: user, raison: raisonBrute, details: `Sanction automatique : ${libelle}` })
-    return `Sanction automatique appliquée : **${libelle}**.`
+    await sendModLog(interaction, { action, cible: user, raison: raisonBrute, details: `Sanction automatique : ${libelleLog}` })
+    return t(interaction, "mod.auto.appliquee", { libelle })
 }
 
 module.exports = {

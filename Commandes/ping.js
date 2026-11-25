@@ -1,3 +1,5 @@
+const { t } = require('../Fonctions/i18n')
+
 module.exports = {
 
     name: "ping",
@@ -7,6 +9,6 @@ module.exports = {
     category: "Information",
 
     async run(bot,message, args) {
-        await message.reply(`Ping : \`${bot.ws.ping} ms\``)
+        await message.reply(t(message, "ping.reponse", { ping: bot.ws.ping }))
     }
 }

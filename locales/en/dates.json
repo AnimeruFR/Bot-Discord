@@ -1,0 +1,7 @@
+{
+  "dates.invalide": "Invalid date.",
+  "dates.inexistante": "This time doesn't exist on that day (clocks go forward). Pick another time.",
+  "dates.format": "Expected format: a duration (`2h`, `3d`) or a date `DD/MM/YYYY HH:MM` (Paris time).",
+  "dates.trop_tot": "The date must be at least one minute from now.",
+  "dates.trop_loin": "The date must be less than {jours} days from now."
+}

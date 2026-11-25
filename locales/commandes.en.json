@@ -1,0 +1,335 @@
+{
+  "annonce": {
+    "description": "Scheduled announcements",
+    "options": {
+      "action": "What to do?",
+      "message": "Announcement text (no mention will notify anyone)",
+      "quand": "In how long (2h, 3d) or date DD/MM/YYYY HH:MM (Paris time)",
+      "salon": "Announcement channel (default: this one)",
+      "numero": "Number of the announcement to cancel"
+    },
+    "choix": {
+      "action": {
+        "liste": "View scheduled announcements",
+        "programmer": "Schedule an announcement",
+        "annuler": "Cancel an announcement"
+      }
+    }
+  },
+  "automod": {
+    "description": "Native Discord AutoMod rules (banned words, invites, mentions, spam)",
+    "options": {
+      "action": "What to do?",
+      "valeur": "Comma-separated words, mention limit, or ID of the rule to delete"
+    },
+    "choix": {
+      "action": {
+        "liste": "View the bot's rules",
+        "mots-interdits": "Banned words (replaces the list)",
+        "invitations": "Block Discord invites",
+        "mentions": "Limit mentions",
+        "spam": "Discord's anti-spam filter",
+        "supprimer": "Delete a bot rule"
+      }
+    }
+  },
+  "ban": {
+    "description": "Ban a member",
+    "options": {
+      "membre": "The member to ban",
+      "raison": "The reason for the ban"
+    },
+    "choix": {}
+  },
+  "bienvenue": {
+    "description": "Welcome and goodbye messages",
+    "options": {
+      "action": "What to do?",
+      "type": "Join or leave",
+      "salon": "Channel for the messages",
+      "message": "Text, with {membre} {serveur} {nombre} (default message otherwise)"
+    },
+    "choix": {
+      "action": {
+        "voir": "View the configuration",
+        "configurer": "Configure",
+        "desactiver": "Disable",
+        "tester": "Test (on yourself)"
+      },
+      "type": {
+        "bienvenue": "Welcome (join)",
+        "aurevoir": "Goodbye (leave)"
+      }
+    }
+  },
+  "clear": {
+    "description": "Clear a channel",
+    "options": {
+      "nombre": "Number of messages to delete (1 to 100)",
+      "salon": "The channel to delete messages from"
+    },
+    "choix": {}
+  },
+  "giveaway": {
+    "description": "Giveaways: start, end or reroll a draw",
+    "options": {
+      "action": "What to do?",
+      "prix": "What can be won",
+      "duree": "Duration (e.g. 1h, 2d; 30 days max)",
+      "gagnants": "Number of winners (default 1)",
+      "numero": "Giveaway number (end, reroll, cancel)",
+      "salon": "Giveaway channel (default: this one)"
+    },
+    "choix": {
+      "action": {
+        "liste": "View giveaways",
+        "lancer": "Start a giveaway",
+        "terminer": "End now",
+        "relancer": "Reroll the draw (new winners)",
+        "annuler": "Cancel (no draw)"
+      }
+    }
+  },
+  "help": {
+    "description": "Shows the commands and their details",
+    "options": {
+      "commande": "Command to show"
+    },
+    "choix": {}
+  },
+  "historique": {
+    "description": "Shows a member's sanction history",
+    "options": {
+      "membre": "The member whose history you want to see"
+    },
+    "choix": {}
+  },
+  "kick": {
+    "description": "Kick a member",
+    "options": {
+      "membre": "The member to kick",
+      "raison": "The reason for the kick"
+    },
+    "choix": {}
+  },
+  "lock": {
+    "description": "Locks a channel: @everyone can no longer write in it",
+    "options": {
+      "salon": "The channel to lock (default: this one)",
+      "raison": "The reason for the lock"
+    },
+    "choix": {}
+  },
+  "mute": {
+    "description": "Mute a member",
+    "options": {
+      "membre": "The member to mute",
+      "temps": "Mute duration (e.g. 10m, 1h, 2d)",
+      "raison": "The reason for the mute"
+    },
+    "choix": {}
+  },
+  "ping": {
+    "description": "Shows the bot's ping",
+    "options": {},
+    "choix": {}
+  },
+  "privacy": {
+    "description": "Data kept by the bot (and deletion for administrators)",
+    "options": {
+      "supprimer": "Administrators: delete all of this server's data right now"
+    },
+    "choix": {}
+  },
+  "quoi": {
+    "description": "Replies with a French joke",
+    "options": {},
+    "choix": {}
+  },
+  "roles": {
+    "description": "Button role panels (members take or remove a role themselves)",
+    "options": {
+      "action": "What to do?",
+      "panneau": "Panel message ID (see \"View panels\")",
+      "role": "The role to add or remove",
+      "texte": "Panel title, or button text",
+      "salon": "Channel of the new panel (default: this one)",
+      "unique": "Only one role from this panel at a time (e.g. colors)"
+    },
+    "choix": {
+      "action": {
+        "liste": "View panels",
+        "creer": "Create a panel",
+        "ajouter": "Add a role to a panel",
+        "retirer": "Remove a role from a panel",
+        "supprimer": "Delete a panel"
+      }
+    }
+  },
+  "sanctions": {
+    "description": "Automatic sanctions based on the number of warnings",
+    "options": {
+      "action": "What to do?",
+      "avertissements": "Number of warns that triggers the sanction",
+      "sanction": "Sanction applied (for \"Set\")",
+      "duree": "Mute or temp ban duration (e.g. 1h, 7d)"
+    },
+    "choix": {
+      "action": {
+        "liste": "View thresholds",
+        "definir": "Set a threshold",
+        "retirer": "Remove a threshold"
+      },
+      "sanction": {
+        "mute": "Mute",
+        "kick": "Kick",
+        "tempban": "Temporary ban",
+        "ban": "Permanent ban"
+      }
+    }
+  },
+  "setlogs": {
+    "description": "Sets the moderation log channel (no channel: disables logs)",
+    "options": {
+      "salon": "The channel to send logs to"
+    },
+    "choix": {}
+  },
+  "setticket": {
+    "description": "Configure the ticket category and staff role",
+    "options": {
+      "categorie": "The category where tickets are created",
+      "staff": "The role that can see and manage tickets",
+      "inactivite": "Close tickets with no message for N days (0 = never)",
+      "reinitialiser": "Restore defaults (panel category, role from .env)"
+    },
+    "choix": {}
+  },
+  "slowmode": {
+    "description": "Sets a channel's slowmode (0 to disable it)",
+    "options": {
+      "duree": "Delay between messages (e.g. 5s, 1m, 2h; 0 = off; 6h max)",
+      "salon": "The channel (default: this one)"
+    },
+    "choix": {}
+  },
+  "sondage": {
+    "description": "Creates a native Discord poll",
+    "options": {
+      "question": "The question",
+      "choix": "The choices, separated by ; (e.g. Yes ; No ; Maybe)",
+      "heures": "Duration in hours (24 by default, 768 max)",
+      "multiple": "Allow multiple answers",
+      "salon": "Poll channel (default: this one)"
+    },
+    "choix": {}
+  },
+  "stats": {
+    "description": "Ticket statistics for the last 30 days",
+    "options": {},
+    "choix": {}
+  },
+  "tempban": {
+    "description": "Ban a member for a limited time (automatic unban)",
+    "options": {
+      "membre": "The member to ban",
+      "duree": "Ban duration (e.g. 1h, 3d, 2w; 365 days max)",
+      "raison": "The reason for the ban"
+    },
+    "choix": {}
+  },
+  "ticket": {
+    "description": "Tickets: post the panel, add or remove a member from a ticket",
+    "options": {
+      "action": "What to do?",
+      "membre": "The member to add or remove"
+    },
+    "choix": {
+      "action": {
+        "panneau": "Post the panel here",
+        "ajouter": "Add a member to this ticket",
+        "retirer": "Remove a member from this ticket"
+      }
+    }
+  },
+  "tickettype": {
+    "description": "Ticket types (panel dropdown menu)",
+    "options": {
+      "action": "What to do?",
+      "numero": "Type number (to edit or remove)",
+      "nom": "Name shown in the menu (e.g. Support, Report, Partnership)",
+      "description": "Short description shown in the menu",
+      "categorie": "Category for tickets of this type",
+      "staff": "Role that can see and manage tickets of this type"
+    },
+    "choix": {
+      "action": {
+        "liste": "View types",
+        "ajouter": "Add a type",
+        "modifier": "Edit a type",
+        "retirer": "Remove a type"
+      }
+    }
+  },
+  "unban": {
+    "description": "Unban a member",
+    "options": {
+      "utilisateur": "The user to unban",
+      "raison": "The reason for the unban"
+    },
+    "choix": {}
+  },
+  "unlock": {
+    "description": "Unlocks a channel locked with /lock",
+    "options": {
+      "salon": "The channel to unlock (default: this one)"
+    },
+    "choix": {}
+  },
+  "unmute": {
+    "description": "Unmute a member",
+    "options": {
+      "membre": "The member to unmute",
+      "raison": "The reason for the unmute"
+    },
+    "choix": {}
+  },
+  "unwarn": {
+    "description": "Removes a warning",
+    "options": {
+      "numero": "The warn number (see /warns)",
+      "raison": "The reason for the removal"
+    },
+    "choix": {}
+  },
+  "warn": {
+    "description": "Warn a member",
+    "options": {
+      "membre": "The member to warn",
+      "raison": "The reason for the warn"
+    },
+    "choix": {}
+  },
+  "warns": {
+    "description": "Shows a member's warnings",
+    "options": {
+      "membre": "The member whose warns you want to see"
+    },
+    "choix": {}
+  },
+  "config": {
+    "description": "Interactive bot settings (logs, tickets, language, appearance)",
+    "options": {},
+    "choix": {}
+  },
+  "invite": {
+    "description": "Link to add the bot to a server",
+    "options": {},
+    "choix": {}
+  },
+  "about": {
+    "description": "About the bot (servers, version, links)",
+    "options": {},
+    "choix": {}
+  }
+}

@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const db = require('./db')
+const { t } = require('./i18n')
 
 const { Flags } = Discord.PermissionsBitField
 
@@ -14,16 +15,16 @@ const TYPES_VERROUILLABLES = [
 
 // Vérifications communes à /lock et /unlock. Renvoie un message d'erreur, ou null.
 function verifierDroits(interaction, channel) {
-    if (!TYPES_VERROUILLABLES.includes(channel.type)) return "Seuls les salons textuels, d'annonces et vocaux peuvent être verrouillés."
+    if (!TYPES_VERROUILLABLES.includes(channel.type)) return t(interaction, "eng.verrou.type")
     // Modifier les permissions d'un salon demande « Gérer les salons » ET « Gérer les permissions » :
     // sans la 2e, un modérateur obtiendrait par le bot un droit qu'il n'a pas
     if (!channel.permissionsFor(interaction.member)?.has([Flags.ViewChannel, Flags.ManageChannels, Flags.ManageRoles])) {
-        return `Il vous faut les permissions « Gérer les salons » et « Gérer les permissions » dans ${channel}.`
+        return t(interaction, "eng.verrou.droits_membre", { salon: channel })
     }
     // Discord refuse qu'un bot (non administrateur) modifie une permission qu'il n'a pas lui-même
     const besoin = [Flags.ViewChannel, Flags.ManageChannels, Flags.ManageRoles, ...DROITS_VERROU.map(d => Flags[d])]
     if (!channel.permissionsFor(interaction.guild.members.me)?.has(besoin)) {
-        return `Il me faut dans ${channel} : Voir le salon, Gérer les salons, Gérer les permissions, Envoyer des messages (y compris dans les fils), Créer des fils et Ajouter des réactions.`
+        return t(interaction, "eng.verrou.droits_bot", { salon: channel })
     }
     return null
 }

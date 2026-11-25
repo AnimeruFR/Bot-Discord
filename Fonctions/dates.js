@@ -1,4 +1,5 @@
 const ms = require('ms')
+const { t } = require('./i18n')
 
 const FUSEAU = "Europe/Paris"
 const MINUTE = 60 * 1000
@@ -27,7 +28,9 @@ function dateDeParis(annee, mois, jour, heure, minute) {
 }
 
 // "2h", "3d" ou "25/12/2026 18:00" -> { date } (ms UTC) ou { erreur }
-function parseQuand(texte, { maintenant = Date.now(), min = MINUTE, max } = {}) {
+// cible : interaction pour la langue des erreurs (français sans cible)
+function parseQuand(texte, { maintenant = Date.now(), min = MINUTE, max, cible = null } = {}) {
+    const L = cible ?? "fr"
     const brut = texte?.trim() ?? ""
     let date
     const absolue = brut.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2})[:h](\d{2})$/)
@@ -35,16 +38,16 @@ function parseQuand(texte, { maintenant = Date.now(), min = MINUTE, max } = {}) 
         const [jour, mois, annee, heure, minute] = absolue.slice(1).map(Number)
         // Valeurs impossibles (31/02, 25:00…) refusées, au lieu d'être décalées comme le ferait new Date()
         const jours = new Date(Date.UTC(annee, mois, 0)).getUTCDate()
-        if (mois < 1 || mois > 12 || jour < 1 || jour > jours || heure > 23 || minute > 59) return { erreur: "Date invalide." }
+        if (mois < 1 || mois > 12 || jour < 1 || jour > jours || heure > 23 || minute > 59) return { erreur: t(L, "dates.invalide") }
         date = dateDeParis(annee, mois, jour, heure, minute)
-        if (date === null) return { erreur: "Cette heure n'existe pas ce jour-là (passage à l'heure d'été). Choisis une autre heure." }
+        if (date === null) return { erreur: t(L, "dates.inexistante") }
     } else {
         const duree = brut ? ms(brut) : NaN
-        if (!Number.isFinite(duree) || duree <= 0) return { erreur: "Format attendu : une durée (`2h`, `3d`) ou une date `JJ/MM/AAAA HH:MM` (heure de Paris)." }
+        if (!Number.isFinite(duree) || duree <= 0) return { erreur: t(L, "dates.format") }
         date = maintenant + duree
     }
-    if (date - maintenant < min) return { erreur: "La date doit être dans au moins une minute." }
-    if (max && date - maintenant > max) return { erreur: `La date doit être dans moins de ${Math.round(max / 86400000)} jours.` }
+    if (date - maintenant < min) return { erreur: t(L, "dates.trop_tot") }
+    if (max && date - maintenant > max) return { erreur: t(L, "dates.trop_loin", { jours: Math.round(max / 86400000) }) }
     return { date }
 }
 

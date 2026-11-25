@@ -1,0 +1,13 @@
+{
+  "crois.invite": "Add the bot to your server with the button below. It only asks for the permissions it needs (never Administrator).",
+  "crois.bouton_inviter": "Add the bot",
+  "crois.bouton_support": "Support server",
+  "crois.bouton_confidentialite": "Privacy",
+  "crois.bouton_conditions": "Terms of service",
+  "crois.about_titre": "About {nom}",
+  "crois.about_description": "Moderation, tickets and community bot, in French and English. `/help` for the command list, `/config` to set it up.",
+  "crois.serveurs": "Servers",
+  "crois.version": "Version",
+  "crois.en_ligne": "Online for",
+  "crois.commandes": "Commands"
+}

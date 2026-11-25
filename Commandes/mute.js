@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const { formatReason, auditReason, checkHierarchy, fetchMember, parseDuree, formatDuree } = require('../Fonctions/moderation')
 const { DUREE_MAX_MUTE } = require('../Fonctions/sanctions')
 const { sendModLog } = require('../Fonctions/logs')
+const { t, langueDe } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 
 module.exports = {
@@ -37,23 +38,25 @@ module.exports = {
         const user = args.getUser("membre")
         const raisonBrute = args.getString("raison")
 
-        const { duree, erreur: erreurDuree } = parseDuree(args.getString("temps"), { min: 1000, max: DUREE_MAX_MUTE })
+        const { duree, erreur: erreurDuree } = parseDuree(args.getString("temps"), { min: 1000, max: DUREE_MAX_MUTE, cible: message })
         if (erreurDuree) return message.editReply(erreurDuree)
-        const temps = formatDuree(duree)
+        const temps = formatDuree(duree, langueDe(message))
+        const tempsFr = formatDuree(duree)
+        const tempsMp = formatDuree(duree, langueDe(message.guild))
         const reason = formatReason(raisonBrute)
 
         const member = await fetchMember(message.guild, user.id)
-        if (!member) return message.editReply("Ce membre n'est pas sur le serveur !")
+        if (!member) return message.editReply(t(message, "mod.absent"))
 
         const erreur = checkHierarchy(message, member, "mute")
         if (erreur) return message.editReply(erreur)
-        if (!member.moderatable) return message.editReply("Je ne peux pas mute ce membre (rôle trop haut pour moi) !")
-        if (member.isCommunicationDisabled()) return message.editReply("Ce membre est déjà mute !")
+        if (!member.moderatable) return message.editReply(t(message, "mod.mute.pas_moderatable"))
+        if (member.isCommunicationDisabled()) return message.editReply(t(message, "mod.mute.deja"))
 
         await member.timeout(duree, auditReason(message, raisonBrute))
         const numero = db.addCase(message.guild.id, { userId: user.id, moderatorId: message.user.id, type: "mute", reason: raisonBrute, durationMs: duree })
-        await message.editReply(`${message.user} a mute ${user} pendant ${temps} pour la raison : ***${reason}*** (sanction n°${numero})`)
-        await sendModLog(message, { action: "mute", cible: user, raison: raisonBrute, details: `Durée : ${temps}` })
-        await user.send(`Tu as été mute sur le serveur ${message.guild.name} pendant ${temps} pour la raison : ***${reason}***`).catch(() => {})
+        await message.editReply(t(message, "mod.mute.reponse", { moderateur: message.user, user, temps, reason, numero }))
+        await sendModLog(message, { action: "mute", cible: user, raison: raisonBrute, details: `Durée : ${tempsFr}` })
+        await user.send(t(message.guild, "mod.mute.mp", { serveur: message.guild.name, temps: tempsMp, reason })).catch(() => {})
     }
 }

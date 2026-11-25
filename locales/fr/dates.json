@@ -1,0 +1,7 @@
+{
+  "dates.invalide": "Date invalide.",
+  "dates.inexistante": "Cette heure n'existe pas ce jour-là (passage à l'heure d'été). Choisis une autre heure.",
+  "dates.format": "Format attendu : une durée (`2h`, `3d`) ou une date `JJ/MM/AAAA HH:MM` (heure de Paris).",
+  "dates.trop_tot": "La date doit être dans au moins une minute.",
+  "dates.trop_loin": "La date doit être dans moins de {jours} jours."
+}

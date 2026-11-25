@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const db = require('./db')
 const { sendModLog } = require('./logs')
+const { t } = require('./i18n')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -20,29 +21,32 @@ function salonDangereux(guild, role) {
 }
 
 // Le rôle peut-il être distribué par un bouton ? Renvoie un message d'erreur, ou null.
+// cible : langue du message d'erreur (interaction, serveur ou "fr" ; français par défaut).
 // Revérifié à CHAQUE clic : le rôle a pu gagner une permission ou monter depuis la création du panneau.
-function refusRole(guild, role, configurateur = null) {
-    if (!role) return "Ce rôle n'existe plus."
-    if (role.id === guild.id) return "@everyone ne peut pas être distribué."
-    if (role.managed) return "Ce rôle est géré par une intégration (bot, boost…)."
-    if (role.permissions.any(PERMS_DANGEREUSES)) return `Le rôle ${role} a des permissions de modération ou d'administration : il ne peut pas être distribué par un bouton.`
+function refusRole(guild, role, configurateur = null, cible = null) {
+    const l = cible ?? "fr"
+    if (!role) return t(l, "eng.refus.inexistant")
+    if (role.id === guild.id) return t(l, "eng.refus.everyone")
+    if (role.managed) return t(l, "eng.refus.gere")
+    if (role.permissions.any(PERMS_DANGEREUSES)) return t(l, "eng.refus.dangereux", { role })
     const salon = salonDangereux(guild, role)
-    if (salon) return `Le rôle ${role} a des permissions de modération dans ${salon} : il ne peut pas être distribué par un bouton.`
-    if (role.comparePositionTo(guild.members.me.roles.highest) >= 0) return `Le rôle ${role} est au-dessus de mon rôle le plus haut : je ne peux pas le donner.`
+    if (salon) return t(l, "eng.refus.dangereux_salon", { role, salon })
+    if (role.comparePositionTo(guild.members.me.roles.highest) >= 0) return t(l, "eng.refus.au_dessus", { role })
     if (configurateur && configurateur.id !== guild.ownerId && role.comparePositionTo(configurateur.roles.highest) >= 0) {
-        return "Vous ne pouvez proposer qu'un rôle inférieur à votre rôle le plus haut."
+        return t(l, "eng.refus.configurateur")
     }
     return null
 }
 
-// Contenu du message d'un panneau (titre échappé, un bouton par rôle)
-function contenuPanneau(panel, boutons) {
+// Contenu du message d'un panneau (titre échappé, un bouton par rôle). cible : le serveur (langue du message public)
+function contenuPanneau(panel, boutons, cible = null) {
+    const l = cible ?? "fr"
     const embed = new Discord.EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle(panel.titre.slice(0, 256))
         .setDescription(boutons.length
-            ? `Clique sur un bouton pour prendre ou retirer le rôle.${panel.mode === "unique" ? "\nUn seul rôle de ce panneau à la fois." : ""}`
-            : "Aucun rôle pour l'instant. Un modérateur peut en ajouter avec `/roles action:Ajouter`.")
+            ? t(l, "eng.panneau.description") + (panel.mode === "unique" ? t(l, "eng.panneau.unique") : "")
+            : t(l, "eng.panneau.vide"))
     const lignes = []
     for (let i = 0; i < boutons.length; i += 5) {
         lignes.push(new Discord.ActionRowBuilder().addComponents(boutons.slice(i, i + 5).map(b =>
@@ -62,7 +66,7 @@ async function rafraichirPanneau(guild, panel) {
         db.removeRolePanel(guild.id, panel.message_id)
         return false
     }
-    await message.edit(contenuPanneau(panel, db.listRoleButtons(guild.id, panel.message_id)))
+    await message.edit(contenuPanneau(panel, db.listRoleButtons(guild.id, panel.message_id), guild))
     return true
 }
 
@@ -76,12 +80,12 @@ async function onClicRole(bot, interaction) {
     // Tout est relu en base : le rôle doit être sur CE panneau (message du clic)
     const panel = db.getRolePanel(guild.id, interaction.message.id)
     const bouton = panel ? db.getRoleButton(guild.id, panel.message_id, roleId) : null
-    if (!bouton) return interaction.reply({ content: "Ce bouton n'est plus actif.", flags: EPHEMERAL })
+    if (!bouton) return interaction.reply({ content: t(interaction, "roles.inactif"), flags: EPHEMERAL })
 
     const role = guild.roles.cache.get(roleId)
     const refus = refusRole(guild, role) ?? (guild.members.me.permissions.has(Flags.ManageRoles) ? null : "il me manque la permission « Gérer les rôles »")
     if (refus) {
-        await interaction.reply({ content: "Ce rôle n'est plus disponible. Le staff a été prévenu.", flags: EPHEMERAL })
+        await interaction.reply({ content: t(interaction, "roles.indisponible"), flags: EPHEMERAL })
         // Une seule alerte par heure et par bouton : des clics répétés ne doivent pas inonder les logs
         const cleAlerte = `${panel.message_id}-${roleId}`
         if (Date.now() - (alertes.get(cleAlerte) ?? 0) < 3600000) return
@@ -90,7 +94,7 @@ async function onClicRole(bot, interaction) {
     }
 
     const cle = `${interaction.user.id}-${panel.message_id}`
-    if (enCours.has(cle)) return interaction.reply({ content: "Un instant, ton clic précédent est en cours.", flags: EPHEMERAL })
+    if (enCours.has(cle)) return interaction.reply({ content: t(interaction, "roles.patience"), flags: EPHEMERAL })
     enCours.add(cle)
     try {
         await interaction.deferReply({ flags: EPHEMERAL })
@@ -98,7 +102,7 @@ async function onClicRole(bot, interaction) {
         const raison = `Rôle par bouton (panneau ${panel.message_id})`
         if (member.roles.cache.has(roleId)) {
             await member.roles.remove(roleId, raison)
-            return interaction.editReply(`Rôle ${role} retiré.`)
+            return interaction.editReply(t(interaction, "roles.retire", { role }))
         }
         // Mode unique : on retire d'abord les autres rôles de ce panneau
         if (panel.mode === "unique") {
@@ -108,7 +112,7 @@ async function onClicRole(bot, interaction) {
             if (autres.length) await member.roles.remove(autres, raison)
         }
         await member.roles.add(roleId, raison)
-        await interaction.editReply(`Rôle ${role} ajouté.`)
+        await interaction.editReply(t(interaction, "roles.ajoute", { role }))
     } finally {
         enCours.delete(cle)
     }

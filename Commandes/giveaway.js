@@ -3,6 +3,7 @@ const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
 const { parseDuree } = require('../Fonctions/moderation')
 const giveaways = require('../Fonctions/giveaways')
+const { t } = require('../Fonctions/i18n')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -67,60 +68,64 @@ module.exports = {
         const action = args.getString("action")
 
         if (action === "liste") {
-            const lignes = db.listGiveaways(guild.id).map(g => `• n°${g.id} – **${Discord.escapeMarkdown(g.prix)}** dans <#${g.channel_id}> – `
-                + (g.status === "en_cours" ? `fin <t:${Math.floor(g.ends_at / 1000)}:R>, ${db.countEntries(g.id)} participant(s)` : "terminé"))
-            return message.reply({ content: lignes.length ? lignes.join("\n") : "Aucun giveaway.", flags: EPHEMERAL })
+            const lignes = db.listGiveaways(guild.id).map(g => {
+                const base = { id: g.id, prix: Discord.escapeMarkdown(g.prix), salon: g.channel_id }
+                return g.status === "en_cours"
+                    ? t(message, "eng.giveaway.ligne_en_cours", { ...base, fin: `<t:${Math.floor(g.ends_at / 1000)}:R>`, nombre: db.countEntries(g.id) })
+                    : t(message, "eng.giveaway.ligne_termine", base)
+            })
+            return message.reply({ content: lignes.length ? lignes.join("\n") : t(message, "eng.giveaway.aucun"), flags: EPHEMERAL })
         }
 
         if (action === "lancer") {
             const prix = args.getString("prix")?.trim()
-            if (!prix) return message.reply({ content: "Précise le prix (option `prix`).", flags: EPHEMERAL })
-            const { duree, erreur } = parseDuree(args.getString("duree") ?? "", { max: DUREE_MAX })
-            if (erreur) return message.reply({ content: `Option \`duree\` : ${erreur}`, flags: EPHEMERAL })
+            if (!prix) return message.reply({ content: t(message, "eng.giveaway.prix_manquant"), flags: EPHEMERAL })
+            const { duree, erreur } = parseDuree(args.getString("duree") ?? "", { max: DUREE_MAX, cible: message })
+            if (erreur) return message.reply({ content: t(message, "eng.giveaway.duree_erreur", { erreur }), flags: EPHEMERAL })
             const channel = args.getChannel("salon") ?? message.channel
             if (!channel.permissionsFor(guild.members.me)?.has([Flags.ViewChannel, Flags.SendMessages, Flags.EmbedLinks])) {
-                return message.reply({ content: `Je ne peux pas écrire dans ${channel}.`, flags: EPHEMERAL })
+                return message.reply({ content: t(message, "eng.giveaway.salon_bot", { salon: channel }), flags: EPHEMERAL })
             }
             if (!channel.permissionsFor(message.member)?.has([Flags.ViewChannel, Flags.SendMessages])) {
-                return message.reply({ content: `Vous ne pouvez pas écrire dans ${channel}.`, flags: EPHEMERAL })
+                return message.reply({ content: t(message, "eng.giveaway.salon_membre", { salon: channel }), flags: EPHEMERAL })
             }
             // Comptage et insertion sans "await" entre les deux : deux commandes simultanées ne dépassent pas la limite
-            if (db.countActiveGiveaways(guild.id) >= MAX_EN_COURS) return message.reply({ content: `${MAX_EN_COURS} giveaways en cours au maximum.`, flags: EPHEMERAL })
+            if (db.countActiveGiveaways(guild.id) >= MAX_EN_COURS) return message.reply({ content: t(message, "eng.giveaway.max", { max: MAX_EN_COURS }), flags: EPHEMERAL })
             const id = db.addGiveaway(guild.id, { channelId: channel.id, prix, gagnants: args.getInteger("gagnants") ?? 1, endsAt: Date.now() + duree, hostId: message.user.id })
 
             try {
-                const envoye = await channel.send(giveaways.contenuGiveaway(db.getGiveaway(guild.id, id)))
+                const envoye = await channel.send(giveaways.contenuGiveaway(db.getGiveaway(guild.id, id), { guild }))
                 db.setGiveawayMessage(id, envoye.id)
             } catch (err) {
                 db.deleteGiveaway(id) // pas de message : pas de giveaway fantôme
                 throw err
             }
-            await message.reply({ content: `Giveaway n°${id} lancé dans ${channel}.`, flags: EPHEMERAL })
+            await message.reply({ content: t(message, "eng.giveaway.lance", { id, salon: channel }), flags: EPHEMERAL })
             return sendModLog(message, { action: "giveaway", details: `Giveaway n°${id} lancé dans ${channel} : ${prix}` })
         }
 
         const g = db.getGiveaway(guild.id, args.getInteger("numero") ?? 0)
-        if (!g) return message.reply({ content: "Numéro de giveaway inconnu (voir `/giveaway action:Voir`).", flags: EPHEMERAL })
+        if (!g) return message.reply({ content: t(message, "eng.giveaway.numero_inconnu"), flags: EPHEMERAL })
         await message.deferReply({ flags: EPHEMERAL })
 
         if (action === "terminer") {
-            if (g.status !== "en_cours") return message.editReply("Ce giveaway est déjà terminé.")
-            if (!await giveaways.terminer(bot, g)) return message.editReply("Le tirage n'a pas pu être fait maintenant (déjà en cours ou serveur indisponible). Réessaie dans un instant.")
-            return message.editReply(`Giveaway n°${g.id} terminé, résultat publié dans <#${g.channel_id}>.`)
+            if (g.status !== "en_cours") return message.editReply(t(message, "eng.giveaway.deja_termine"))
+            if (!await giveaways.terminer(bot, g)) return message.editReply(t(message, "eng.giveaway.tirage_impossible"))
+            return message.editReply(t(message, "eng.giveaway.termine_ok", { id: g.id, salon: g.channel_id }))
         }
         if (action === "relancer") {
-            if (g.status !== "termine") return message.editReply("On ne peut relancer qu'un giveaway terminé.")
+            if (g.status !== "termine") return message.editReply(t(message, "eng.giveaway.relance_seulement_termine"))
             const gagnants = await giveaways.relancer(bot, g)
             await sendModLog(message, { action: "giveaway", details: `Nouveau tirage du giveaway n°${g.id}` })
-            if (gagnants === null) return message.editReply("Nouveau tirage impossible pour le moment, réessaie dans un instant.")
-            return message.editReply(gagnants.length ? "Nouveau tirage publié." : "Plus aucun participant disponible : rien n'a été changé.")
+            if (gagnants === null) return message.editReply(t(message, "eng.giveaway.relance_impossible"))
+            return message.editReply(t(message, gagnants.length ? "eng.giveaway.relance_ok" : "eng.giveaway.relance_vide"))
         }
         // annuler
-        if (g.status !== "en_cours") return message.editReply("Ce giveaway est déjà terminé.")
+        if (g.status !== "en_cours") return message.editReply(t(message, "eng.giveaway.deja_termine"))
         db.deleteGiveaway(g.id)
         const channel = guild.channels.cache.get(g.channel_id)
         if (channel && g.message_id) await channel.messages.delete(g.message_id).catch(() => {})
         await sendModLog(message, { action: "giveaway", details: `Giveaway n°${g.id} annulé (${g.prix})` })
-        return message.editReply(`Giveaway n°${g.id} annulé, participations effacées.`)
+        return message.editReply(t(message, "eng.giveaway.annule", { id: g.id }))
     }
 }

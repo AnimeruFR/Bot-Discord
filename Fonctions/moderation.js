@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const ms = require('ms')
+const { t, langueDe } = require('./i18n')
 
 // Raison affichée sans casser la mise en forme Discord (ni lien déguisé, ni titre, ni liste)
 function formatReason(reason) {
@@ -17,17 +18,21 @@ function auditReason(interaction, reason) {
 }
 
 // Vérifie que l'auteur de la commande a le droit d'agir sur la cible.
+// action : identifiant de l'action ("ban", "kick", "mute", "unmute", "warn", "unwarn", "sanctionner") dont le verbe est traduit.
 // Renvoie un message d'erreur, ou null si tout est bon.
+const ANCIENS_VERBES = { bannir: "ban" }
 function checkHierarchy(interaction, target, action) {
     const guild = interaction.guild
+    const id = ANCIENS_VERBES[action] ?? action
+    const verbe = t(interaction, `mod.verbe.${id}`)
 
-    if (target.id === interaction.user.id) return `Vous ne pouvez pas vous ${action} vous-même !`
-    if (target.id === guild.ownerId) return `Vous ne pouvez pas ${action} le propriétaire du serveur !`
-    if (target.id === interaction.client.user.id) return `Je ne peux pas me ${action} moi-même !`
+    if (target.id === interaction.user.id) return t(interaction, "mod.hierarchie.soi", { verbe })
+    if (target.id === guild.ownerId) return t(interaction, "mod.hierarchie.proprio", { verbe })
+    if (target.id === interaction.client.user.id) return t(interaction, "mod.hierarchie.bot", { verbe })
 
     // Le propriétaire du serveur peut agir sur tout le monde
     if (interaction.user.id !== guild.ownerId && target.roles.highest.comparePositionTo(interaction.member.roles.highest) >= 0) {
-        return `Vous ne pouvez pas ${action} ce membre : son rôle est supérieur ou égal au vôtre !`
+        return t(interaction, "mod.hierarchie.role", { verbe })
     }
     return null
 }
@@ -44,25 +49,33 @@ function fetchMember(guild, userId) {
 }
 
 // "10m", "2h", "7d"… -> millisecondes. Renvoie { duree } ou { erreur }.
-function parseDuree(texte, { min = 60 * 1000, max }) {
+// cible : interaction ou serveur pour la langue des erreurs (français sans cible).
+function parseDuree(texte, { min = 60 * 1000, max, cible = null }) {
+    const langue = cible ? langueDe(cible) : "fr"
     const valeur = texte?.trim() ? ms(texte.trim()) : NaN
-    if (!Number.isFinite(valeur) || valeur <= 0) return { erreur: "Durée invalide ! Exemples : `10m`, `1h`, `2d`." }
-    if (valeur < min) return { erreur: `Durée trop courte (minimum ${formatDuree(min)}) !` }
-    if (valeur > max) return { erreur: `Durée trop longue (maximum ${formatDuree(max)}) !` }
+    if (!Number.isFinite(valeur) || valeur <= 0) return { erreur: t(langue, "mod.duree.invalide") }
+    if (valeur < min) return { erreur: t(langue, "mod.duree.courte", { duree: formatDuree(min, langue) }) }
+    if (valeur > max) return { erreur: t(langue, "mod.duree.longue", { duree: formatDuree(max, langue) }) }
     return { duree: valeur }
 }
 
-// 90 000 000 ms -> "1 jour et 1 heure" (deux unités au plus, en français)
-const UNITES = [[86400000, "jour"], [3600000, "heure"], [60000, "minute"], [1000, "seconde"]]
-function formatDuree(duree) {
+// 90 000 000 ms -> "1 jour et 1 heure" / "1 day and 1 hour" (deux unités au plus)
+const UNITES = [
+    [86400000, { fr: "jour", en: "day" }], [3600000, { fr: "heure", en: "hour" }],
+    [60000, { fr: "minute", en: "minute" }], [1000, { fr: "seconde", en: "second" }]
+]
+const LIAISON = { fr: " et ", en: " and " }
+const MOINS_D_UNE = { fr: "moins d'une seconde", en: "less than a second" }
+function formatDuree(duree, langue = "fr") {
+    if (!LIAISON[langue]) langue = "fr"
     const parties = []
     let reste = duree
-    for (const [taille, nom] of UNITES) {
+    for (const [taille, noms] of UNITES) {
         const n = Math.floor(reste / taille)
-        if (n > 0 && parties.length < 2) parties.push(`${n} ${nom}${n > 1 ? "s" : ""}`)
+        if (n > 0 && parties.length < 2) parties.push(`${n} ${noms[langue]}${n > 1 ? "s" : ""}`)
         reste -= n * taille
     }
-    return parties.join(" et ") || "moins d'une seconde"
+    return parties.join(LIAISON[langue]) || MOINS_D_UNE[langue]
 }
 
 module.exports = { formatReason, auditReason, checkHierarchy, fetchMember, parseDuree, formatDuree }

@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const { couleur } = require('./apparence')
+const { t, langueDe } = require('./i18n')
 const db = require('./db')
 const { getLogChannel, sendModLog } = require('./logs')
 const { buildTranscript, sendAttachments, messageContentActive } = require('./transcript')
@@ -90,26 +92,26 @@ function verifierOuverture(interaction, type = null) {
     const existant = tickets.find(c => c.topic === user.id)
     if (existant) {
         return existant.name.startsWith("ferme-")
-            ? "Ton ancien ticket n'a pas encore été traité par le staff, attends sa suppression."
-            : `Tu as déjà un ticket ouvert : ${existant}`
+            ? t(interaction, "tickets.ancien_en_attente")
+            : t(interaction, "tickets.deja_ouvert", { salon: existant })
     }
-    if (enCours.has(`${guild.id}-${user.id}`)) return "Ton ticket est en cours de création…"
+    if (enCours.has(`${guild.id}-${user.id}`)) return t(interaction, "tickets.en_creation")
 
     // Délai stocké en base : il survit à un redémarrage du bot
     const attente = db.getTicketCooldown(guild.id, user.id) + DELAI_ENTRE_TICKETS - Date.now()
-    if (attente > 0) return `Merci d'attendre ${Math.ceil(attente / 60000)} min avant d'ouvrir un nouveau ticket.`
-    if (tickets.size >= MAX_TICKETS_OUVERTS) return "Trop de tickets sont ouverts en ce moment, réessaie plus tard."
+    if (attente > 0) return t(interaction, "tickets.attendre", { minutes: Math.ceil(attente / 60000) })
+    if (tickets.size >= MAX_TICKETS_OUVERTS) return t(interaction, "tickets.trop")
 
     const categorie = ticketCategory(interaction, type)
-    if (categorie && categorie.children.cache.size >= MAX_SALONS_CATEGORIE) return "La catégorie des tickets est pleine, préviens le staff."
+    if (categorie && categorie.children.cache.size >= MAX_SALONS_CATEGORIE) return t(interaction, "tickets.categorie_pleine")
     return null
 }
 
 // Menu déroulant des types (panneau, ou réponse au bouton d'un ancien panneau)
-function menuTypes(types) {
+function menuTypes(types, langue = "fr") {
     return new Discord.ActionRowBuilder().addComponents(new Discord.StringSelectMenuBuilder()
         .setCustomId("ticket-type")
-        .setPlaceholder("Choisis le type de ta demande")
+        .setPlaceholder(t(langue, "tickets.menu_placeholder"))
         .addOptions(types.map(t => {
             const option = { label: t.nom.slice(0, 100), value: String(t.id) }
             if (t.description) option.description = t.description.slice(0, 100)
@@ -124,7 +126,7 @@ async function onBoutonTicket(bot, interaction) {
     if (types.length === 0) return montrerFormulaire(interaction, null)
     const erreur = verifierOuverture(interaction)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
-    return interaction.reply({ content: "Quel est le type de ta demande ?", components: [menuTypes(types)], flags: EPHEMERAL })
+    return interaction.reply({ content: t(interaction, "tickets.question_type"), components: [menuTypes(types, langueDe(interaction))], flags: EPHEMERAL })
 }
 
 // Menu des types : on relit le type en base (il a pu être supprimé depuis la pose du panneau)
@@ -132,7 +134,7 @@ async function onMenuType(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const id = Number(interaction.values[0])
     const type = Number.isInteger(id) ? db.getTicketType(interaction.guild.id, id) : null
-    if (!type) return interaction.reply({ content: "Ce type de ticket n'existe plus. Préviens le staff pour qu'il reposte le panneau.", flags: EPHEMERAL })
+    if (!type) return interaction.reply({ content: t(interaction, "tickets.type_disparu"), flags: EPHEMERAL })
     await montrerFormulaire(interaction, type)
     // Le menu du panneau garde l'option choisie affichée : on le remet à zéro pour pouvoir la rechoisir
     // (si le formulaire est annulé). Sans effet sur le menu éphémère des anciens panneaux.
@@ -148,13 +150,13 @@ async function montrerFormulaire(interaction, type) {
 
     const modal = new Discord.ModalBuilder()
         .setCustomId(`ticket-form:${type?.id ?? 0}`)
-        .setTitle(type ? `Ticket : ${type.nom}`.slice(0, 45) : "Ouvrir un ticket")
+        .setTitle((type ? t(interaction, "tickets.formulaire_titre_type", { type: type.nom }) : t(interaction, "tickets.formulaire_titre")).slice(0, 45))
         .addComponents(
             new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("sujet").setLabel("Sujet").setStyle(Discord.TextInputStyle.Short)
+                .setCustomId("sujet").setLabel(t(interaction, "tickets.formulaire_sujet")).setStyle(Discord.TextInputStyle.Short)
                 .setRequired(true).setMinLength(3).setMaxLength(100)),
             new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("details").setLabel("Détails (facultatif)").setStyle(Discord.TextInputStyle.Paragraph)
+                .setCustomId("details").setLabel(t(interaction, "tickets.formulaire_details")).setStyle(Discord.TextInputStyle.Paragraph)
                 .setRequired(false).setMaxLength(1000))
         )
     await interaction.showModal(modal)
@@ -170,14 +172,14 @@ async function onFormulaire(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const typeId = Number(interaction.customId.split(":")[1])
     const type = typeId ? db.getTicketType(interaction.guild.id, typeId) : null
-    if (typeId && !type) return interaction.reply({ content: "Ce type de ticket a été supprimé entre-temps, recommence depuis le panneau.", flags: EPHEMERAL })
+    if (typeId && !type) return interaction.reply({ content: t(interaction, "tickets.type_supprime"), flags: EPHEMERAL })
 
     const erreur = verifierOuverture(interaction, type)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
 
     const sujet = interaction.fields.getTextInputValue("sujet").trim()
     const details = interaction.fields.getTextInputValue("details")?.trim() ?? ""
-    if (!sujet) return interaction.reply({ content: "Le sujet ne peut pas être vide.", flags: EPHEMERAL })
+    if (!sujet) return interaction.reply({ content: t(interaction, "tickets.sujet_vide"), flags: EPHEMERAL })
 
     const { guild, user } = interaction
     const cle = `${guild.id}-${user.id}`
@@ -206,22 +208,22 @@ async function onFormulaire(bot, interaction) {
         db.addTicket(guild.id, channel.id, user.id, type?.id ?? null, { staffRoleId: staff })
 
         const embed = new Discord.EmbedBuilder()
-            .setColor(bot.color)
-            .setTitle(type ? `Ticket : ${type.nom}` : "Ticket")
+            .setColor(couleur(guild))
+            .setTitle(type ? t(guild, "tickets.formulaire_titre_type", { type: type.nom }) : t(guild, "tickets.bienvenue_titre"))
             .setThumbnail(bot.user.displayAvatarURL())
-            .setDescription(`Bienvenue ${user}, un membre du staff va te répondre.`)
-            .addFields({ name: "Sujet", value: texteSur(sujet).slice(0, 1024) })
+            .setDescription(t(guild, "tickets.bienvenue", { membre: user }))
+            .addFields({ name: t(guild, "tickets.champ_sujet"), value: texteSur(sujet).slice(0, 1024) })
             .setTimestamp()
             .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
-        if (details) embed.addFields({ name: "Détails", value: texteSur(details).slice(0, 1024) })
+        if (details) embed.addFields({ name: t(guild, "tickets.champ_details"), value: texteSur(details).slice(0, 1024) })
 
         const boutons = new Discord.ActionRowBuilder().addComponents(
-            new Discord.ButtonBuilder().setCustomId("claim").setLabel("Prendre en charge").setStyle(Discord.ButtonStyle.Success).setEmoji("🙋"),
-            new Discord.ButtonBuilder().setCustomId("close").setLabel("Fermer le ticket").setStyle(Discord.ButtonStyle.Danger).setEmoji("🗑️")
+            new Discord.ButtonBuilder().setCustomId("claim").setLabel(t(guild, "tickets.bouton_prendre")).setStyle(Discord.ButtonStyle.Success).setEmoji("🙋"),
+            new Discord.ButtonBuilder().setCustomId("close").setLabel(t(guild, "tickets.bouton_fermer")).setStyle(Discord.ButtonStyle.Danger).setEmoji("🗑️")
         )
 
         await channel.send({ embeds: [embed], components: [boutons] })
-        await interaction.editReply(`Votre ticket a correctement été créé : ${channel}`)
+        await interaction.editReply(t(interaction, "tickets.cree", { salon: channel }))
 
         // En dernier : une erreur de la base ne doit pas laisser un ticket sans bouton de fermeture
         try {
@@ -239,29 +241,29 @@ async function claimTicket(bot, interaction) {
     if (!interaction.inCachedGuild()) return
     const channel = interaction.channel
     const ownerId = ticketOwnerId(channel)
-    if (!ownerId) return interaction.reply({ content: "Ce salon n'est pas un ticket.", flags: EPHEMERAL })
-    if (!isStaff(interaction, channel)) return interaction.reply({ content: "Seul le staff peut prendre un ticket en charge.", flags: EPHEMERAL })
-    if (interaction.user.id === ownerId) return interaction.reply({ content: "Vous ne pouvez pas prendre en charge votre propre ticket.", flags: EPHEMERAL })
-    if (channel.name.startsWith("ferme-")) return interaction.reply({ content: "Ce ticket est fermé.", flags: EPHEMERAL })
+    if (!ownerId) return interaction.reply({ content: t(interaction, "tk.pas_ticket"), flags: EPHEMERAL })
+    if (!isStaff(interaction, channel)) return interaction.reply({ content: t(interaction, "tk.claim_staff"), flags: EPHEMERAL })
+    if (interaction.user.id === ownerId) return interaction.reply({ content: t(interaction, "tk.claim_propre"), flags: EPHEMERAL })
+    if (channel.name.startsWith("ferme-")) return interaction.reply({ content: t(interaction, "tk.ferme"), flags: EPHEMERAL })
 
     const ticket = db.getTicket(channel.id) ?? assurerTicket(channel, ownerId)
     if (ticket.claimed_by === interaction.user.id) {
         // Double clic : un 2e clic dans les 5 s ne libère pas le ticket qu'on vient de prendre
-        if (Date.now() - (dernierePrise.get(channel.id) ?? 0) < 5000) return interaction.reply({ content: "Vous avez déjà pris ce ticket en charge.", flags: EPHEMERAL })
+        if (Date.now() - (dernierePrise.get(channel.id) ?? 0) < 5000) return interaction.reply({ content: t(interaction, "tk.claim_deja"), flags: EPHEMERAL })
         db.unclaimTicket(channel.id, interaction.user.id)
-        return interaction.reply(`${interaction.user} ne s'occupe plus de ce ticket.`)
+        return interaction.reply(t(interaction.guild, "tk.claim_libere", { staff: interaction.user }))
     }
     if (!db.claimTicket(channel.id, interaction.user.id)) {
         const actuel = db.getTicket(channel.id).claimed_by
         // Un responsable (« Gérer les salons ») peut reprendre un ticket déjà pris
         if (!interaction.memberPermissions.has(Flags.ManageChannels)) {
-            return interaction.reply({ content: `Ce ticket est déjà pris en charge par <@${actuel}>.`, flags: EPHEMERAL })
+            return interaction.reply({ content: t(interaction, "tk.claim_pris", { staff: `<@${actuel}>` }), flags: EPHEMERAL })
         }
         db.takeOverTicket(channel.id, interaction.user.id)
-        return interaction.reply(`🙋 ${interaction.user} reprend ce ticket (il était suivi par <@${actuel}>).`)
+        return interaction.reply(t(interaction.guild, "tk.claim_reprise", { staff: interaction.user, ancien: `<@${actuel}>` }))
     }
     dernierePrise.set(channel.id, Date.now())
-    await interaction.reply(`🙋 ${interaction.user} a pris en charge ce ticket.`)
+    await interaction.reply(t(interaction.guild, "tk.claim_ok", { staff: interaction.user }))
 }
 
 // /ticket ajouter|retirer : donne ou retire l'accès d'un membre au ticket
@@ -269,14 +271,14 @@ async function gererMembre(interaction, action, user) {
     if (!interaction.inCachedGuild()) return
     const channel = interaction.channel
     const ownerId = ticketOwnerId(channel)
-    if (!ownerId) return interaction.reply({ content: "Utilisez cette commande dans un salon de ticket.", flags: EPHEMERAL })
-    if (!isStaff(interaction, channel)) return interaction.reply({ content: "Seul le staff du ticket peut ajouter ou retirer des membres.", flags: EPHEMERAL })
+    if (!ownerId) return interaction.reply({ content: t(interaction, "tk.gm_hors_ticket"), flags: EPHEMERAL })
+    if (!isStaff(interaction, channel)) return interaction.reply({ content: t(interaction, "tk.gm_staff"), flags: EPHEMERAL })
     if (!channel.permissionsFor(interaction.guild.members.me)?.has([Flags.ViewChannel, Flags.ManageChannels, Flags.ManageRoles])) {
-        return interaction.reply({ content: "Il me faut « Gérer les salons » et « Gérer les permissions » dans ce ticket.", flags: EPHEMERAL })
+        return interaction.reply({ content: t(interaction, "tk.gm_perms"), flags: EPHEMERAL })
     }
-    if (user.bot) return interaction.reply({ content: "On n'ajoute ou ne retire pas un bot d'un ticket.", flags: EPHEMERAL })
-    if (user.id === ownerId) return interaction.reply({ content: "L'auteur du ticket ne peut pas être ajouté ou retiré.", flags: EPHEMERAL })
-    if (channel.name.startsWith("ferme-")) return interaction.reply({ content: "Ce ticket est fermé.", flags: EPHEMERAL })
+    if (user.bot) return interaction.reply({ content: t(interaction, "tk.gm_bot"), flags: EPHEMERAL })
+    if (user.id === ownerId) return interaction.reply({ content: t(interaction, "tk.gm_auteur"), flags: EPHEMERAL })
+    if (channel.name.startsWith("ferme-")) return interaction.reply({ content: t(interaction, "tk.ferme"), flags: EPHEMERAL })
 
     const member = await interaction.guild.members.fetch({ user: user.id, force: true }).catch(err => {
         if (err.code === Discord.RESTJSONErrorCodes.UnknownMember) return null
@@ -285,25 +287,25 @@ async function gererMembre(interaction, action, user) {
     const raison = `${interaction.user.tag} : /ticket ${action}`
 
     if (action === "ajouter") {
-        if (!member) return interaction.reply({ content: "Ce membre n'est pas sur le serveur.", flags: EPHEMERAL })
-        if (channel.permissionsFor(member)?.has(Flags.ViewChannel)) return interaction.reply({ content: `${user} voit déjà ce ticket.`, flags: EPHEMERAL })
+        if (!member) return interaction.reply({ content: t(interaction, "tk.gm_absent"), flags: EPHEMERAL })
+        if (channel.permissionsFor(member)?.has(Flags.ViewChannel)) return interaction.reply({ content: t(interaction, "tk.gm_voit_deja", { membre: user }), flags: EPHEMERAL })
         const ajoutes = channel.permissionOverwrites.cache.filter(o => o.type === Discord.OverwriteType.Member && o.id !== ownerId && o.id !== interaction.guild.members.me.id)
-        if (ajoutes.size >= MAX_MEMBRES_AJOUTES) return interaction.reply({ content: `${MAX_MEMBRES_AJOUTES} membres ajoutés au maximum par ticket.`, flags: EPHEMERAL })
+        if (ajoutes.size >= MAX_MEMBRES_AJOUTES) return interaction.reply({ content: t(interaction, "tk.gm_max", { max: MAX_MEMBRES_AJOUTES }), flags: EPHEMERAL })
         await channel.permissionOverwrites.edit(user.id, Object.fromEntries(PERMS_TICKET.map(p => [new Discord.PermissionsBitField(p).toArray()[0], true])),
             { reason: raison, type: Discord.OverwriteType.Member })
-        await interaction.reply(`${user} a été ajouté au ticket par ${interaction.user}.`)
+        await interaction.reply(t(interaction.guild, "tk.gm_ajoute", { membre: user, staff: interaction.user }))
     } else {
         // On ne retire pas un membre plus haut que soi (ex : un administrateur)
         if (member && interaction.user.id !== interaction.guild.ownerId && member.roles.highest.comparePositionTo(interaction.member.roles.highest) >= 0) {
-            return interaction.reply({ content: "Vous ne pouvez pas retirer un membre dont le rôle est supérieur ou égal au vôtre.", flags: EPHEMERAL })
+            return interaction.reply({ content: t(interaction, "tk.gm_superieur"), flags: EPHEMERAL })
         }
-        if (!channel.permissionOverwrites.cache.has(user.id)) return interaction.reply({ content: `${user} n'a pas été ajouté à ce ticket.`, flags: EPHEMERAL })
+        if (!channel.permissionOverwrites.cache.has(user.id)) return interaction.reply({ content: t(interaction, "tk.gm_pas_ajoute", { membre: user }), flags: EPHEMERAL })
         // Accès par un rôle (staff, administrateur) : retirer son autorisation personnelle ne changerait rien
         const parRole = member && (member.permissions.has(Flags.Administrator) || member.permissionsIn(channel).has(Flags.ManageChannels)
             || channel.permissionOverwrites.cache.some(o => o.type === Discord.OverwriteType.Role && member.roles.cache.has(o.id) && o.allow.has(Flags.ViewChannel)))
-        if (parRole) return interaction.reply({ content: `${user} voit ce ticket grâce à l'un de ses rôles : impossible de le retirer avec cette commande.`, flags: EPHEMERAL })
+        if (parRole) return interaction.reply({ content: t(interaction, "tk.gm_par_role", { membre: user }), flags: EPHEMERAL })
         await channel.permissionOverwrites.delete(user.id, raison)
-        await interaction.reply(`${user} a été retiré du ticket par ${interaction.user}.`)
+        await interaction.reply(t(interaction.guild, "tk.gm_retire", { membre: user, staff: interaction.user }))
     }
     await sendModLog(interaction, { action: "ticket", cible: user, details: `${action === "ajouter" ? "Ajouté au" : "Retiré du"} ticket ${channel}` })
 }
@@ -339,23 +341,23 @@ async function closeTicket(bot, interaction) {
 
     const channel = interaction.channel
     const ownerId = ticketOwnerId(channel)
-    if (!ownerId) return interaction.reply({ content: "Ce salon n'est pas un ticket.", flags: EPHEMERAL })
+    if (!ownerId) return interaction.reply({ content: t(interaction, "tk.pas_ticket"), flags: EPHEMERAL })
 
     const staff = isStaff(interaction, channel)
     if (interaction.user.id !== ownerId && !staff) {
-        return interaction.reply({ content: "Seul l'auteur du ticket ou le staff peut le fermer.", flags: EPHEMERAL })
+        return interaction.reply({ content: t(interaction, "tk.close_droit"), flags: EPHEMERAL })
     }
 
     const cle = `close-${channel.id}`
-    if (enCours.has(cle)) return interaction.reply({ content: "Fermeture déjà en cours…", flags: EPHEMERAL })
+    if (enCours.has(cle)) return interaction.reply({ content: t(interaction, "tk.close_en_cours"), flags: EPHEMERAL })
     enCours.add(cle)
 
     try {
         if (!staff) {
-            if (channel.name.startsWith("ferme-")) return interaction.reply({ content: "Ce ticket est déjà fermé.", flags: EPHEMERAL })
+            if (channel.name.startsWith("ferme-")) return interaction.reply({ content: t(interaction, "tk.close_deja"), flags: EPHEMERAL })
             await interaction.deferReply()
             await fermerPourAuteur(channel, ownerId, "Ticket fermé par son auteur")
-            await interaction.editReply("Ticket fermé par son auteur. Le staff peut maintenant le supprimer avec le bouton.")
+            await interaction.editReply(t(interaction.guild, "tk.close_auteur"))
             return
         }
 
@@ -370,21 +372,21 @@ async function supprimerTicket(bot, interaction, channel, ownerId) {
     const peutJoindre = logs?.permissionsFor(interaction.guild.members.me)?.has(Flags.AttachFiles)
     const contenu = await messageContentActive(bot)
     let avertissement = !logs
-        ? "\n⚠️ Aucun salon de logs (`/setlogs`) : l'historique de ce ticket sera **perdu définitivement**."
+        ? t(interaction, "tk.suppr_aucun_logs")
         : !peutJoindre
-            ? `\n⚠️ Je ne peux pas joindre de fichier dans ${logs} : l'historique sera **perdu définitivement**.`
-            : `\nUn transcript (texte et HTML) et les pièces jointes seront envoyés dans ${logs}.`
+            ? t(interaction, "tk.suppr_pas_joindre", { logs })
+            : t(interaction, "tk.suppr_transcript", { logs })
     if (logs && peutJoindre && !contenu) {
-        avertissement += "\n⚠️ Le **Message Content Intent** n'est pas activé : le transcript ne contiendra **pas le texte** des messages des membres."
+        avertissement += t(interaction, "tk.suppr_intent")
     }
 
     // Confirmation par bouton, visible seulement par la personne qui a cliqué
     const boutons = new Discord.ActionRowBuilder().addComponents(
-        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-oui-${interaction.id}`).setLabel("Supprimer").setStyle(Discord.ButtonStyle.Danger),
-        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-non-${interaction.id}`).setLabel("Annuler").setStyle(Discord.ButtonStyle.Secondary)
+        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-oui-${interaction.id}`).setLabel(t(interaction, "tk.bouton_supprimer")).setStyle(Discord.ButtonStyle.Danger),
+        new Discord.ButtonBuilder().setCustomId(`ticket-suppr-non-${interaction.id}`).setLabel(t(interaction, "tk.bouton_annuler")).setStyle(Discord.ButtonStyle.Secondary)
     )
     const reponse = await interaction.reply({
-        content: `Supprimer définitivement ce ticket ?${avertissement}`,
+        content: t(interaction, "tk.suppr_question", { avertissement }),
         components: [boutons],
         flags: EPHEMERAL,
         withResponse: true
@@ -396,12 +398,12 @@ async function supprimerTicket(bot, interaction, channel, ownerId) {
         time: DELAI_CONFIRMATION
     }).catch(() => null)
 
-    if (!clic) return interaction.editReply({ content: "Temps écoulé, suppression annulée.", components: [] })
-    if (clic.customId.startsWith("ticket-suppr-non")) return clic.update({ content: "Suppression annulée.", components: [] })
-    await clic.update({ content: "Suppression du ticket…", components: [] })
+    if (!clic) return interaction.editReply({ content: t(interaction, "tk.suppr_temps"), components: [] })
+    if (clic.customId.startsWith("ticket-suppr-non")) return clic.update({ content: t(interaction, "tk.suppr_annulee"), components: [] })
+    await clic.update({ content: t(interaction, "tk.suppr_en_cours"), components: [] })
 
     // Les droits ont pu changer pendant la confirmation : on revérifie avec le clic (données à jour)
-    if (!isStaff(clic, channel)) return interaction.editReply({ content: "Vous n'avez plus le droit de supprimer ce ticket." })
+    if (!isStaff(clic, channel)) return interaction.editReply({ content: t(interaction, "tk.suppr_plus_droit") })
 
     const owner = await bot.users.fetch(ownerId).catch(() => null)
     const ticket = db.getTicket(channel.id) ?? assurerTicket(channel, ownerId)
@@ -410,30 +412,31 @@ async function supprimerTicket(bot, interaction, channel, ownerId) {
     if (logs && peutJoindre) {
         try {
             const { texte, html, nombre, pieces } = await buildTranscript(channel, { fermePar: interaction.user, auteurId: ownerId })
+            const L = interaction.guild // le salon de logs est public pour le staff : langue du serveur
             const embed = new Discord.EmbedBuilder()
                 .setColor(0x9B59B6)
-                .setTitle("Ticket supprimé")
+                .setTitle(t(L, "tk.log_titre"))
                 .addFields(
-                    { name: "Ticket", value: `\`#${channel.name}\``, inline: true },
-                    { name: "Auteur", value: owner ? `${owner} (\`${owner.id}\`)` : `\`${ownerId}\``, inline: true },
-                    { name: "Supprimé par", value: `${interaction.user} (\`${interaction.user.id}\`)`, inline: true },
-                    { name: "Pris en charge par", value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : "Personne", inline: true },
-                    { name: "Messages", value: String(nombre), inline: true },
-                    { name: "Pièces jointes", value: String(pieces.length), inline: true }
+                    { name: t(L, "tk.log_ticket"), value: `\`#${channel.name}\``, inline: true },
+                    { name: t(L, "tk.log_auteur"), value: owner ? `${owner} (\`${owner.id}\`)` : `\`${ownerId}\``, inline: true },
+                    { name: t(L, "tk.log_supprime_par"), value: `${interaction.user} (\`${interaction.user.id}\`)`, inline: true },
+                    { name: t(L, "tk.log_pris_par"), value: ticket.claimed_by ? `<@${ticket.claimed_by}>` : t(L, "tk.log_personne"), inline: true },
+                    { name: t(L, "tk.log_messages"), value: String(nombre), inline: true },
+                    { name: t(L, "tk.log_pieces"), value: String(pieces.length), inline: true }
                 )
                 .setTimestamp()
-            if (!contenu) embed.addFields({ name: "⚠️ Attention", value: "Message Content Intent désactivé : le texte des messages des membres est absent du transcript." })
+            if (!contenu) embed.addFields({ name: t(L, "tk.log_attention"), value: t(L, "tk.log_intent") })
             const fichier = new Discord.AttachmentBuilder(Buffer.from(texte, "utf8"), { name: `transcript-${channel.name}.txt` })
             await logs.send({ embeds: [embed], files: [fichier] })
             // HTML dans un 2e message : chaque envoi reste sous la limite de taille de Discord
             if (html) await logs.send({ files: [new Discord.AttachmentBuilder(Buffer.from(html, "utf8"), { name: `transcript-${channel.name}.html` })] })
-            else await logs.send("Transcript HTML trop volumineux : seule la version texte est jointe.")
+            else await logs.send(t(L, "tk.html_gros"))
 
             const ignorees = await sendAttachments(logs, pieces, channel.name)
-            if (ignorees.length) await logs.send(`Pièces jointes non conservées (trop lourdes ou indisponibles) : ${ignorees.length}`)
+            if (ignorees.length) await logs.send(t(L, "tk.pieces_ignorees", { nombre: ignorees.length }))
         } catch (err) {
             console.error("Transcript impossible :", err)
-            return interaction.editReply({ content: "Impossible d'enregistrer le transcript ou les pièces jointes : suppression annulée pour ne pas perdre l'historique (un envoi partiel a pu avoir lieu dans les logs)." })
+            return interaction.editReply({ content: t(interaction, "tk.transcript_echec") })
         }
     }
 
@@ -444,8 +447,8 @@ async function supprimerTicket(bot, interaction, channel, ownerId) {
     const notes = new Discord.ActionRowBuilder().addComponents([1, 2, 3, 4, 5].map(n =>
         new Discord.ButtonBuilder().setCustomId(`note:${channel.id}:${n}`).setLabel("⭐".repeat(n)).setStyle(Discord.ButtonStyle.Secondary)))
     await owner?.send({
-        content: `Votre ticket sur le serveur **${Discord.escapeMarkdown(interaction.guild.name)}** a été fermé. Comment s'est passée la prise en charge ?`
-            + (logs && peutJoindre ? "\n-# Une copie de la conversation est conservée par le staff du serveur." : ""),
+        content: t(interaction.guild, "tk.note_mp", { serveur: Discord.escapeMarkdown(interaction.guild.name) })
+            + (logs && peutJoindre ? t(interaction.guild, "tk.note_mp_copie") : ""),
         components: [notes]
     }).catch(() => {})
 }
@@ -456,14 +459,16 @@ async function noterTicket(bot, interaction) {
     const [, channelId, texteNote] = interaction.customId.split(":")
     const note = Number(texteNote)
     const ticket = /^\d{17,20}$/.test(channelId ?? "") ? db.getTicket(channelId) : null
+    // Réponses dans la langue du serveur du ticket (le MP a été écrit dans cette langue), sinon celle du membre
+    const guild = ticket ? bot.guilds?.cache?.get(ticket.guild_id) : null
+    const L = guild ?? interaction
     if (!ticket || !Number.isInteger(note) || note < 1 || note > 5 || ticket.owner_id !== interaction.user.id) {
-        return interaction.reply({ content: "Cette note n'est pas valable.", flags: EPHEMERAL })
+        return interaction.reply({ content: t(L, "tk.note_invalide"), flags: EPHEMERAL })
     }
-    if (Date.now() - (ticket.closed_at ?? 0) > DELAI_NOTE) return interaction.update({ content: "Le délai pour noter ce ticket est dépassé.", components: [] })
-    if (!db.rateTicket(channelId, interaction.user.id, note)) return interaction.update({ content: "Ce ticket a déjà été noté.", components: [] })
+    if (Date.now() - (ticket.closed_at ?? 0) > DELAI_NOTE) return interaction.update({ content: t(L, "tk.note_delai"), components: [] })
+    if (!db.rateTicket(channelId, interaction.user.id, note)) return interaction.update({ content: t(L, "tk.note_deja"), components: [] })
 
-    await interaction.update({ content: `Merci pour ta note : ${"⭐".repeat(note)}`, components: [] })
-    const guild = bot.guilds.cache.get(ticket.guild_id)
+    await interaction.update({ content: t(L, "tk.note_merci", { etoiles: "⭐".repeat(note) }), components: [] })
     if (guild) await sendModLog({ guild, user: interaction.user }, { action: "ticket", details: `Note du ticket \`${channelId}\` : ${note}/5${ticket.claimed_by ? ` (pris en charge par <@${ticket.claimed_by}>)` : ""}` })
 }
 

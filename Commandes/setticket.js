@@ -1,16 +1,16 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
-const { roleValide, categorieUtilisable } = require('../Fonctions/tickets')
+const { t } = require('../Fonctions/i18n')
+const { PERMISSION_TICKETS, refusCategorie, refusRoleStaff } = require('../Fonctions/config')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
-const P = Discord.PermissionFlagsBits
 
 module.exports = {
     name: "setticket",
     description: "Configure la catégorie et le rôle staff des tickets",
     // Le rôle staff obtient l'accès à tous les tickets : il faut pouvoir gérer le serveur, les salons ET les rôles
-    permission: P.ManageGuild | P.ManageChannels | P.ManageRoles,
+    permission: PERMISSION_TICKETS,
     dm: false,
     category: "Configuration",
     options: [
@@ -46,52 +46,43 @@ module.exports = {
         const inactivite = args.getInteger("inactivite")
 
         if (inactivite !== null) {
-            if (categorie || role || args.getBoolean("reinitialiser")) return message.reply({ content: "Utilise `inactivite` seul.", flags: EPHEMERAL })
+            if (categorie || role || args.getBoolean("reinitialiser")) return message.reply({ content: t(message, "tk.st_inactivite_seul"), flags: EPHEMERAL })
             db.setTicketInactivity(message.guild.id, inactivite)
-            const texte = inactivite
-                ? `Les tickets sans message depuis ${inactivite} jour(s) recevront un avertissement, puis seront fermés 24 h après s'il n'y a pas de réponse (le staff les supprime ensuite, avec transcript).`
-                : "Fermeture automatique des tickets inactifs désactivée."
+            const texte = inactivite ? t(message, "tk.st_inactivite_on", { jours: inactivite }) : t(message, "tk.st_inactivite_off")
             await message.reply({ content: texte, flags: EPHEMERAL })
             return sendModLog(message, { action: "config", details: inactivite ? `Tickets fermés après ${inactivite} jour(s) d'inactivité` : "Fermeture des tickets inactifs désactivée" })
         }
 
         if (args.getBoolean("reinitialiser")) {
-            if (categorie || role) return message.reply({ content: "Utilise `reinitialiser` seul, sans catégorie ni rôle.", flags: EPHEMERAL })
+            if (categorie || role) return message.reply({ content: t(message, "tk.st_reinit_seul"), flags: EPHEMERAL })
             db.resetTicketConfig(message.guild.id)
-            await message.reply({ content: "Configuration des tickets réinitialisée (catégorie du panneau, rôle du .env).", flags: EPHEMERAL })
+            await message.reply({ content: t(message, "tk.st_reinit_ok"), flags: EPHEMERAL })
             return sendModLog(message, { action: "config", details: "Configuration des tickets réinitialisée" })
         }
         if (!categorie && !role) {
             const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)
+            const jours = db.getTicketInactivity(message.guild.id)
             return message.reply({
-                content: `Configuration actuelle – Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`
-                    + ` – Fermeture après inactivité : ${db.getTicketInactivity(message.guild.id) ? `${db.getTicketInactivity(message.guild.id)} jour(s)` : "jamais"}`
-                    + "\nTypes de tickets : `/tickettype action:Voir`",
+                content: t(message, "tk.st_actuel", {
+                    categorie: categoryId ? `<#${categoryId}>` : t(message, "tk.st_celle_panneau"),
+                    role: staffRoleId ? `<@&${staffRoleId}>` : t(message, "tk.st_celui_env"),
+                    inactivite: jours ? t(message, "config.jours", { jours }) : t(message, "config.jamais")
+                }),
                 flags: EPHEMERAL
             })
         }
 
-        if (categorie && !categorieUtilisable(categorie)) {
-            return message.reply({ content: `Je ne peux pas créer de salons dans ${categorie} (il me faut Voir les salons et Gérer les salons).`, flags: EPHEMERAL })
-        }
-        if (role) {
-            if (!roleValide(message.guild, role.id)) {
-                return message.reply({ content: "Ce rôle ne peut pas être le rôle staff (@everyone ou rôle d'un bot).", flags: EPHEMERAL })
-            }
-            // On ne peut pas donner l'accès aux tickets à un rôle égal ou supérieur au sien (ex : un rôle qu'on possède soi-même)
-            if (message.user.id !== message.guild.ownerId && role.comparePositionTo(message.member.roles.highest) >= 0) {
-                return message.reply({ content: "Vous ne pouvez choisir qu'un rôle inférieur à votre rôle le plus haut.", flags: EPHEMERAL })
-            }
-        }
+        const refus = (categorie && refusCategorie(categorie, message)) || (role && refusRoleStaff(message, role))
+        if (refus) return message.reply({ content: refus, flags: EPHEMERAL })
 
         db.setTicketConfig(message.guild.id, categorie?.id ?? null, role?.id ?? null)
         const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)
 
-        const details = `Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`
+        const details = t("fr", "tk.st_details", { categorie: categoryId ? `<#${categoryId}>` : "celle du panneau", role: staffRoleId ? `<@&${staffRoleId}>` : "celui du .env" })
+        const detailsMembre = t(message, "tk.st_details", { categorie: categoryId ? `<#${categoryId}>` : t(message, "tk.st_celle_panneau"), role: staffRoleId ? `<@&${staffRoleId}>` : t(message, "tk.st_celui_env") })
         // Réponse d'abord (Discord exige une réponse en moins de 3 s), log ensuite
         await message.reply({
-            content: `Tickets configurés.\n${details}\nLes tickets déjà ouverts gardent leurs permissions actuelles.`
-                + (role ? "\nTous les membres ayant ce rôle verront les nouveaux tickets." : ""),
+            content: t(message, "tk.st_configure", { details: detailsMembre }) + (role ? t(message, "tk.st_role_visible") : ""),
             flags: EPHEMERAL
         })
         await sendModLog(message, { action: "config", details: `Tickets configurés. ${details}` })
