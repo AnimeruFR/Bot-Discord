@@ -9,11 +9,11 @@
   "quoi.reponse": "Feur (a French joke: \"quoi ?\" rhymes with \"feur\")",
 
   "help.titre": "Bot commands",
-  "help.description": "Available commands: `{commandes}`\nAvailable categories: `{categories}`",
+  "help.description": "Commands available to you: `{commandes}`",
   "help.pied": "Bot commands",
   "help.inconnue": "This command doesn't exist.",
   "help.commande_titre": "Command `{nom}`",
-  "help.commande_detail": "Name: `{nom}`\nDescription: `{description}`\nRequired permission: `{permission}`\nUsable in DMs: `{dm}`\nCategory: `{categorie}`",
+  "help.commande_detail": "Name: `{nom}`\nDescription: `{description}`\nRequired permission: `{permission}`\nUsable in DMs: `{dm}`\nModule: `{categorie}`",
   "help.oui": "Yes",
   "help.non": "No",
   "help.aucune": "None",

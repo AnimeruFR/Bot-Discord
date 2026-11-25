@@ -9,11 +9,11 @@
   "quoi.reponse": "Feur",
 
   "help.titre": "Commandes du bot",
-  "help.description": "Commandes disponibles : `{commandes}`\nCatégories disponibles : `{categories}`",
+  "help.description": "Commandes disponibles pour toi : `{commandes}`",
   "help.pied": "Commandes du robot",
   "help.inconnue": "Cette commande n'existe pas.",
   "help.commande_titre": "Commande `{nom}`",
-  "help.commande_detail": "Nom : `{nom}`\nDescription : `{description}`\nPermission requise : `{permission}`\nCommande possible en MP : `{dm}`\nCatégorie : `{categorie}`",
+  "help.commande_detail": "Nom : `{nom}`\nDescription : `{description}`\nPermission requise : `{permission}`\nCommande possible en MP : `{dm}`\nModule : `{categorie}`",
   "help.oui": "Oui",
   "help.non": "Non",
   "help.aucune": "Aucune",

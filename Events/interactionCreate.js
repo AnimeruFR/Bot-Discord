@@ -12,10 +12,12 @@ const indisponible = (interaction, motif) => interaction.reply({ content: t(inte
 module.exports = async (bot, interaction) => {
     try {
         if (interaction.isAutocomplete()) {
-            const entry = interaction.options.getFocused().toLowerCase()
-            const choices = bot.commands
+            // Autocomplétion de /help : seulement les commandes que ce membre peut voir (staff masqué, modules désactivés)
+            const entry = String(interaction.options.getFocused()).toLowerCase()
+            const visibles = bot.commands.get("help")?.commandesVisibles?.(bot, interaction) ?? []
+            const choices = visibles
                 .filter(cmd => cmd.name.includes(entry))
-                .first(25)
+                .slice(0, 25)
                 .map(cmd => ({ name: cmd.name, value: cmd.name }))
             return await interaction.respond(choices)
         }
