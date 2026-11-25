@@ -38,6 +38,8 @@
   "am.log_raison": "Raison",
   "am.log_warn_titre": "Avertissement",
   "am.log_warn": "Avertissement n°{id} (total : {total})",
+  "am.log_rafale_titre": "Rafale",
+  "am.log_rafale": "+{n} blocages depuis le dernier dossier (comptés sans nouveau dossier)",
   "am.log_sanction": "Sanction automatique",
   "am.dossiers_pouvoir": "Vous n'avez pas vous-même le droit d'appliquer la sanction du seuil à {warns} warns : je ne l'appliquerai pas à votre place."
 }

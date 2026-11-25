@@ -1,12 +1,11 @@
 const Discord = require('discord.js')
 const { couleur } = require('../../Fonctions/apparence')
-const { formatReason, formatDuree } = require('../../Fonctions/moderation')
-const { t, langueDe } = require('../../Fonctions/i18n')
+const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
 const { compterNotes } = require('../../Fonctions/notes')
+const { ligneSanction } = require('../../Fonctions/cases')
 
 const AFFICHES = 10
-const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban", "automod"]
 
 module.exports = {
     name: "historique",
@@ -34,16 +33,7 @@ module.exports = {
         if (total === 0) return message.reply({ content: t(message, "mod.historique.aucune", { user }) + (mentionNotes && `\n${mentionNotes}`), flags: Discord.MessageFlags.Ephemeral })
 
         const tempban = db.getTempban(message.guild.id, user.id)
-        // Raisons coupées à 200 caractères : 10 lignes restent sous la limite de 4096 caractères d'un embed
-        const lignes = db.listCases(message.guild.id, user.id, AFFICHES).map(c => {
-            const duree = c.duration_ms ? ` (${formatDuree(c.duration_ms, langueDe(message))})` : ""
-            const auto = c.auto ? t(message, "mod.historique.auto") : ""
-            const nom = TYPES.includes(c.type) ? t(message, `mod.type.${c.type}`) : c.type
-            const reason = formatReason(c.reason).slice(0, 200)
-            const ligne = t(message, "mod.historique.ligne", { id: c.id, nom, duree, date: Math.floor(c.created_at / 1000), moderateur: c.moderator_id, auto, reason: c.cancelled_at ? `~~${reason.replace(/\s+/g, " ")}~~` : reason })
-            // Sanction annulée : mention et raison barrée
-            return c.cancelled_at ? ligne + t(message, "dos.historique.annulee", { date: Math.floor(c.cancelled_at / 1000) }) : ligne
-        })
+        const lignes = db.listCases(message.guild.id, user.id, AFFICHES).map(c => ligneSanction(message, c))
         if (mentionNotes) lignes.unshift(mentionNotes)
         if (tempban) lignes.unshift(t(message, "mod.historique.tempban_en_cours", { fin: Math.floor(tempban / 1000) }))
 

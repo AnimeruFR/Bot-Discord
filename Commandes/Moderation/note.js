@@ -4,6 +4,7 @@ const { refuser } = require('../../Fonctions/erreurs')
 const { formatReason } = require('../../Fonctions/moderation')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t } = require('../../Fonctions/i18n')
+const { cibleDe, verifierDroitSurCible } = require('../../Fonctions/cases')
 const { LIMITE_NOTES, TAILLE_MAX, ajouterNote, listerNotes, compterNotes, lireNote, retirerNote } = require('../../Fonctions/notes')
 
 const AFFICHEES = 10
@@ -66,15 +67,16 @@ module.exports = {
         if (action === "retirer") {
             const id = args.getInteger("numero")
             if (!id) return refuser(message, t(message, "dos.note.numero_requis"))
+            // Réponse différée : relire le membre auprès de Discord peut dépasser les 3 s permises
+            await message.deferReply({ flags: EPHEMERAL })
             const note = lireNote(guildId, id)
             if (!note) return refuser(message, t(message, "dos.note.introuvable", { id }))
-            // Seul l'auteur de la note, ou un membre qui gère le serveur, peut la retirer
-            if (note.author_id !== message.user.id && !message.memberPermissions?.has(Discord.PermissionFlagsBits.ManageGuild)) {
-                return refuser(message, t(message, "dos.note.pas_auteur"))
-            }
+            // Seul l'auteur de la note, ou un membre qui gère le serveur, peut la retirer (et sans dépasser la hiérarchie actuelle)
+            const { refus } = await verifierDroitSurCible(message, { auteurId: note.author_id, userId: note.user_id, cleAutre: "dos.note.pas_auteur" })
+            if (refus) return refuser(message, refus)
             if (!retirerNote(guildId, id)) return refuser(message, t(message, "dos.note.introuvable", { id }))
-            await message.reply({ content: t(message, "dos.note.retiree", { id }), flags: EPHEMERAL })
-            return sendModLog(message, { action: "note", cible: { id: note.user_id, toString: () => `<@${note.user_id}>` }, details: `Note n°${id} retirée` })
+            await message.editReply({ content: t(message, "dos.note.retiree", { id }) })
+            return sendModLog(message, { action: "note", cible: cibleDe(note.user_id), details: `Note n°${id} retirée` })
         }
 
         // Liste : 300 caractères par note au plus, pour que 10 notes tiennent dans un embed (4096 caractères)

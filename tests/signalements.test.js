@@ -9,6 +9,8 @@ const cooldowns = require('../Fonctions/cooldowns')
 const loadCommands = require('../Loader/loadCommands')
 const { setSalonFamille } = require('../Fonctions/logs')
 const sig = require('../Fonctions/signalements')
+const cases = require('../Fonctions/cases')
+const db = require('../Fonctions/db')
 
 const { Flags } = Discord.PermissionsBitField
 const G = "111111111111111111"
@@ -95,7 +97,7 @@ test("refus : son propre message, un bot, un webhook, un message système, aucun
     assert.ok(sig.verifierSignalement(i, { ...message(), webhookId: "5" }), "un webhook")
     assert.ok(sig.verifierSignalement(i, { ...message(), system: true }), "un message système")
     const sansSalon = interaction("x", { guild: serveur({ avecSalon: false }) })
-    assert.match(sig.verifierSignalement(sansSalon, message()), /salon/)
+    assert.match(sig.verifierSignalement(sansSalon, message()), /configuré les signalements/)
 })
 
 test("les customId restent sous 100 caractères, même avec des identifiants de 20 chiffres", () => {
@@ -152,4 +154,75 @@ test("loader : au plus 5 menus contextuels de chaque type", () => {
         assert.ok(noms.length <= 5, `${type} : ${noms.length} menus`)
         for (const nom of noms) assert.ok(nom.length <= 32, `${nom} : nom trop long`)
     }
+})
+
+// Soumission du modal : faux salon du message (permissions du signaleur au choix) et faux serveur
+const SALON_MSG = "333333333333333333"
+function soumission({ id, accordees = [Flags.ViewChannel, Flags.ReadMessageHistory], guild = serveur(), signaleur = MEMBRE }) {
+    const msg = { ...message(), id, guildId: G }
+    const salon = {
+        isTextBased: () => true, messages: { fetch: async () => msg },
+        permissionsFor: () => ({ has: p => [].concat(p).every(x => accordees.includes(x)) })
+    }
+    guild.channels.cache.set(SALON_MSG, salon)
+    const i = interaction(`signal:${SALON_MSG}:${id}`, { guild })
+    return Object.assign(i, {
+        user: { id: signaleur }, deferred: true, ephemeral: true,
+        fields: { getTextInputValue: () => "insultes" },
+        deferReply: async () => {}, editReply: async r => i.reponses.push(r)
+    })
+}
+
+test("signalement refusé sans salon « signalements », même si le salon général existe", async () => {
+    const H = "999999999999999999"
+    const guild = { ...serveur(), id: H }
+    db.setLogChannel(H, SALON_LOGS)
+    assert.ok(guild.channels.cache.get(SALON_LOGS), "le salon général existe et le bot peut y écrire")
+    const i = interaction("x", { guild })
+    assert.match(sig.verifierSignalement(i, message()), /pas encore configuré les signalements/)
+
+    const modal = soumission({ id: "444444444444444450", guild })
+    await sig.recevoirSignalement(null, modal)
+    assert.strictEqual(guild.envoyes.length, 0, "rien n'est envoyé dans le salon général")
+    assert.match(modal.reponses[0].content, /pas encore configuré les signalements/)
+})
+
+test("signalement refusé si le signaleur ne peut pas lire l'historique du salon", async () => {
+    setSalonFamille(G, "signalements", SALON_LOGS)
+    const guild = serveur()
+    const sansHistorique = soumission({ id: "444444444444444451", accordees: [Flags.ViewChannel], guild })
+    await sig.recevoirSignalement(null, sansHistorique)
+    assert.match(sansHistorique.reponses[0].content, /n'existe plus ou n'est pas accessible/)
+    const sansVue = soumission({ id: "444444444444444452", accordees: [Flags.ReadMessageHistory], guild })
+    await sig.recevoirSignalement(null, sansVue)
+    assert.match(sansVue.reponses[0].content, /n'existe plus ou n'est pas accessible/)
+    assert.strictEqual(guild.envoyes.length, 0)
+
+    const ok = soumission({ id: "444444444444444453", guild })
+    await sig.recevoirSignalement(null, ok)
+    assert.match(ok.reponses[0].content, /transmis au staff/)
+    assert.strictEqual(guild.envoyes.length, 1)
+})
+
+test("le 2e signaleur d'un message déjà signalé apprend qu'il l'est déjà, sans nouvel envoi", async () => {
+    setSalonFamille(G, "signalements", SALON_LOGS)
+    const guild = serveur()
+    const premier = soumission({ id: "444444444444444454", guild })
+    await sig.recevoirSignalement(null, premier)
+    const second = soumission({ id: "444444444444444454", guild, signaleur: "666666666666666666" })
+    await sig.recevoirSignalement(null, second)
+    assert.match(premier.reponses[0].content, /transmis au staff/)
+    assert.match(second.reponses[0].content, /déjà été signalé/)
+    assert.strictEqual(guild.envoyes.length, 1, "un seul signalement au staff")
+})
+
+test("ligne de sanction annulée : raison barrée, les « s » ne sont pas touchés", () => {
+    const c = { id: 7, type: "kick", reason: "ssss  espaces\nmultiples", created_at: 1000, cancelled_at: 5000, moderator_id: MEMBRE }
+    const ligne = cases.ligneSanction(interaction("x"), c)
+    assert.ok(ligne.includes("~~ssss espaces multiples~~"), ligne)
+    assert.ok(ligne.includes("Annulée"))
+    const active = cases.ligneSanction(interaction("x"), { ...c, cancelled_at: null })
+    assert.ok(!active.includes("~~") && !active.includes("Annulée"))
+    assert.strictEqual(cases.nomType(interaction("x"), "automod"), "Blocage AutoMod", "type automod connu")
+    assert.strictEqual(cases.nomType(interaction("x"), "inconnu"), "inconnu")
 })

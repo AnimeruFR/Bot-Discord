@@ -13,9 +13,10 @@ const COULEURS = {
 
 // Salons de logs séparés (idée #24) : chaque famille peut avoir son salon (/setlogs famille:…).
 // Sans salon pour sa famille, un log va dans le salon général, SAUF les familles « sans repli » :
-// le spam des jeux et de l'économie ne doit jamais noyer les alertes de modération.
+// le spam des jeux et de l'économie ne doit jamais noyer les alertes de modération. Les signalements en font partie :
+// l'identité du signaleur ne doit jamais atterrir dans un salon plus large que celui choisi pour eux.
 const FAMILLES = ["sanctions", "automod", "tickets", "membres", "signalements", "animation", "config", "jeux", "economie"]
-const SANS_REPLI = ["jeux", "economie"]
+const SANS_REPLI = ["jeux", "economie", "signalements"]
 
 // Famille d'une action de sendModLog (action inconnue : sanctions)
 const FAMILLE_ACTION = {

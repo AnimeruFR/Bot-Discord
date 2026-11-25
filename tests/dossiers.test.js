@@ -288,3 +288,38 @@ test("/historique : sanction annulée barrée et nombre de notes", async () => {
     assert.ok(description.includes("1 note"))
     assert.ok(!description.includes("secret"), "le texte des notes n'apparaît pas")
 })
+
+test("/case et /note : refusés si le membre visé est maintenant au-dessus du modérateur, même pour l'auteur", async () => {
+    const haut = () => { const m = fauxMembre({ muet: true }); m.roles.highest = role(50); return m }
+    const numero = db.addCase(G, { userId: U, moderatorId: MOD, type: "kick", reason: "d'origine" })
+
+    const raison = interaction({ options: { action: "raison", numero, texte: "modifiée" }, perms: [Flags.ModerateMembers], membre: haut() })
+    await lancer("case", raison)
+    assert.strictEqual(cases.lireCase(G, numero).reason, "d'origine", "raison inchangée")
+    assert.strictEqual(cases.listerModifs(G, numero).length, 0)
+    assert.ok(texte(raison).includes("rôle"), texte(raison))
+
+    const annuler = interaction({ options: { action: "annuler", numero }, perms: [Flags.ModerateMembers], membre: haut() })
+    await lancer("case", annuler)
+    assert.strictEqual(cases.lireCase(G, numero).cancelled_at, null, "sanction non annulée")
+
+    // Même un membre qui gère le serveur reste soumis à la hiérarchie
+    const gestionnaire = interaction({ options: { action: "annuler", numero }, user: MOD2, perms: [Flags.ModerateMembers, Flags.ManageGuild], membre: haut() })
+    await lancer("case", gestionnaire)
+    assert.strictEqual(cases.lireCase(G, numero).cancelled_at, null)
+
+    // Membre parti du serveur (introuvable) : la garde ne bloque pas
+    const parti = interaction({ options: { action: "annuler", numero }, perms: [Flags.ModerateMembers], membre: null })
+    parti.guild.members.fetch = async () => { throw Object.assign(new Error("absent"), { code: Discord.RESTJSONErrorCodes.UnknownMember }) }
+    await lancer("case", parti)
+    assert.ok(cases.lireCase(G, numero).cancelled_at, "membre absent : annulation permise")
+
+    // /note retirer : même garde
+    const A = "333333333333333399"
+    notes.ajouterNote(G, A, MOD, "note")
+    const [note] = notes.listerNotes(G, A)
+    const refus = interaction({ options: { action: "retirer", membre: { id: A }, numero: note.id }, perms: [Flags.ModerateMembers], membre: haut() })
+    await lancer("note", refus)
+    assert.strictEqual(notes.compterNotes(G, A), 1, "note conservée")
+    assert.ok(texte(refus).includes("rôle"), texte(refus))
+})

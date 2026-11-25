@@ -91,13 +91,26 @@ test("jeux et économie : jamais de repli sur le salon général", async () => {
 test("filtre des comptes récents : rôle dangereux, rôle trop haut et âge hors bornes refusés", async () => {
     const sage = role("111111111111111200", 3), modo = role("111111111111111201", 3, Flags.KickMembers), admin = role("111111111111111202", 3, Flags.Administrator)
     const haut = role("111111111111111203", 20), bot_ = role("111111111111111204", 1, 0n, true)
-    const i = faux({ perms: [Flags.ManageGuild], roles: [sage, modo, admin, haut, bot_] })
+    const i = faux({ perms: [Flags.ManageGuild, Flags.ManageRoles], roles: [sage, modo, admin, haut, bot_] })
 
     assert.strictEqual(cfg.refusRoleFiltre(i, sage), null)
     assert.ok(cfg.refusRoleFiltre(i, modo), "permission de modération refusée")
     assert.ok(cfg.refusRoleFiltre(i, admin), "administrateur refusé")
     assert.ok(cfg.refusRoleFiltre(i, haut), "rôle au-dessus du bot refusé")
     assert.ok(cfg.refusRoleFiltre(i, bot_), "rôle géré par une intégration refusé")
+
+    // Le configurateur doit lui-même pouvoir gérer ce rôle
+    const mention = role("111111111111111205", 3, Flags.MentionEveryone), webhooks = role("111111111111111206", 3, Flags.ManageWebhooks)
+    const auDessus = role("111111111111111207", 5), toutHaut = role("111111111111111208", 8)
+    assert.ok(cfg.refusRoleFiltre(i, mention), "@everyone mentionnable refusé")
+    assert.ok(cfg.refusRoleFiltre(i, webhooks), "Gérer les webhooks refusé")
+    assert.ok(cfg.refusRoleFiltre(i, auDessus), "rôle égal à celui du configurateur refusé")
+    assert.ok(cfg.refusRoleFiltre(i, toutHaut), "rôle au-dessus du configurateur refusé")
+    const sansRoles = faux({ perms: [Flags.ManageGuild], roles: [sage] })
+    assert.ok(cfg.refusRoleFiltre(sansRoles, sage), "configurateur sans « Gérer les rôles » refusé")
+    assert.ok((await cfg.changerFiltreComptes(sansRoles, { minAgeJours: 7, action: "role", roleId: sage.id })).erreur)
+    const proprio = faux({ userId: "owner", roles: [sage, toutHaut] })
+    assert.strictEqual(cfg.refusRoleFiltre(proprio, toutHaut), null, "propriétaire accepté même sans permission ni rang")
 
     for (const minAgeJours of [0, -1, 366, 1.5, NaN]) {
         assert.ok((await cfg.changerFiltreComptes(i, { minAgeJours, action: "role", roleId: sage.id })).erreur, `âge ${minAgeJours} refusé`)

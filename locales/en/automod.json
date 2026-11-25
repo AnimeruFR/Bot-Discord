@@ -38,6 +38,8 @@
   "am.log_raison": "Reason",
   "am.log_warn_titre": "Warning",
   "am.log_warn": "Warning #{id} (total: {total})",
+  "am.log_rafale_titre": "Burst",
+  "am.log_rafale": "+{n} blocked messages since the last case (counted without a new case)",
   "am.log_sanction": "Automatic sanction",
   "am.dossiers_pouvoir": "You don't have the permission to apply the sanction set at {warns} warns yourself, so I won't apply it on your behalf."
 }

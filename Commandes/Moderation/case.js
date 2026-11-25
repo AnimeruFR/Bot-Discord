@@ -1,17 +1,16 @@
 const Discord = require('discord.js')
 const { couleur } = require('../../Fonctions/apparence')
 const { refuser } = require('../../Fonctions/erreurs')
-const { formatReason, formatDuree, checkHierarchy, fetchMember, auditReason } = require('../../Fonctions/moderation')
+const { formatReason, formatDuree, auditReason } = require('../../Fonctions/moderation')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t, langueDe } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
-const { lireCase, listerModifs, muteActif, warnEncore, modifierRaison, annulerCase } = require('../../Fonctions/cases')
+const { lireCase, listerModifs, muteActif, warnEncore, modifierRaison, annulerCase, nomType, cibleDe, verifierDroitSurCible } = require('../../Fonctions/cases')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
-const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban"]
 
-// Cible pour sendModLog quand l'utilisateur n'est pas sous la main
-const cibleDe = id => ({ id, toString: () => `<@${id}>` })
+// Résultat de modifierRaison -> clé du refus (le reste : introuvable)
+const REFUS_MODIF = { annulee: "figee", warn_retire: "warn_retire" }
 
 module.exports = {
     name: "case",
@@ -64,32 +63,24 @@ module.exports = {
             if (!texte) return refuser(message, t(message, "dos.case.texte_requis"))
             if (c.cancelled_at) return refuser(message, t(message, "dos.case.figee", { id }))
             if (!warnEncore(c)) return refuser(message, t(message, "dos.case.warn_retire", { id }))
-            // Corriger la sanction d'un collègue demande de gérer le serveur
-            if (c.moderator_id !== message.user.id && !message.memberPermissions?.has(Discord.PermissionFlagsBits.ManageGuild)) {
-                return refuser(message, t(message, "dos.case.autre_moderateur"))
-            }
+            const { refus } = await verifierDroitSurCible(message, { auteurId: c.moderator_id, userId: c.user_id, cleAutre: "dos.case.autre_moderateur" })
+            if (refus) return refuser(message, refus)
             const r = modifierRaison(guildId, id, message.user.id, texte)
-            if (r !== "ok") return refuser(message, t(message, `dos.case.${r === "annulee" ? "figee" : r === "warn_retire" ? "warn_retire" : "introuvable"}`, { id }))
+            if (r !== "ok") return refuser(message, t(message, `dos.case.${REFUS_MODIF[r] ?? "introuvable"}`, { id }))
             await message.editReply(t(message, "dos.case.raison_modifiee", { id, reason: formatReason(texte) }))
             return sendModLog(message, { action: "case", cible: cibleDe(c.user_id), details: `Sanction n°${id} : raison modifiée\nAvant : ${formatReason(c.reason).slice(0, 400)}`, raison: texte })
         }
 
-        // Annulation : même règle que la correction (sanction d'un collègue = gérer le serveur)
-        if (c.moderator_id !== message.user.id && !message.memberPermissions?.has(Discord.PermissionFlagsBits.ManageGuild)) {
-            return refuser(message, t(message, "dos.case.autre_moderateur"))
-        }
+        // Annulation : même garde que la correction (auteur ou gérer le serveur, et hiérarchie actuelle)
+        const { refus, membre } = await verifierDroitSurCible(message, { auteurId: c.moderator_id, userId: c.user_id, cleAutre: "dos.case.autre_moderateur" })
+        if (refus) return refuser(message, refus)
         let timeoutRetire = false
-        if (muteActif(c) && !c.cancelled_at) {
-            const member = await fetchMember(message.guild, c.user_id)
-            if (member?.isCommunicationDisabled()) {
-                const erreur = checkHierarchy(message, member, "unmute")
-                if (erreur) return refuser(message, erreur)
-                try {
-                    await member.timeout(null, auditReason(message, `Annulation de la sanction n°${id}`))
-                    timeoutRetire = true
-                } catch {
-                    return refuser(message, t(message, "dos.case.timeout_echec"))
-                }
+        if (muteActif(c) && membre?.isCommunicationDisabled()) {
+            try {
+                await membre.timeout(null, auditReason(message, `Annulation de la sanction n°${id}`))
+                timeoutRetire = true
+            } catch {
+                return refuser(message, t(message, "dos.case.timeout_echec"))
             }
         }
         const r = annulerCase(guildId, id, message.user.id)
@@ -108,7 +99,7 @@ module.exports = {
 
 async function voir(message, c) {
     const langue = langueDe(message)
-    const nom = TYPES.includes(c.type) ? t(message, `mod.type.${c.type}`) : c.type
+    const nom = nomType(message, c.type)
     const embed = new Discord.EmbedBuilder()
         .setColor(couleur(message.guild))
         .setTitle(t(message, "dos.case.voir_titre", { id: c.id, nom }))

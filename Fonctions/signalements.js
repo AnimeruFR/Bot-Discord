@@ -1,13 +1,13 @@
 const Discord = require('discord.js')
 const db = require('./db')
-const { t, langueDe } = require('./i18n')
+const { t } = require('./i18n')
 const { couleur } = require('./apparence')
-const { formatReason, formatDuree } = require('./moderation')
 const { getLogChannel } = require('./logs')
 const { avertir, muter } = require('./actionsMod')
 const { refuser } = require('./erreurs')
 const cooldowns = require('./cooldowns')
 const { compterNotes } = require('./notes')
+const { ligneSanction } = require('./cases')
 
 // Signalement d'un message au staff (#22) et menus contextuels du staff (#23).
 // Rien n'est stocké en base : les données utiles voyagent dans le customId des modals et des boutons.
@@ -112,6 +112,15 @@ function embedSignalement(guild, message, signaleur, raison) {
         .setTimestamp()
 }
 
+// Le signaleur peut-il lire ce salon ? Il faut voir le salon ET son historique, et, pour un fil privé, en être membre
+// (ou pouvoir gérer les fils). Sinon on ne recopie pas un message qu'il ne pourrait pas lire lui-même.
+async function peutLire(salon, membre) {
+    const perms = salon.permissionsFor(membre)
+    if (!perms?.has([Flags.ViewChannel, Flags.ReadMessageHistory])) return false
+    if (salon.type !== Discord.ChannelType.PrivateThread || perms.has(Flags.ManageThreads)) return true
+    return Boolean(await salon.members.fetch(membre.id).catch(() => null))
+}
+
 // Soumission du modal : relit le message, revérifie tout, puis l'envoie au staff. La réponse au signaleur est éphémère
 // et l'auteur du message n'apprend jamais qui l'a signalé (le signalement ne va que dans le salon staff).
 async function recevoirSignalement(bot, interaction) {
@@ -123,7 +132,7 @@ async function recevoirSignalement(bot, interaction) {
     // Réponse différée d'abord : relire le message peut dépasser les 3 s permises par Discord
     await interaction.deferReply({ flags: EPHEMERAL })
     const salon = interaction.guild?.channels.cache.get(m[1])
-    if (!salon?.isTextBased() || !salon.permissionsFor(interaction.member)?.has(Flags.ViewChannel)) {
+    if (!salon?.isTextBased() || !await peutLire(salon, interaction.member)) {
         return refuser(interaction, t(interaction, "sig.refus.introuvable"))
     }
     const message = await salon.messages.fetch(m[2]).catch(() => null)
@@ -132,7 +141,7 @@ async function recevoirSignalement(bot, interaction) {
     const refus = verifierSignalement(interaction, message)
     if (refus) return refuser(interaction, refus)
     // Un même message signalé par plusieurs membres : un seul signalement au staff pendant 10 min
-    if (dejaSignales.has(message.id)) return interaction.editReply({ content: t(interaction, "sig.envoye") })
+    if (dejaSignales.has(message.id)) return interaction.editReply({ content: t(interaction, "sig.deja_signale") })
     dejaSignales.set(message.id, Date.now())
     for (const [id, date] of dejaSignales) if (Date.now() - date > DUREE_DEJA_SIGNALE) dejaSignales.delete(id)
     try {
@@ -219,19 +228,11 @@ async function dossier(interaction) {
 
     const guildId = interaction.guild.id
     const cases = db.listCases(guildId, user.id, SANCTIONS_AFFICHEES)
-    const lignes = cases.map(c => {
-        const duree = c.duration_ms ? ` (${formatDuree(c.duration_ms, langueDe(interaction))})` : ""
-        const nom = t(interaction, `mod.type.${c.type}`)
-        const ligne = t(interaction, "mod.historique.ligne", {
-            id: c.id, nom: nom === `mod.type.${c.type}` ? c.type : nom, duree, date: Math.floor(c.created_at / 1000),
-            moderateur: c.moderator_id, auto: c.auto ? t(interaction, "mod.historique.auto") : "",
-            reason: c.cancelled_at ? `~~${formatReason(c.reason).slice(0, 200).replace(/s+/g, " ")}~~` : formatReason(c.reason).slice(0, 200)
-        })
-        return c.cancelled_at ? ligne + t(interaction, "dos.historique.annulee", { date: Math.floor(c.cancelled_at / 1000) }) : ligne
-    })
+    const lignes = cases.map(c => ligneSanction(interaction, c))
     const resume = t(interaction, "sig.dossier.resume", {
         warns: db.countWarns(guildId, user.id),
-        sanctions: db.sqlAll("SELECT COUNT(*) AS n FROM cases WHERE guild_id = ? AND user_id = ? AND cancelled_at IS NULL", [guildId, user.id])[0].n, notes: compterNotes(guildId, user.id)
+        sanctions: db.countActiveCases(guildId, user.id),
+        notes: compterNotes(guildId, user.id)
     })
     const embed = new Discord.EmbedBuilder()
         .setColor(couleur(interaction.guild))

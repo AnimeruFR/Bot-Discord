@@ -40,25 +40,39 @@ function ligneReduite(ligne, roles) {
     return { ...reduite, role_du_membre: roles }
 }
 
+// Lignes d'une table rattachées au membre par leur ligne parente (ex. case_edits -> cases.user_id)
+function lignesRattachees(table, def, guildId, userId) {
+    const { colonne, parent, cle, parentServeur, parentMembre } = def.rattachee
+    return db.sqlAll(`SELECT * FROM ${table} WHERE ${conditionServeur(def)} AND ${colonne} IN (SELECT ${cle} FROM ${parent} WHERE ${parentServeur} = ? AND ${parentMembre} = ?)`,
+        [guildId, guildId, userId])
+}
+
 // Toutes les données d'un membre sur un serveur, table par table (seules les tables où il apparaît sont listées)
 function exporter(guildId, userId) {
-    const u = String(userId)
+    const g = String(guildId), u = String(userId)
     const tables = {}
     for (const [table, def] of tablesConcernees()) {
         const colonnes = Object.entries(def.colonnes)
         const conditions = colonnes.map(([colonne, c]) => conditionMembre(colonne, c)).join(" OR ")
         const trouvees = db.sqlAll(`SELECT * FROM ${table} WHERE ${conditionServeur(def)} AND (${conditions})`,
             [String(guildId), ...colonnes.map(() => u)])
-        const lignes = trouvees.map(ligne => {
+        // Lignes qui visent le membre par leur ligne parente (ex. modifications de ses sanctions) : toujours en entier
+        const viaParent = def.rattachee ? lignesRattachees(table, def, g, u) : []
+        const completes = new Set(viaParent.map(l => JSON.stringify(l)))
+        const lignes = trouvees.filter(l => !completes.has(JSON.stringify(l))).map(ligne => {
             const roles = colonnes.filter(([colonne, c]) => designe(ligne, colonne, c, u))
             // Concerné lui-même (sanctionné, auteur du ticket, gagnant…) : ligne complète
             if (roles.some(([, c]) => !c.auteur)) return ligne
             return ligneReduite(ligne, roles.map(([colonne]) => colonne))
-        })
+        }).concat(viaParent)
         if (!lignes.length) continue
+        const traitements = colonnes.map(([colonne, c]) => [colonne, c.duree ? `${c.traitement} (${c.duree})` : c.traitement])
+        if (viaParent.length && def.rattachee) {
+            const r = def.rattachee
+            traitements.push([`${r.colonne} (via ${r.parent}.${r.parentMembre})`, r.duree ? `${r.traitement} (${r.duree})` : r.traitement])
+        }
         tables[table] = {
-            traitement_a_l_effacement: Object.fromEntries(colonnes.map(([colonne, c]) =>
-                [colonne, c.duree ? `${c.traitement} (${c.duree})` : c.traitement])),
+            traitement_a_l_effacement: Object.fromEntries(traitements),
             lignes
         }
     }

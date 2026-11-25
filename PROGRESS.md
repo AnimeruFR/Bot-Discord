@@ -59,7 +59,7 @@
 
 ## Phase 0 – Fondations (25/11/2026)
 
-Branche d'intégration locale `phase-0/fondations` (non poussée), qui empile une branche par idée : `docs/plan-ameliorations` → `feat/86-loader-modules` → `feat/91-erreurs` → `feat/90-cooldowns` → (fusion `feat/88-migrations`) → `feat/1-garde-staff` → (fusion `feat/92-tests-node`) → `feat/89-routeur` → `feat/87-config-modules` → `feat/95-help-modules` → (fusion `feat/93-rgpd-membre`).
+Branche d'intégration `phase-0/fondations` (poussée, PR #14 ouverte), qui empile une branche par idée : `docs/plan-ameliorations` → `feat/86-loader-modules` → `feat/91-erreurs` → `feat/90-cooldowns` → (fusion `feat/88-migrations`) → `feat/1-garde-staff` → (fusion `feat/92-tests-node`) → `feat/89-routeur` → `feat/87-config-modules` → `feat/95-help-modules` → (fusion `feat/93-rgpd-membre`).
 
 | Idée | État | Résumé |
 |---|---|---|
@@ -90,5 +90,43 @@ Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haik
 - 🕓 Reporté : S3 bis rejouer les effacements RGPD après une restauration (phase 3) · S8 purge des délais sur minuteur avant les jeux en boutons (phase 3) · A4 rôle staff et permissions par défaut des commandes (phase 1) · A6 dériver purge serveur et liste des guildes du registre RGPD + vérificateurs d'effacement enregistrés (phase 3) · pagination de `/help` (phase 3) · réponses de `/warn` encore publiques sur certaines erreurs (phase 1).
 - ❌ Rejeté : A7 cache des modules (gain non mesuré) · P8 remarques de style.
 
+## Phase 1 – Quick wins (25/11/2026)
+
+Branche d'intégration `phase-1/quick-wins` (part de `phase-0/fondations`, PR #14 pas encore fusionnée). Une branche par commit d'idée : `feat/3-filtre-comptes`, `feat/20-reponses-tickets`, `feat/8-10-12-dossiers`, `feat/6-7-automod`, `feat/22-23-signalements`, `feat/24-94-logs-setup`.
+
+| Idée | État | Résumé |
+|---|---|---|
+| Contrats communs | ✅ | migrations 004-009, logs par famille (cœur de #24), menus contextuels dans le loader, `avertir`/`muter` partagés, `refuser()` |
+| #3 Filtre des comptes récents | ✅ | rôle « en attente » ou expulsion, réglé dans `/config` |
+| #6 AutoMod préréglages | ✅ | souple/normal/strict, regex, exemptions (rôles, salons, salons de jeux) |
+| #7 AutoMod → dossiers | ✅ | blocage consigné (case automod) ; option `dossiers` : compte comme warn + seuils |
+| #8 Notes staff | ✅ | `/note`, 50 par membre, purgées à 2 ans |
+| #10 Raisons prédéfinies | ✅ | `/raisons`, autocomplétion sur ban/kick/tempban/mute/warn |
+| #12 /case | ✅ | voir, corriger, annuler (tracé dans case_edits) |
+| #20 Réponses de tickets | ✅ | `/reponse` |
+| #22 Signaler au staff | ✅ | menu message, boutons staff Warn / Mute / Ignorer |
+| #23 Menus staff | ✅ | Dossier, Warn rapide, Mute 10 min |
+| #24 Logs par famille | ✅ | `/setlogs famille:` et `/config` ; jeux/économie sans repli |
+| #94 /setup | ✅ | 5 étapes, suggéré à l'arrivée du bot |
+
+Décisions de la phase 1 :
+- Groupes d'idées commités ensemble quand ils partagent des fichiers (#8/#10/#12, #6/#7, #22/#23, #24/#94) ; seul l'état final est testé, pas chaque commit intermédiaire.
+- Rôle staff : suffit aussi pour `/note` et « Dossier » (aucun pouvoir du bot). `/case`, Warn rapide et les boutons des signalements exigent la vraie permission.
+- Jamais plus de pouvoir par le bot que celui qui configure : expulsion du filtre réservée à qui peut expulser ; `/automod dossiers` exige les pouvoirs de tous les seuils en place.
+- Un même message n'est signalé qu'une fois toutes les 10 min ; le message d'un membre du staff peut être signalé.
+- Annuler un warn efface sa raison (même règle que `/unwarn`).
+- Logs du salon de logs en français (convention existante), y compris ceux du filtre.
+
+Critique de fin de lot (sonnet) : corrigé — annulation d'une sanction d'un collègue = Gérer le serveur ; réponse différée avant tout appel réseau (signalement, Warn rapide) ; dossier qui barre les sanctions annulées ; verrou gardé si les boutons ne se désactivent pas + anti-doublon des signalements ; expulsion du filtre et `dossiers` sans pouvoir prêté par le bot ; raisons comparées sans casse en JS (accents) ; log de config en double. Écarté : raison d'un warn annulé gardée (cohérent avec `/unwarn`) ; double ligne automod + warn (trace voulue) ; Warn rapide plus strict que `/warn` (sans faille) ; logs en français (convention).
+
+Reporté : retrait du rôle « en attente » par un flux de vérification (#4, phase 2).
+
+### Tribunal de fin de jalon 1 — **jalon validé** (corrections appliquées)
+Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haiku). Défense (sonnet), jury (opus). 0 CVE (`npm audit` ; osv-scanner indisponible sur ce poste).
+- ✅ Corrigé : S1 `/automod dossiers` ne compte que les règles créées par le bot qui bloquent ou mettent en sourdine · S2 rôle « en attente » : le configurateur doit avoir Gérer les rôles et un rôle plus haut · S3 signalements jamais dans le salon général (famille sans repli) + ReadMessageHistory et fils privés vérifiés · S4 anti-rafale AutoMod (1 dossier + 1 log par membre et par minute, compteur « +N ») · S5 export RGPD avec les modifications des sanctions du membre · S8 `/case` et `/note retirer` revérifient la hiérarchie actuelle · A4 « déjà signalé » pour le 2e signaleur · A5 regex du dossier · A6 libellés des familles en i18n (déjà conforme) · P2 TYPES et rendu d'une sanction en un seul endroit (`Fonctions/cases.js`) · P3 comptage en requête préparée · P6 une seule garde `verifierDroitSurCible` · P8 tests de `avertir`/`muter`.
+- 🕓 Reporté : S6 notes visant un membre du staff (phase 2, avec le dossier unifié #9) · A3 mesure de `/setup` en moins de 2 min (avant la démo) · A4 bis garde-fous des signalements persistés (phase 2) · A7 `/automod` en sous-commandes + confirmation avant remplacement (phase 2) · P7 nettoyage (verifierLimites, paramètres inutilisés, INSERT dupliqué) (phase 2).
+- ❌ Rejeté : S7 extrait AutoMod (justifie la sanction, durée déclarée) · A1 logs de jeux (familles prêtes, jeux en phase 3) · A2 /setup limité aux 5 étapes du plan · P4 préfixes i18n (cosmétique) · P5 logs en français (convention).
+- Risque connu : un membre avec « Gérer le serveur » peut modifier dans Discord une règle créée par le bot (son créateur ne change pas) ; la règle reste alors comptée pour `dossiers` (cache de 5 min).
+
 ## Prochaine étape
-Phase 0 codée, tribunal passé, tout commité en local sur `phase-0/fondations` (rien de poussé). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID` puis `npm run dev`), puis, sur accord d'Animeru, pousser et ouvrir la PR. Ensuite : phase 1 (quick wins).
+Phase 1 codée et commitée en local sur `phase-1/quick-wins` (rien de poussé), tribunal de fin de jalon passé (jalon validé, corrections appliquées). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID` pour enregistrer les menus contextuels, puis `npm run dev`), puis, sur accord d'Animeru, pousser et ouvrir la PR de la phase 1 (après fusion de la PR #14). Ensuite : phase 2 (modération avancée).

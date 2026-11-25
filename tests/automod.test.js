@@ -226,12 +226,13 @@ test("dédoublonnage : règle sans blocage (une seule action retenue) et événe
     assert.strictEqual(db.countCases(guild.id, U), 1)
     // Un blocage avec identifiant livré deux fois
     const guild2 = serveurEvenement("700000000000000022")
+    const t0 = 1_000_000_000_000
     const bloc = evenement(guild2, { alertSystemMessageId: id(99) })
-    assert.ok(await am.traiterExecution(bot, bloc))
-    assert.strictEqual(await am.traiterExecution(bot, bloc), null)
-    // Deux déclenchements distincts (sans identifiant) sont tous deux enregistrés
-    assert.ok(await am.traiterExecution(bot, evenement(guild2)))
-    assert.ok(await am.traiterExecution(bot, evenement(guild2)))
+    assert.ok(await am.traiterExecution(bot, bloc, { maintenant: t0 }))
+    assert.strictEqual(await am.traiterExecution(bot, bloc, { maintenant: t0 }), null)
+    // Deux déclenchements distincts (sans identifiant), à plus d'une minute d'écart, sont tous deux enregistrés
+    assert.ok(await am.traiterExecution(bot, evenement(guild2), { maintenant: t0 + 61_000 }))
+    assert.ok(await am.traiterExecution(bot, evenement(guild2), { maintenant: t0 + 122_000 }))
     assert.strictEqual(db.countCases(guild2.id, U), 3)
 })
 
@@ -259,15 +260,16 @@ test("dossiers : avertissement et seuil seulement si count_warns est activé, un
 
     am.setCountWarns(guild.id, true)
     assert.strictEqual(am.getCountWarns(guild.id), true)
+    am.reinitialiserEtat()
     const t0 = 1_000_000_000_000
     const un = await am.traiterExecution(bot, evenement(guild), { maintenant: t0 })
     assert.ok(un.warnId)
     assert.strictEqual(db.countWarns(guild.id, U), 1)
     assert.strictEqual(db.getWarn(guild.id, un.warnId).moderator_id, BOT)
 
-    // Rafale : le 2e blocage dans la minute est consigné mais ne warn pas (sinon le seuil de 2 partirait tout de suite)
+    // Rafale : le 2e blocage dans la minute est seulement compté (sinon le seuil de 2 partirait tout de suite)
     const rafale = await am.traiterExecution(bot, evenement(guild), { maintenant: t0 + 5000 })
-    assert.strictEqual(rafale.warnId, null)
+    assert.strictEqual(rafale, null)
     assert.strictEqual(db.countWarns(guild.id, U), 1)
     assert.ok(!membre.expulse)
 
@@ -293,4 +295,67 @@ test("seuil d'AutoMod : refusé si le bot n'a pas la permission de la sanction",
     const r = await am.traiterExecution(bot, evenement(guild))
     assert.ok(r.warnId, "le warn est posé")
     assert.match(r.sanction, /non appliquée.*permission/)
+})
+
+// --- Quelles règles comptent comme warn ---
+
+async function blocageAvecWarns(guildId, donneesRegle, surcharge = {}) {
+    am.reinitialiserEtat()
+    const guild = fauxServeur(guildId)
+    faussRegle(guild, { name: "Règle", triggerType: TriggerType.Keyword, ...donneesRegle })
+    guild.members.fetch = async () => ({ id: U, bannable: true, roles: { highest: role(1) }, ban: async () => { throw new Error("ne doit pas être banni") } })
+    guild.members.me.permissions = new Discord.PermissionsBitField(Flags.BanMembers | Flags.ManageGuild)
+    db.setThreshold(guild.id, 1, "ban", null)
+    am.setCountWarns(guild.id, true)
+    const r = await am.traiterExecution(bot, evenement(guild, surcharge))
+    return { guild, r }
+}
+
+test("dossiers : une règle créée par un humain n'avertit ni ne sanctionne (mais le dossier existe)", async () => {
+    const { guild, r } = await blocageAvecWarns("700000000000000030", { creatorId: AUTRE })
+    assert.ok(r.numero, "dossier et log conservés")
+    assert.strictEqual(r.warnId, null)
+    assert.strictEqual(r.sanction, null)
+    assert.strictEqual(db.countWarns(guild.id, U), 0)
+})
+
+test("dossiers : une règle du bot en alerte seule n'avertit pas", async () => {
+    const { guild, r } = await blocageAvecWarns("700000000000000031", { actions: [{ type: ActionType.SendAlertMessage }] }, { action: { type: ActionType.SendAlertMessage } })
+    assert.ok(r.numero)
+    assert.strictEqual(r.warnId, null)
+    assert.strictEqual(db.countWarns(guild.id, U), 0)
+})
+
+test("dossiers : une règle du bot avec blocage (ou timeout) avertit et peut déclencher le seuil", async () => {
+    const bloc = await blocageAvecWarns("700000000000000032", {})
+    assert.ok(bloc.r.warnId)
+    assert.strictEqual(db.countWarns(bloc.guild.id, U), 1)
+    assert.ok(bloc.r.sanction, "le seuil à 1 warn est appliqué (ici refusé par le faux membre, mais tenté)")
+    const mute = await blocageAvecWarns("700000000000000033", { actions: [{ type: ActionType.Timeout }] }, { action: { type: ActionType.Timeout } })
+    assert.ok(mute.r.warnId, "règle du bot avec timeout seul")
+})
+
+test("dossiers : règle introuvable (échec de Discord) : dossier, mais pas de warn", async () => {
+    const { guild, r } = await blocageAvecWarns("700000000000000034", {}, { ruleId: id(9999) })
+    assert.ok(r.numero)
+    assert.strictEqual(r.warnId, null)
+    assert.strictEqual(db.countWarns(guild.id, U), 0)
+})
+
+test("anti-rafale : 50 blocages en une minute = 1 dossier, puis « +49 blocages depuis » au dossier suivant", async () => {
+    am.reinitialiserEtat()
+    const guild = serveurEvenement("700000000000000035")
+    const t0 = 1_000_000_000_000
+    let crees = 0
+    for (let i = 0; i < 50; i++) if (await am.traiterExecution(bot, evenement(guild), { maintenant: t0 + i * 1000 })) crees++
+    assert.strictEqual(crees, 1)
+    assert.strictEqual(db.countCases(guild.id, U), 1)
+    assert.ok(!db.listCases(guild.id, U)[0].reason.includes("blocages depuis"), "le premier dossier n'a rien à rattraper")
+
+    const suivant = await am.traiterExecution(bot, evenement(guild), { maintenant: t0 + 61_000 })
+    assert.ok(suivant)
+    assert.strictEqual(db.countCases(guild.id, U), 2)
+    assert.ok(db.listCases(guild.id, U, 5).some(c => c.reason.includes("(+49 blocages depuis)") && c.reason.length <= 100))
+    // Un autre membre n'est pas concerné par la fenêtre
+    assert.ok(await am.traiterExecution(bot, evenement(guild, { userId: "800000000000000002", user: { id: "800000000000000002", bot: false } }), { maintenant: t0 + 62_000 }))
 })

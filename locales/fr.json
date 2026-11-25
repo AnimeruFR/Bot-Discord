@@ -177,6 +177,7 @@
   "config.bouton_filtre_off": "Désactiver le filtre",
   "config.filtre_role_invalide": "Ce rôle ne peut pas servir de rôle « en attente » (@everyone ou rôle d'un bot).",
   "config.filtre_role_pouvoir": "Ce rôle a des permissions de modération : choisissez un rôle sans pouvoir.",
+  "config.filtre_roles_membre": "Pour choisir ce rôle, il vous faut vous-même la permission « Gérer les rôles ».",
   "config.filtre_role_bot": "Je ne peux pas donner ce rôle : il me faut « Gérer les rôles » et un rôle placé au-dessus de lui.",
   "config.filtre_role_manquant": "Choisissez un rôle « en attente ».",
   "config.filtre_age_invalide": "L'âge minimal doit être compris entre {min} et {max} jours.",

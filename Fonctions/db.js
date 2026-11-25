@@ -180,6 +180,7 @@ const requetes = {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     listCases: db.prepare("SELECT * FROM cases WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT ?"),
     countCases: db.prepare("SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ?"),
+    countActiveCases: db.prepare("SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? AND cancelled_at IS NULL"),
     addWarnCase: db.prepare(`INSERT INTO cases (guild_id, user_id, moderator_id, type, reason, warn_id, created_at)
         VALUES (?, ?, ?, 'warn', ?, ?, ?)`),
     anonymiserWarnCase: db.prepare("UPDATE cases SET reason = '(avertissement retiré)' WHERE guild_id = ? AND warn_id = ?"),
@@ -293,6 +294,8 @@ module.exports = {
     },
     listCases: (guildId, userId, limite = 15) => requetes.listCases.all(guildId, userId, limite),
     countCases: (guildId, userId) => requetes.countCases.get(guildId, userId).total,
+    // Sanctions non annulées d'un membre
+    countActiveCases: (guildId, userId) => requetes.countActiveCases.get(guildId, userId).total,
     // Historique gardé 2 ans au plus (voir docs/confidentialite.md)
     // Notes du staff (#8) et trace des modifications (#12) suivent la même durée que l'historique
     purgeOldCases(avant) {

@@ -177,6 +177,7 @@
   "config.bouton_filtre_off": "Turn the filter off",
   "config.filtre_role_invalide": "This role can't be the \"pending\" role (@everyone or a bot role).",
   "config.filtre_role_pouvoir": "This role has moderation permissions: pick a role with no power.",
+  "config.filtre_roles_membre": "To choose this role, you need the Manage Roles permission yourself.",
   "config.filtre_role_bot": "I can't give this role: I need Manage Roles and a role above it.",
   "config.filtre_role_manquant": "Pick a \"pending\" role.",
   "config.filtre_age_invalide": "The minimum age must be between {min} and {max} days.",

@@ -88,6 +88,11 @@ function refusRoleFiltre(interaction, role) {
     const guild = interaction.guild
     if (!roleValide(guild, role.id)) return t(interaction, "config.filtre_role_invalide")
     if (role.permissions.any(PERMISSIONS_MODERATION)) return t(interaction, "config.filtre_role_pouvoir")
+    // Jamais plus de pouvoir par le bot que celui qui règle le filtre : « Gérer les rôles » et un rôle strictement sous le sien
+    const proprietaire = interaction.user.id === guild.ownerId
+    if (!proprietaire && !interaction.memberPermissions?.has(Flags.ManageRoles)) return t(interaction, "config.filtre_roles_membre")
+    const refusPosition = refusRoleStaff(interaction, role)
+    if (refusPosition) return refusPosition
     // Le bot doit pouvoir donner ce rôle : il lui faut « Gérer les rôles » et un rôle plus haut
     const moi = guild.members.me
     if (!moi?.permissions.has(Flags.ManageRoles) || role.comparePositionTo(moi.roles.highest) >= 0) return t(interaction, "config.filtre_role_bot")

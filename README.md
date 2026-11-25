@@ -68,6 +68,7 @@ Règles :
 ## Configuration et langues
 
 - **`/config`** (Gérer le serveur) ouvre une fenêtre privée avec des menus : langue, couleur des embeds, **modules** (activer ou désactiver la Modération, la Communauté et chacun de ses sous-modules, limiter les jeux à certains salons ; administrateur uniquement), **rôle staff** (ses membres peuvent utiliser `/warn`, `/warns`, `/unwarn` et `/historique` ; à choisir avec « Gérer le serveur » + « Exclure temporairement »), salon de logs, tickets (catégorie, rôle staff, fermeture des inactifs), texte du panneau de tickets, et un résumé du reste. Elle applique exactement les mêmes règles que les commandes (`/setlogs`, `/setticket`) : par exemple, changer la config des tickets demande toujours Gérer le serveur + les salons + les rôles. Une seule fenêtre par membre, fermée au bout de 5 minutes.
+- **Filtre des comptes récents** (`/config`, section filtre) : un compte de moins de N jours reçoit un rôle « en attente » ou est expulsé, avec un log. Le bot a besoin de « Gérer les rôles » (rôle du bot au-dessus du rôle en attente) ou d'« Expulser des membres ». Le rôle en attente se retire à la main pour l'instant.
 - **Interrupteur d'urgence** : `DESACTIVER=communaute.jeux,commande:quiz` dans le `.env` coupe ces fonctions sur tous les serveurs au prochain redémarrage (en cas de bug grave), sans redéployer.
 - **Langues** : le bot parle français ou anglais. Par défaut, il répond dans la langue du client Discord de chaque membre (les messages publics suivent la langue du serveur) ; `/config` permet d'imposer une langue. Les descriptions des commandes sont traduites en anglais (fichier `locales/commandes.en.json`), les messages dans `locales/fr.json` et `locales/en.json`.
   Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
@@ -159,13 +160,17 @@ Les commandes sont rangées par module dans `Commandes/` : le dossier décide du
 | `/sanctions action …` | Gérer le serveur | Sanctions automatiques : « au 3e warn, mute 1 h », etc. (10 seuils max) |
 | `/lock [salon]`, `/unlock [salon]` | Gérer les salons + Gérer les permissions | @everyone ne peut plus écrire ; `/unlock` remet les permissions d'avant |
 | `/slowmode duree [salon]` | Gérer les salons | Mode lent (0 = désactivé, 6 h max) |
-| `/automod action [valeur]` | Gérer le serveur | Règles AutoMod natives : mots interdits, invitations, mentions en masse, spam |
+| `/automod action [valeur]` | Gérer le serveur | Règles AutoMod natives : préréglages souple/normal/strict, mots, regex, exemptions de rôles et de salons (dont salons de jeux) ; `dossiers` : chaque blocage est consigné et compte comme warn (le bot doit avoir « Gérer le serveur ») |
 | `/kick` | Expulser des membres | Expulser |
 | `/mute`, `/unmute` | Exclure temporairement | Timeout (28 j max) |
 | `/warn` | Exclure temporairement | Avertir (enregistré en base + MP) |
 | `/warns membre` | Exclure temporairement | Liste des avertissements d'un membre |
 | `/unwarn numero` | Exclure temporairement | Retire un avertissement (pas les siens, ni ceux d'un supérieur) |
-| `/setlogs [salon]` | Gérer le serveur | Salon des logs de modération (sans salon : désactive) |
+| `/setlogs [salon] [famille]` | Gérer le serveur | Salon des logs ; avec `famille` (sanctions, automod, tickets, membres, signalements…), un salon par type de log. Jeux et économie ne vont jamais dans le salon général |
+| `/note action membre …` | Exclure temporairement (ou rôle staff) | Notes privées du staff sur un membre (50 max), jamais montrées au membre |
+| `/raisons action …` | Gérer le serveur | Raisons prédéfinies (25 max), proposées en autocomplétion dans ban, kick, tempban, mute, warn |
+| `/case action numero …` | Exclure temporairement | Voir, corriger la raison ou annuler une sanction (tracé ; sanction d'un collègue : Gérer le serveur) |
+| Clic droit sur un membre | Exclure temporairement | « Dossier » (ou rôle staff), « Warn rapide », « Mute 10 min » |
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
 
 ### 🎫 Tickets (staff ; les boutons des tickets restent ouverts aux membres) – `Commandes/Tickets/`
@@ -176,6 +181,7 @@ Les commandes sont rangées par module dans `Commandes/` : le dossier décide du
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
 | `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
 | `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
+| `/reponse action [nom]` | Gérer les messages ou staff du ticket ; ajouter/retirer : Gérer le serveur | Réponses prédéfinies (25 max) postées dans un ticket |
 
 ### 🎉 Communauté – `Commandes/Communaute/<Sous-module>/`
 
@@ -196,7 +202,9 @@ Animation (`Communaute/Animation/`) :
 |---|---|---|
 | `/help [commande]` | aucune | Liste des commandes |
 | `/ping` | aucune | Latence du bot |
-| `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs, tickets, panneau |
+| `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs par famille, filtre des comptes récents, modules, rôle staff, tickets, panneau |
+| `/setup` | Gérer le serveur | Assistant en 5 étapes : langue, salon de logs, rôle staff, modules, salons de jeux |
+| Clic droit sur un message | aucune | « Signaler au staff » : raison envoyée au salon des signalements (à définir avec `/setlogs famille:Signalements`, jamais le salon général), avec boutons Warn / Mute / Ignorer pour le staff |
 | `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
 | `/premium` | aucune | Statut premium du serveur, fonctions premium, bouton d'achat |
 | `/about` | aucune | Serveurs, version, durée en ligne, liens (support, confidentialité, conditions) |

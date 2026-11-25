@@ -233,31 +233,36 @@ function setCountWarns(guildId, actif) {
 const DELAI_REGLE = 5 * 60 * 1000      // une règle modifiée dans Discord est relue au bout de ce délai
 const DELAI_VUS = 10 * 60 * 1000
 const FENETRE_SANS_ID = 5 * 1000       // faute d'identifiant de message : même membre, même salon, même règle
-const DELAI_WARN = 60 * 1000           // anti-rafale : un warn AutoMod par membre et par minute
+const DELAI_RAFALE = 60 * 1000         // anti-rafale : un dossier et un log AutoMod par membre et par minute
 const TAILLE_MAX = 1000
 const RAISON_MAX = 100
 
-const reglesVues = new Map()   // "serveur:règle" -> { nom, aBlocage, ts }
+const reglesVues = new Map()   // "serveur:règle" -> { nom, aBlocage, compteWarn, ts }
 const evenementsVus = new Map() // clé de déclenchement -> ts
-const derniersWarns = new Map() // "serveur:membre" -> ts
+const rafales = new Map()       // "serveur:membre" -> { ts, supprimes } (supprimes = blocages comptés sans dossier depuis ts)
 
 // Garde une Map bornée : on retire d'abord les entrées périmées, puis les plus anciennes
 function borner(map, maintenant, duree) {
     if (map.size <= TAILLE_MAX) return
-    for (const [cle, ts] of map) if (maintenant - ts > duree) map.delete(cle)
+    for (const [cle, valeur] of map) if (maintenant - (valeur.ts ?? valeur) > duree) map.delete(cle)
     while (map.size > TAILLE_MAX) map.delete(map.keys().next().value)
 }
 
-const reinitialiserEtat = () => { reglesVues.clear(); evenementsVus.clear(); derniersWarns.clear() }
+const reinitialiserEtat = () => { reglesVues.clear(); evenementsVus.clear(); rafales.clear() }
 
-// Nom et actions d'une règle (mémorisés quelques minutes pour ne pas appeler Discord à chaque blocage)
-async function lireRegle(guild, ruleId, maintenant) {
+// Nom et actions d'une règle (mémorisés quelques minutes pour ne pas appeler Discord à chaque blocage).
+// compteWarn : règle créée par le bot ET qui bloque ou met en sourdine. Une règle d'un humain, ou « alerte seule »,
+// n'a pas passé le contrôle de pouvoir fait à l'activation de /automod dossiers : elle ne warn jamais.
+async function lireRegle(guild, ruleId, botId, maintenant) {
     const cle = `${guild.id}:${ruleId}`
     const vue = reglesVues.get(cle)
     if (vue && maintenant - vue.ts < DELAI_REGLE) return vue
     const regle = await guild.autoModerationRules.fetch({ autoModerationRule: ruleId, force: true }).catch(() => null)
     if (!regle) return vue ?? null
-    const info = { nom: regle.name, aBlocage: (regle.actions ?? []).some(a => a.type === ActionType.BlockMessage), ts: maintenant }
+    const actions = regle.actions ?? []
+    const aBlocage = actions.some(a => a.type === ActionType.BlockMessage)
+    const compteWarn = regle.creatorId === botId && (aBlocage || actions.some(a => a.type === ActionType.Timeout))
+    const info = { nom: regle.name, aBlocage, compteWarn, ts: maintenant }
     reglesVues.set(cle, info)
     borner(reglesVues, maintenant, DELAI_REGLE)
     return info
@@ -272,21 +277,28 @@ function dejaVu(cle, maintenant) {
     return false
 }
 
-// Un seul warn AutoMod par membre et par minute (sinon un spam déclencherait tous les seuils d'un coup)
-function warnPermis(guildId, userId, maintenant) {
+// Anti-rafale : un dossier (donc un log et un warn) par membre et par minute, sinon un spam inonderait l'historique
+// et déclencherait tous les seuils d'un coup. Renvoie null si le blocage est seulement compté, sinon { depuis } :
+// le nombre de blocages comptés sans dossier depuis le précédent.
+function rafale(guildId, userId, maintenant) {
     const cle = `${guildId}:${userId}`
-    const dernier = derniersWarns.get(cle)
-    if (dernier !== undefined && maintenant - dernier < DELAI_WARN) return false
-    derniersWarns.set(cle, maintenant)
-    borner(derniersWarns, maintenant, DELAI_WARN)
-    return true
+    const vue = rafales.get(cle)
+    if (vue && maintenant - vue.ts < DELAI_RAFALE) {
+        vue.supprimes++
+        return null
+    }
+    rafales.delete(cle) // la Map reste classée de la plus ancienne à la plus récente
+    rafales.set(cle, { ts: maintenant, supprimes: 0 })
+    borner(rafales, maintenant, DELAI_RAFALE)
+    return { depuis: vue?.supprimes ?? 0 }
 }
 
 // Raison courte : nom de la règle + mot déclencheur, 100 caractères au plus (le message lui-même n'est jamais gardé)
-function construireRaison(nomRegle, motif) {
+function construireRaison(nomRegle, motif, depuis = 0) {
     const propre = texte => String(texte).replace(/\s+/g, " ").replace(/`/g, "'").trim()
     const base = `AutoMod (${propre(nomRegle).slice(0, 40)})`
-    return (motif ? `${base} : ${propre(motif)}` : base).slice(0, RAISON_MAX)
+    const suite = depuis > 0 ? ` (+${depuis} blocages depuis)` : ""
+    return (motif ? `${base} : ${propre(motif)}` : base).slice(0, RAISON_MAX - suite.length) + suite
 }
 
 // Discord émet un événement PAR action de la règle (blocage, alerte, mute) : on n'en retient qu'un par déclenchement.
@@ -296,10 +308,10 @@ async function traiterExecution(bot, ex, { maintenant = Date.now() } = {}) {
     if (!guild || !ex.userId || ex.userId === bot.user.id) return null
     if (!moduleActif(guild.id, "moderation")) return null
 
-    const user = ex.user ?? await bot.users.fetch(ex.userId).catch(() => null)
-    if (user?.bot) return null
+    // L'identifiant suffit : on ne va chercher l'auteur chez Discord que pour un avertissement
+    if (ex.user?.bot) return null
 
-    const regle = await lireRegle(guild, ex.ruleId, maintenant)
+    const regle = await lireRegle(guild, ex.ruleId, bot.user.id, maintenant)
     const blocage = ex.action?.type === ActionType.BlockMessage
     if (!blocage) {
         // Seule une règle sans blocage est traitée via ses autres actions (et celle d'une règle inconnue est ignorée)
@@ -309,18 +321,25 @@ async function traiterExecution(bot, ex, { maintenant = Date.now() } = {}) {
     const cleVu = idMessage ? `${ex.ruleId}:${idMessage}` : (blocage ? null : `${ex.ruleId}:${ex.userId}:${ex.channelId}:${Math.floor(maintenant / FENETRE_SANS_ID)}`)
     if (cleVu && dejaVu(cleVu, maintenant)) return null
 
-    const raison = construireRaison(regle?.nom ?? `#${ex.ruleId}`, ex.matchedKeyword ?? ex.matchedContent)
+    const fenetre = rafale(guild.id, ex.userId, maintenant)
+    if (!fenetre) return null
+
+    const raison = construireRaison(regle?.nom ?? `#${ex.ruleId}`, ex.matchedKeyword ?? ex.matchedContent, fenetre.depuis)
     const numero = db.addCase(guild.id, { userId: ex.userId, moderatorId: bot.user.id, type: "automod", reason: raison, auto: true })
 
     let warnId = null, total = null, sanction = null
-    if (getCountWarns(guild.id) && warnPermis(guild.id, ex.userId, maintenant)) {
-        warnId = db.addWarn(guild.id, ex.userId, bot.user.id, raison)
-        total = db.countWarns(guild.id, ex.userId)
-        try {
-            const me = guild.members.me ?? await guild.members.fetchMe()
-            sanction = await appliquerSeuilBot(bot, guild, user ?? { id: ex.userId, send: async () => {} }, total, me)
-        } catch (err) {
-            console.error("Échec de la sanction automatique (AutoMod) :", err.message)
+    // Warn seulement pour une règle du bot qui bloque ou met en sourdine (règle inconnue : on ne compte pas)
+    if (regle?.compteWarn && getCountWarns(guild.id)) {
+        const user = ex.user ?? await bot.users.fetch(ex.userId).catch(() => null)
+        if (!user?.bot) {
+            warnId = db.addWarn(guild.id, ex.userId, bot.user.id, raison)
+            total = db.countWarns(guild.id, ex.userId)
+            try {
+                const me = guild.members.me ?? await guild.members.fetchMe()
+                sanction = await appliquerSeuilBot(bot, guild, user ?? { id: ex.userId, send: async () => {} }, total, me)
+            } catch (err) {
+                console.error("Échec de la sanction automatique (AutoMod) :", err.message)
+            }
         }
     }
 
@@ -331,6 +350,7 @@ async function traiterExecution(bot, ex, { maintenant = Date.now() } = {}) {
     ]
     if (ex.channelId) champs.push({ name: t(guild, "am.log_salon"), value: `<#${ex.channelId}>`, inline: true })
     champs.push({ name: t(guild, "am.log_raison"), value: Discord.escapeMarkdown(raison).slice(0, 1024) })
+    if (fenetre.depuis > 0) champs.push({ name: t(guild, "am.log_rafale_titre"), value: t(guild, "am.log_rafale", { n: fenetre.depuis }) })
     if (warnId) champs.push({ name: t(guild, "am.log_warn_titre"), value: t(guild, "am.log_warn", { id: warnId, total }) })
     if (sanction) champs.push({ name: t(guild, "am.log_sanction"), value: String(sanction).slice(0, 1024) })
     const embed = new Discord.EmbedBuilder().setColor(COULEURS.automod).setTitle(t(guild, "am.log_titre")).addFields(champs).setTimestamp()
