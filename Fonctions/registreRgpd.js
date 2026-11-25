@@ -30,6 +30,8 @@ const REGISTRE = {
     },
     // Configuration du serveur : salons, rôles et textes, aucun membre.
     guild_config: { serveur: "guild_id", aucune: "Configuration du serveur, aucune donnée de membre" },
+    guild_modules: { serveur: "guild_id", aucune: "Modules activés du serveur (#87), aucune donnée de membre" },
+    guild_salons_jeux: { serveur: "guild_id", aucune: "Salons de jeux du serveur (#87), aucune donnée de membre" },
     // Simple délai anti-spam, sans intérêt à garder : on efface.
     ticket_cooldowns: {
         serveur: "guild_id",
