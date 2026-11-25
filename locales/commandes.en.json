@@ -17,19 +17,35 @@
     }
   },
   "automod": {
-    "description": "Native Discord AutoMod rules (banned words, invites, mentions, spam)",
+    "description": "Native Discord AutoMod rules (presets, words, regex, exemptions, cases)",
     "options": {
       "action": "What to do?",
-      "valeur": "Comma-separated words, mention limit, or ID of the rule to delete"
+      "valeur": "Words (commas), mention limit, regex (separated by ;;) or ID of the rule to delete",
+      "niveau": "Preset level",
+      "role": "Role to exempt or stop exempting",
+      "salon": "Channel to exempt or stop exempting",
+      "jeux": "Include the bot's game channels in the exemptions",
+      "actif": "For cases: turn on or off (empty: view the state)"
     },
     "choix": {
       "action": {
         "liste": "View the bot's rules",
+        "preset": "Apply a preset (lenient, normal, strict)",
         "mots-interdits": "Banned words (replaces the list)",
         "invitations": "Block Discord invites",
         "mentions": "Limit mentions",
         "spam": "Discord's anti-spam filter",
+        "regex": "Regular expressions (replaces the list)",
+        "exempter": "Exempt a role or a channel",
+        "retirer-exemption": "Remove an exemption",
+        "exemptions": "View the exemptions",
+        "dossiers": "Count blocks as warnings",
         "supprimer": "Delete a bot rule"
+      },
+      "niveau": {
+        "souple": "Lenient",
+        "normal": "Normal",
+        "strict": "Strict"
       }
     }
   },
@@ -195,11 +211,24 @@
     }
   },
   "setlogs": {
-    "description": "Sets the moderation log channel (no channel: disables logs)",
+    "description": "Sets the log channel (general or per type; no channel: removes the setting)",
     "options": {
-      "salon": "The channel to send logs to"
+      "salon": "The channel to send logs to",
+      "famille": "A specific type of logs (none: the general channel)"
     },
-    "choix": {}
+    "choix": {
+      "famille": {
+        "sanctions": "Sanctions (ban, kick, warn…)",
+        "automod": "AutoMod",
+        "tickets": "Tickets",
+        "membres": "Members (joins, filter)",
+        "signalements": "Reports",
+        "animation": "Events (giveaways, polls)",
+        "config": "Configuration",
+        "jeux": "Games (never in the general channel)",
+        "economie": "Economy (never in the general channel)"
+      }
+    }
   },
   "setticket": {
     "description": "Configure the ticket category and staff role",
