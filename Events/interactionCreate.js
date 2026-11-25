@@ -4,6 +4,7 @@ const { t } = require('../Fonctions/i18n')
 const { onClicRole } = require('../Fonctions/rolesBoutons')
 const { onClicGiveaway } = require('../Fonctions/giveaways')
 const { traiterErreur } = require('../Fonctions/erreurs')
+const { verifierCommande } = require('../Fonctions/cooldowns')
 
 module.exports = async (bot, interaction) => {
     try {
@@ -25,6 +26,14 @@ module.exports = async (bot, interaction) => {
             // (Paramètres > Intégrations) : on revérifie donc la permission réelle du membre à chaque appel
             if (typeof command.permission === "bigint" && interaction.inGuild() && !interaction.memberPermissions?.has(command.permission)) {
                 return await interaction.reply({ content: t(interaction, "commun.permission"), flags: Discord.MessageFlags.Ephemeral })
+            }
+
+            // Délai entre deux utilisations (`cooldown` dans la commande), vérifié après les droits :
+            // un membre refusé ne bloque pas son propre délai
+            const restant = verifierCommande(command, interaction)
+            if (restant > 0) {
+                const fin = Math.ceil((Date.now() + restant) / 1000)
+                return await interaction.reply({ content: t(interaction, "commun.cooldown", { quand: `<t:${fin}:R>` }), flags: Discord.MessageFlags.Ephemeral })
             }
 
             return await command.run(bot, interaction, interaction.options)
