@@ -10,7 +10,7 @@ const { formatReason, formatDuree, checkHierarchy, fetchMember } = require('./mo
 const ANNULABLES = ["warn", "mute", "kick", "ban", "tempban"]
 
 // Tous les types de sanction connus (noms traduits : mod.type.<type>), source unique pour /historique, /case et le menu « Dossier »
-const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban", "automod"]
+const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban", "automod", "quarantaine", "fin_quarantaine"]
 const nomType = (interaction, type) => TYPES.includes(type) ? t(interaction, `mod.type.${type}`) : type
 
 // Une ligne d'historique : raison coupée à 200 caractères (10 lignes tiennent dans un embed),

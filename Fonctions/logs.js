@@ -8,7 +8,8 @@ const COULEURS = {
     ban: 0xE74C3C, unban: 0x2ECC71, kick: 0xE67E22, mute: 0xF1C40F, unmute: 0x2ECC71,
     warn: 0xF39C12, unwarn: 0x3498DB, clear: 0x95A5A6, ticket: 0x9B59B6, tempban: 0xC0392B,
     lock: 0x7F8C8D, unlock: 0x2ECC71, slowmode: 0x95A5A6, automod: 0x34495E, config: 0x3498DB,
-    roles: 0x5865F2, giveaway: 0xF1C40F, annonce: 0x1ABC9C, sondage: 0x1ABC9C
+    roles: 0x5865F2, giveaway: 0xF1C40F, annonce: 0x1ABC9C, sondage: 0x1ABC9C,
+    quarantaine: 0x8E44AD, fin_quarantaine: 0x2ECC71, raid: 0xC0392B, appel: 0x3498DB
 }
 
 // Salons de logs séparés (idée #24) : chaque famille peut avoir son salon (/setlogs famille:…).

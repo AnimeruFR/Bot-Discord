@@ -1,0 +1,44 @@
+# Domaines d'arnaque (phishing) bloqués par /phishing.
+# Un domaine par ligne, en minuscules, sans "https://" ni chemin. Les lignes qui commencent par # sont ignorées.
+#
+# Mise à jour : par pull request uniquement.
+#   1. Ajoutez le domaine avec un commentaire de source si possible (signalement, liste communautaire).
+#   2. Vérifiez qu'il ne s'agit jamais d'un domaine légitime : la règle bloque tout lien qui CONTIENT le domaine.
+#   3. Lancez `node --disable-warning=ExperimentalWarning --test tests/phishing.test.js` (format, doublons, longueur).
+#   4. Après le déploiement, les administrateurs relancent `/phishing action:activer` pour appliquer la nouvelle liste.
+# Limites de Discord : 1 000 mots-clés par règle, 60 caractères par mot-clé (le domaine en garde 58, les deux * comptent).
+#
+# Faux domaines Discord (fautes de frappe et faux cadeaux Nitro)
+dlscord.com
+dicsord.com
+discrod.com
+disscord.com
+discorrd.com
+discordd.com
+disocrd.com
+dlscordapp.com
+discordapp-gift.com
+discord-gift.com
+discord-gifts.com
+discordgift.site
+discord-nitro.com
+discordnitro.club
+discord-nitro.xyz
+nitro-discord.com
+free-discord-nitro.com
+discord-give.com
+discord-airdrop.com
+discorcl.gift
+# Faux domaines Steam (fautes de frappe et faux échanges)
+steamcommunnity.com
+steamcomunity.com
+steamcommunlty.com
+steamcommunitty.com
+steamcornmunity.com
+stearncommunity.com
+steam-community.com
+steamcommunity-trade.com
+steampowerd.com
+steamppowered.com
+store-steampowered.com
+steam-gift-card.com

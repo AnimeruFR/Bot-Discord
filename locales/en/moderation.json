@@ -85,6 +85,8 @@
   "mod.type.tempban": "Temporary ban",
   "mod.type.unban": "Unban",
   "mod.type.automod": "AutoMod block",
+  "mod.type.quarantaine": "Quarantine",
+  "mod.type.fin_quarantaine": "Quarantine lifted",
   "mod.historique.aucune": "{user} has no recorded sanctions.",
   "mod.historique.auto": " · automatic",
   "mod.historique.ligne": "**#{id} – {nom}{duree}** – <t:{date}:d> by <@{moderateur}>{auto}\n{reason}",

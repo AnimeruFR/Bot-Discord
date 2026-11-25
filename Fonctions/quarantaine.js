@@ -1,0 +1,199 @@
+const Discord = require('discord.js')
+const db = require('./db')
+const { t } = require('./i18n')
+const { checkHierarchy, fetchMember, formatReason, auditReason } = require('./moderation')
+const { sendModLog } = require('./logs')
+const { PERMISSIONS_MODERATION } = require('./config')
+const { roleValide } = require('./tickets')
+
+const { Flags } = Discord.PermissionsBitField
+const P = Discord.PermissionFlagsBits
+
+// Quarantaine (idée #14) : un membre perd ses rôles (sauvegardés en base) et reçoit un rôle isolé, jusqu'à la levée.
+
+// Permissions qu'un rôle isolé ne doit jamais avoir : celles de modération (comme le filtre des comptes récents)
+// et quelques autres qui permettent d'agir sur le serveur ou d'inviter du monde.
+const PERMISSIONS_DANGEREUSES = PERMISSIONS_MODERATION | P.ManageGuildExpressions | P.ManageEvents | P.MuteMembers
+    | P.DeafenMembers | P.MoveMembers | P.CreateInstantInvite
+
+// --- Base ------------------------------------------------------------------------------------------------------
+
+const getRoleIsole = guildId => db.sqlAll("SELECT role_id FROM quarantine_config WHERE guild_id = ?", [guildId])[0]?.role_id ?? null
+
+const setRoleIsole = (guildId, roleId) => db.sqlRun(`INSERT INTO quarantine_config (guild_id, role_id) VALUES (?, ?)
+    ON CONFLICT (guild_id) DO UPDATE SET role_id = excluded.role_id`, [guildId, roleId])
+
+// La liste JSON est relue avec prudence : une valeur abîmée ne doit pas empêcher de lever la quarantaine
+function lireRoles(texte) {
+    try {
+        const liste = JSON.parse(texte)
+        return Array.isArray(liste) ? liste.filter(id => typeof id === "string") : []
+    } catch {
+        return []
+    }
+}
+
+function getQuarantine(guildId, userId) {
+    const ligne = db.sqlAll("SELECT * FROM quarantines WHERE guild_id = ? AND user_id = ?", [guildId, userId])[0]
+    return ligne ? { ...ligne, roles: lireRoles(ligne.roles) } : null
+}
+
+const listerQuarantaines = guildId => db.sqlAll("SELECT * FROM quarantines WHERE guild_id = ? ORDER BY created_at", [guildId])
+    .map(l => ({ ...l, roles: lireRoles(l.roles) }))
+
+const supprimerLigne = (guildId, userId) => db.sqlRun("DELETE FROM quarantines WHERE guild_id = ? AND user_id = ?", [guildId, userId])
+
+// --- Rôle isolé ------------------------------------------------------------------------------------------------
+
+// Le bot peut-il donner ce rôle ? Il lui faut « Gérer les rôles » et un rôle plus haut.
+const botPeutDonner = (guild, role) => {
+    const moi = guild.members.me
+    return Boolean(moi?.permissions.has(Flags.ManageRoles) && role.comparePositionTo(moi.roles.highest) < 0)
+}
+
+// Rôle isolé acceptable pour ce membre qui configure ? Renvoie un message d'erreur, ou null.
+function refusRoleIsole(interaction, role) {
+    const guild = interaction.guild
+    if (!roleValide(guild, role.id)) return t(interaction, "quar.role_invalide")
+    if (role.permissions.any(PERMISSIONS_DANGEREUSES)) return t(interaction, "quar.role_pouvoir")
+    // Jamais plus de pouvoir par le bot que celui qui configure : « Gérer les rôles » et un rôle strictement sous le sien
+    const proprietaire = interaction.user.id === guild.ownerId
+    if (!proprietaire && !interaction.memberPermissions?.has(Flags.ManageRoles)) return t(interaction, "quar.config_roles_membre")
+    if (!proprietaire && role.comparePositionTo(interaction.member.roles.highest) >= 0) return t(interaction, "quar.role_superieur")
+    if (!botPeutDonner(guild, role)) return t(interaction, "quar.role_bot")
+    return null
+}
+
+// Choisit le rôle isolé. Renvoie { erreur } ou { inchange } ou { ok }.
+async function changerRoleIsole(interaction, role) {
+    const guild = interaction.guild
+    const refus = refusRoleIsole(interaction, role)
+    if (refus) return { erreur: refus }
+    const ancien = getRoleIsole(guild.id)
+    if (ancien === role.id) return { inchange: true }
+    // Des membres portent peut-être l'ancien rôle : le changer maintenant l'abandonnerait sur eux
+    if (ancien && listerQuarantaines(guild.id).length) return { erreur: t(interaction, "quar.config_en_cours") }
+    setRoleIsole(guild.id, role.id)
+    await sendModLog(interaction, { action: "config", details: `Rôle de quarantaine : ${ancien ? `<@&${ancien}>` : "aucun"} → ${role}` })
+    return { ok: true }
+}
+
+// --- Mettre en quarantaine -------------------------------------------------------------------------------------
+
+// Renvoie { erreur } (rien n'est enregistré) ou { numero, retires, gardes, prevenu }.
+async function mettre(interaction, user, raisonSaisie) {
+    const guild = interaction.guild
+    const roleId = getRoleIsole(guild.id)
+    const iso = roleId ? roleValide(guild, roleId) : null
+    if (!iso) return { erreur: t(interaction, "quar.pas_configure") }
+    // Le rôle a pu changer depuis /quarantaine config : on revérifie ce que le bot va donner
+    if (iso.permissions.any(PERMISSIONS_DANGEREUSES)) return { erreur: t(interaction, "quar.role_pouvoir") }
+    if (!botPeutDonner(guild, iso)) return { erreur: t(interaction, "quar.role_bot") }
+
+    const member = await fetchMember(guild, user.id)
+    if (!member) return { erreur: t(interaction, "mod.absent") }
+    const erreur = checkHierarchy(interaction, member, "quarantaine")
+    if (erreur) return { erreur }
+    if (!member.manageable) return { erreur: t(interaction, "quar.pas_gerable") }
+    if (getQuarantine(guild.id, user.id)) return { erreur: t(interaction, "quar.deja") }
+
+    // Retirables : ni @everyone, ni rôle d'intégration (booster, bot…), ni rôle au-dessus de celui du bot. Les autres restent.
+    const plusHaut = guild.members.me.roles.highest
+    const retirables = [], gardes = []
+    for (const role of member.roles.cache.values()) {
+        if (role.id === guild.id || role.id === iso.id) continue
+        if (role.managed || role.comparePositionTo(plusHaut) >= 0) gardes.push(role.id)
+        else retirables.push(role.id)
+    }
+    const avant = [...member.roles.cache.keys()].filter(id => id !== guild.id)
+
+    // Sauvegarde AVANT le retrait : si le bot s'arrête entre les deux, les rôles ne sont pas perdus
+    const raisonBrute = raisonSaisie?.trim() || "Aucune raison fournie"
+    const ecrit = db.transaction(() => {
+        if (getQuarantine(guild.id, user.id)) return false
+        db.sqlRun("INSERT INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            [guild.id, user.id, JSON.stringify(retirables), interaction.user.id, raisonBrute, Date.now()])
+        return true
+    })
+    if (!ecrit) return { erreur: t(interaction, "quar.deja") }
+
+    try {
+        await member.roles.set([iso.id, ...gardes], auditReason(interaction, raisonSaisie))
+    } catch (err) {
+        console.error("Échec de la mise en quarantaine :", err.message)
+        // Le changement a pu partir à moitié : on tente de rendre les rôles, puis on oublie la sauvegarde
+        await member.roles.set(avant, auditReason(interaction, "Quarantaine annulée (échec)")).catch(() => {})
+        supprimerLigne(guild.id, user.id)
+        return { erreur: t(interaction, "quar.echec") }
+    }
+
+    const numero = db.addCase(guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "quarantaine", reason: raisonSaisie })
+    await sendModLog(interaction, { action: "quarantaine", cible: user, raison: raisonSaisie, details: `${retirables.length} rôle(s) sauvegardé(s), ${gardes.length} conservé(s)` })
+    const prevenu = await user.send(t(guild, "quar.mp", { serveur: guild.name, reason: formatReason(raisonSaisie) })).then(() => true).catch(() => false)
+    return { numero, retires: retirables.length, gardes: gardes.length, prevenu }
+}
+
+// --- Lever la quarantaine --------------------------------------------------------------------------------------
+
+// Renvoie { erreur } ou { absent: true } (membre parti : sauvegarde supprimée) ou { numero, restaures, supprimes, impossibles }.
+async function lever(interaction, user) {
+    const guild = interaction.guild
+    const ligne = getQuarantine(guild.id, user.id)
+    if (!ligne) return { erreur: t(interaction, "quar.pas_en_quarantaine") }
+
+    const member = await fetchMember(guild, user.id)
+    if (!member) {
+        supprimerLigne(guild.id, user.id)
+        await sendModLog(interaction, { action: "quarantaine", cible: user, details: "Membre absent du serveur : sauvegarde de ses rôles supprimée" })
+        return { absent: true }
+    }
+    const erreur = checkHierarchy(interaction, member, "quarantaine")
+    if (erreur) return { erreur }
+
+    // Jamais plus de pouvoir par le bot que celui qui lève : on ne rend que des rôles sous le sien.
+    // Un rôle plus haut est refusé en bloc (la quarantaine reste), un rôle supprimé ou hors de portée du bot est ignoré.
+    const proprietaire = interaction.user.id === guild.ownerId
+    const plusHautBot = guild.members.me.roles.highest
+    let supprimes = 0, impossibles = 0
+    const aRendre = []
+    for (const id of ligne.roles) {
+        const role = guild.roles.cache.get(id)
+        if (!role) { supprimes++; continue }
+        if (role.id === guild.id || role.managed || role.comparePositionTo(plusHautBot) >= 0) { impossibles++; continue }
+        if (!proprietaire && role.comparePositionTo(interaction.member.roles.highest) >= 0) {
+            return { erreur: t(interaction, "quar.lever_superieur", { role: `<@&${role.id}>` }) }
+        }
+        aRendre.push(id)
+    }
+
+    const isoId = getRoleIsole(guild.id)
+    const garder = [...member.roles.cache.keys()].filter(id => id !== guild.id && id !== isoId)
+    try {
+        await member.roles.set([...new Set([...garder, ...aRendre])], auditReason(interaction, "Fin de quarantaine"))
+    } catch (err) {
+        console.error("Échec de la levée de quarantaine :", err.message)
+        return { erreur: t(interaction, "quar.echec_lever") } // la sauvegarde reste : on peut réessayer
+    }
+
+    supprimerLigne(guild.id, user.id)
+    const numero = db.addCase(guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "fin_quarantaine", reason: "Fin de quarantaine" })
+    await sendModLog(interaction, { action: "quarantaine", cible: user, details: `Fin de quarantaine : ${aRendre.length} rôle(s) rendu(s), ${supprimes} supprimé(s), ${impossibles} impossible(s) à rendre` })
+    return { numero, restaures: aRendre.length, supprimes, impossibles }
+}
+
+// À appeler quand un membre arrive (Events/guildMemberAdd.js) : un membre en quarantaine qui est parti puis revenu
+// n'a plus de rôle. On lui remet le rôle isolé ; la sauvegarde est gardée pour la levée. Renvoie true si le rôle est posé.
+async function reappliquer(member) {
+    const guild = member.guild
+    if (!getQuarantine(guild.id, member.id)) return false
+    const roleId = getRoleIsole(guild.id)
+    const iso = roleId ? roleValide(guild, roleId) : null
+    if (!iso || iso.permissions.any(PERMISSIONS_DANGEREUSES) || !botPeutDonner(guild, iso)) return false
+    await member.roles.add(iso.id, "Quarantaine : retour d'un membre en quarantaine")
+    return true
+}
+
+module.exports = {
+    PERMISSIONS_DANGEREUSES, getRoleIsole, getQuarantine, listerQuarantaines, refusRoleIsole, changerRoleIsole,
+    mettre, lever, reappliquer
+}
