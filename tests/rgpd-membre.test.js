@@ -4,6 +4,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const db = require('../Fonctions/db')
 const donneesMembre = require('../Fonctions/donneesMembre')
+const cases = require('../Fonctions/cases')
 const { REGISTRE, verifier } = require('../Fonctions/registreRgpd')
 
 const G1 = "111111111111111111", G2 = "222222222222222222"
@@ -261,4 +262,30 @@ test("/privacy moi effacer : une fois par heure, libéré si annulé ou si le d�
     assert.match(bloquee[0], /moins d'une heure/)
     assert.strictEqual(bloquee.length, 1)
     cooldowns.vider()
+})
+test("export : les modifications des sanctions du membre (case_edits) y figurent, pas celles des autres", () => {
+    const W = "666666666666666601", X = "666666666666666602", EDITEUR = "666666666666666603"
+    const casesW = db.addCase(G1, { userId: W, moderatorId: EDITEUR, type: "kick", reason: "avant" })
+    const casesX = db.addCase(G1, { userId: X, moderatorId: EDITEUR, type: "kick", reason: "autre membre" })
+    const casesAutreServeur = db.addCase(G2, { userId: W, moderatorId: EDITEUR, type: "kick", reason: "serveur 2" })
+    cases.modifierRaison(G1, casesW, EDITEUR, "après")
+    cases.modifierRaison(G1, casesX, EDITEUR, "modifiée")
+    cases.modifierRaison(G2, casesAutreServeur, EDITEUR, "modifiée 2")
+
+    // Le membre sanctionné reçoit les modifications de sa sanction, en entier
+    const exportW = donneesMembre.exporter(G1, W)
+    assert.strictEqual(exportW.tables.case_edits.lignes.length, 1)
+    assert.strictEqual(exportW.tables.case_edits.lignes[0].old_value, "avant")
+    assert.strictEqual(exportW.tables.case_edits.lignes[0].new_value, "après")
+    assert.ok(exportW.tables.case_edits.traitement_a_l_effacement["case_id (via cases.user_id)"].includes("2 ans"))
+
+    // L'éditeur n'est qu'auteur de l'action : lignes réduites, sans la raison des autres
+    const exportEditeur = donneesMembre.exporter(G1, EDITEUR)
+    assert.strictEqual(exportEditeur.tables.case_edits.lignes.length, 2)
+    assert.ok(exportEditeur.tables.case_edits.lignes.every(l => l.old_value === undefined && l.role_du_membre.includes("editor_id")))
+    assert.strictEqual(donneesMembre.exporter(G1, "999999999999999998").tables.case_edits, undefined)
+
+    // Effacement inchangé : la trace est conservée, seul l'éditeur est anonymisé
+    donneesMembre.effacer(G1, W)
+    assert.strictEqual(compter("SELECT COUNT(*) AS n FROM case_edits WHERE guild_id = ? AND case_id = ?", [G1, casesW]), 1)
 })

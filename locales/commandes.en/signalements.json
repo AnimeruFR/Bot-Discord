@@ -1,0 +1,6 @@
+{
+  "Signaler au staff": { "description": "Report a message to the staff", "nom": "Report to staff" },
+  "Dossier": { "description": "Show a member's file (recent sanctions, warns, staff notes)", "nom": "Member file" },
+  "Warn rapide": { "description": "Warn a member quickly, with a reason", "nom": "Quick warn" },
+  "Mute 10 min": { "description": "Mute a member for 10 minutes", "nom": "Mute 10 min" }
+}

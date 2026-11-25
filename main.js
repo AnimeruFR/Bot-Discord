@@ -13,7 +13,7 @@ const bot = new Discord.Client({
     // Guilds pour les serveurs et salons, GuildModeration pour savoir quand un membre est débanni.
     // GuildMembers (intent PRIVILÉGIÉ, à cocher dans le Developer Portal) : messages de bienvenue / au revoir
     // et vérification des participants d'un giveaway.
-    intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildModeration, Discord.GatewayIntentBits.GuildMembers],
+    intents: [Discord.GatewayIntentBits.Guilds, Discord.GatewayIntentBits.GuildModeration, Discord.GatewayIntentBits.GuildMembers, Discord.GatewayIntentBits.AutoModerationExecution],
     // Départ d'un membre absent du cache : l'événement arrive quand même (avec au moins son compte)
     partials: [Discord.Partials.GuildMember],
     // Le bot ne ping jamais @everyone, @here ou un rôle, même si une raison en contient

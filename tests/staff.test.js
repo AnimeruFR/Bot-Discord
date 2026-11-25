@@ -65,7 +65,7 @@ test("chaque commande de modération accepte un membre qui a sa permission", asy
 test("le rôle staff suffit seulement pour les commandes qui le déclarent", async () => {
     db.setStaffRole(G, STAFF)
     const suffit = moderation.filter(c => c.roleStaffSuffit).map(c => c.name).sort()
-    assert.deepStrictEqual(suffit, ["historique", "unwarn", "warn", "warns"])
+    assert.deepStrictEqual(suffit, ["Dossier", "historique", "note", "unwarn", "warn", "warns"])
     for (const c of moderation) {
         const attendu = Boolean(c.roleStaffSuffit)
         assert.strictEqual(await verifierAcces(fausse({ roles: [STAFF] }), c), attendu, `${c.name} (rôle en cache)`)

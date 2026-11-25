@@ -1,8 +1,25 @@
 const Discord = require('discord.js')
 const { traductionsCommande, localisation } = require('../Fonctions/i18n')
 
-// Construit la définition d'une slash commande à partir du fichier de commande
+// Types de menus contextuels (clic droit sur un membre ou un message) : champ `type` de la commande
+const TYPES_MENU = { user: Discord.ApplicationCommandType.User, message: Discord.ApplicationCommandType.Message }
+
+// Menu contextuel : pas de description ni d'option, seulement un nom (traduit par `nom` dans locales/commandes.en)
+function buildContextMenu(command) {
+    const menu = new Discord.ContextMenuCommandBuilder()
+        .setName(command.name)
+        .setType(TYPES_MENU[command.type])
+        .setIntegrationTypes(Discord.ApplicationIntegrationType.GuildInstall)
+        .setContexts([Discord.InteractionContextType.Guild])
+        .setDefaultMemberPermissions(command.permission === "Aucune" ? null : command.permission)
+    const en = traductionsCommande(command.name)
+    if (en?.nom) menu.setNameLocalizations(localisation(en.nom))
+    return menu
+}
+
+// Construit la définition d'une slash commande (ou d'un menu contextuel) à partir du fichier de commande
 function buildSlashCommand(command) {
+    if (command.type) return buildContextMenu(command)
     const contexts = [Discord.InteractionContextType.Guild]
     if (command.dm) contexts.push(Discord.InteractionContextType.BotDM)
 

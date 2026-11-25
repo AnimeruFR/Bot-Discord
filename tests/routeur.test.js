@@ -91,7 +91,8 @@ test("les composants existants sont tous enregistrés, sans collision", async ()
     loadCommands(bot, { silencieux: true })
     const appeles = []
     for (const route of bot.routeur.routes) {
-        assert.ok(route.public, `${route.id ?? route.prefixe} : composant cliqué par les membres, déclaré public`)
+        // Composant cliqué par les membres : déclaré public ; sinon il doit venir d'un module staff (garde staff)
+        assert.ok(route.public || ["moderation", "tickets"].includes(route.module), `${route.id ?? route.prefixe} : ni public ni gardé par le staff`)
         route.gestionnaire = (_, i) => appeles.push(i.customId)
     }
     for (const [id, type] of [["ticket", "bouton"], ["close", "bouton"], ["claim", "bouton"], ["note:12", "bouton"],

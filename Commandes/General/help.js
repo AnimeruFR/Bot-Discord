@@ -54,7 +54,8 @@ module.exports = {
             for (const [nomGroupe, commandes] of [...groupes].slice(0, 25)) {
                 let valeur = ""
                 for (const c of commandes) {
-                    const ligne = `\`${c.name}\` : ${description(c, langue)}`
+                    // Menu contextuel : clic droit, pas de « / »
+                    const ligne = `${c.type ? "🖱️ " : ""}\`${c.name}\` : ${description(c, langue)}`
                     if (valeur.length + ligne.length + 1 > 1024) break // limite d'un champ d'embed : on ne coupe pas une ligne
                     valeur += (valeur ? "\n" : "") + ligne
                 }

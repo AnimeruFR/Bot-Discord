@@ -1,0 +1,17 @@
+{
+  "reponse": {
+    "description": "Canned replies: send them in a ticket, add or remove them",
+    "options": {
+      "action": "What to do?",
+      "nom": "Name of the reply"
+    },
+    "choix": {
+      "action": {
+        "envoyer": "Send in this ticket",
+        "ajouter": "Add a reply",
+        "retirer": "Remove a reply",
+        "liste": "List the replies"
+      }
+    }
+  }
+}

@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { banAvecConfirmation } = require('../../Fonctions/sanctions')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "ban",
@@ -18,9 +19,12 @@ module.exports = {
             name: "raison",
             description: "La raison du bannissement",
             required: true,
+            autocomplete: true,
             maxLength: 400
         }
     ],
+
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
 
     async run(bot, message, args) {
         await banAvecConfirmation(message, { user: args.getUser("membre"), raisonBrute: args.getString("raison") })

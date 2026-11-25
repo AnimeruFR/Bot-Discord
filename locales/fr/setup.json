@@ -1,0 +1,23 @@
+{
+  "setup.etape": "Étape {n}/{total} : {nom}",
+  "setup.nom_langue": "Langue",
+  "setup.nom_logs": "Salon de logs",
+  "setup.nom_staff": "Rôle staff",
+  "setup.nom_modules": "Modules",
+  "setup.nom_jeux": "Salons de jeux",
+  "setup.intro_langue": "Dans quelle langue le bot doit-il répondre ? « Automatique » suit la langue de chaque membre.\n\n**Actuellement** : {langue}",
+  "setup.intro_logs": "Choisissez le salon où envoyer les logs de modération (sanctions, AutoMod, tickets…). Vous pourrez séparer les logs par type plus tard avec /setlogs.\n\n**Actuellement** : {salon}",
+  "setup.intro_staff": "Les membres de ce rôle pourront utiliser /warn, /warns, /unwarn et /historique sans permission supplémentaire.\n\n**Actuellement** : {role}",
+  "setup.intro_modules": "Activez ou désactivez les modules du bot. Le module Général reste toujours actif.\n\n{liste}",
+  "setup.intro_jeux": "Vous pouvez limiter les jeux à certains salons (par défaut : tous les salons).\n\n**Actuellement** : {salons}",
+  "setup.bouton_prec": "Précédent",
+  "setup.bouton_passer": "Passer",
+  "setup.bouton_suivant": "Suivant",
+  "setup.bouton_terminer": "Terminer",
+  "setup.recap_titre": "Configuration terminée",
+  "setup.recap": "**Langue** : {langue}\n**Salon de logs** : {logs}\n**Rôle staff** : {staff}\n**Salons de jeux** : {jeux}\n\n**Modules**\n{modules}",
+  "setup.recap_suite": "Pour aller plus loin : /config (tous les réglages), /setlogs (logs séparés par type), /setticket (tickets).",
+  "setup.expiree": "Assistant /setup terminé (10 min sans activité). Relancez /setup pour continuer : vos choix déjà validés sont conservés.",
+  "setup.ancienne_session": "Un autre /setup a été ouvert : celui-ci est fermé.",
+  "setup.arrivee": "👋 Merci d'avoir ajouté le bot ! Un administrateur peut lancer **/setup** pour le configurer en quelques étapes (langue, logs, rôle staff, modules)."
+}

@@ -1,9 +1,8 @@
 const Discord = require('discord.js')
-const { formatReason, checkHierarchy, fetchMember } = require('../../Fonctions/moderation')
-const { appliquerSeuil, sanctionInterdite } = require('../../Fonctions/sanctions')
-const { sendModLog } = require('../../Fonctions/logs')
+const { avertir } = require('../../Fonctions/actionsMod')
+const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
-const db = require('../../Fonctions/db')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "warn",
@@ -24,47 +23,22 @@ module.exports = {
             name: "raison",
             description: "La raison du warn",
             required: false,
+            autocomplete: true,
             maxLength: 400
         }
     ],
 
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
+
     async run(bot, message, args) {
-        // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord
+        // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord.
+        // Tout refus passe par refuser() : il reste visible de l'auteur seulement.
         await message.deferReply()
         const user = args.getUser("membre")
-        const member = await fetchMember(message.guild, user.id)
-        if (!member) return message.editReply(t(message, "mod.absent"))
+        const r = await avertir(message, user, args.getString("raison"))
+        if (r.erreur) return refuser(message, r.erreur)
 
-        const reason = formatReason(args.getString("raison"))
-
-        const erreur = checkHierarchy(message, member, "warn")
-        if (erreur) return message.editReply(erreur)
-
-        // Un warn qui atteindrait un seuil dont l'auteur ne peut pas appliquer la sanction est refusé :
-        // sinon le seuil serait consommé sans effet (pas de déclenchement au warn suivant)
-        const interdite = sanctionInterdite(message, db.countWarns(message.guild.id, user.id) + 1)
-        if (interdite) {
-            // La réponse différée est publique : on la retire et le refus part en éphémère (seul l'auteur le voit)
-            await message.deleteReply().catch(() => {})
-            return message.followUp({ content: t(message, "mod.warn.seuil_interdit", { sanction: interdite }), flags: Discord.MessageFlags.Ephemeral })
-        }
-
-        // On enregistre la raison brute : elle est échappée au moment de l'affichage.
-        // Ajout et comptage sans "await" entre les deux : chaque warn obtient un total différent,
-        // même si deux modérateurs warnent en même temps (un seuil ne se déclenche donc qu'une fois)
-        const raisonBrute = args.getString("raison")?.trim() || "Aucune raison fournie"
-        const id = db.addWarn(message.guild.id, user.id, message.user.id, raisonBrute)
-        const total = db.countWarns(message.guild.id, user.id)
-
-        const prevenu = await user.send(t(message.guild, "mod.warn.mp", { serveur: message.guild.name, reason }))
-            .then(() => true)
-            .catch(() => false)
-
-        await message.editReply(t(message, "mod.warn.reponse", { moderateur: message.user, user, reason, id, total }) + (prevenu ? "" : t(message, "mod.warn.pas_prevenu")))
-        await sendModLog(message, { action: "warn", cible: user, raison: raisonBrute, details: `Warn n°${id}, ${total} au total` })
-
-        // Sanction automatique configurée avec /sanctions (seuil atteint)
-        const auto = await appliquerSeuil(message, user, total)
-        if (auto) await message.followUp(t(message, "mod.warn.seuil", { total, user, auto }))
+        await message.editReply(t(message, "mod.warn.reponse", { moderateur: message.user, user, reason: r.reason, id: r.id, total: r.total }) + (r.prevenu ? "" : t(message, "mod.warn.pas_prevenu")))
+        if (r.auto) await message.followUp(t(message, "mod.warn.seuil", { total: r.total, user, auto: r.auto }))
     }
 }

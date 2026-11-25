@@ -84,6 +84,7 @@
   "mod.type.ban": "Ban",
   "mod.type.tempban": "Ban temporaire",
   "mod.type.unban": "Déban",
+  "mod.type.automod": "Blocage AutoMod",
   "mod.historique.aucune": "{user} n'a aucune sanction enregistrée.",
   "mod.historique.auto": " · automatique",
   "mod.historique.ligne": "**n°{id} – {nom}{duree}** – <t:{date}:d> par <@{moderateur}>{auto}\n{reason}",

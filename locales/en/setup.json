@@ -1,0 +1,23 @@
+{
+  "setup.etape": "Step {n}/{total}: {nom}",
+  "setup.nom_langue": "Language",
+  "setup.nom_logs": "Log channel",
+  "setup.nom_staff": "Staff role",
+  "setup.nom_modules": "Modules",
+  "setup.nom_jeux": "Game channels",
+  "setup.intro_langue": "Which language should the bot reply in? \"Automatic\" follows each member's own language.\n\n**Currently**: {langue}",
+  "setup.intro_logs": "Pick the channel where moderation logs are sent (sanctions, AutoMod, tickets…). You can split logs by type later with /setlogs.\n\n**Currently**: {salon}",
+  "setup.intro_staff": "Members with this role can use /warn, /warns, /unwarn and /historique without any extra permission.\n\n**Currently**: {role}",
+  "setup.intro_modules": "Turn the bot's modules on or off. The General module always stays on.\n\n{liste}",
+  "setup.intro_jeux": "You can limit games to some channels (default: every channel).\n\n**Currently**: {salons}",
+  "setup.bouton_prec": "Previous",
+  "setup.bouton_passer": "Skip",
+  "setup.bouton_suivant": "Next",
+  "setup.bouton_terminer": "Finish",
+  "setup.recap_titre": "Setup complete",
+  "setup.recap": "**Language**: {langue}\n**Log channel**: {logs}\n**Staff role**: {staff}\n**Game channels**: {jeux}\n\n**Modules**\n{modules}",
+  "setup.recap_suite": "To go further: /config (all settings), /setlogs (logs split by type), /setticket (tickets).",
+  "setup.expiree": "/setup assistant ended (10 min without activity). Run /setup again to continue: the choices you already confirmed are kept.",
+  "setup.ancienne_session": "Another /setup was opened: this one is closed.",
+  "setup.arrivee": "👋 Thanks for adding the bot! An administrator can run **/setup** to configure it in a few steps (language, logs, staff role, modules)."
+}

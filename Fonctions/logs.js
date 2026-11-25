@@ -11,9 +11,39 @@ const COULEURS = {
     roles: 0x5865F2, giveaway: 0xF1C40F, annonce: 0x1ABC9C, sondage: 0x1ABC9C
 }
 
-// Renvoie le salon de logs du serveur s'il existe encore et que le bot peut y écrire
-function getLogChannel(guild) {
-    const id = db.getLogChannel(guild.id)
+// Salons de logs séparés (idée #24) : chaque famille peut avoir son salon (/setlogs famille:…).
+// Sans salon pour sa famille, un log va dans le salon général, SAUF les familles « sans repli » :
+// le spam des jeux et de l'économie ne doit jamais noyer les alertes de modération. Les signalements en font partie :
+// l'identité du signaleur ne doit jamais atterrir dans un salon plus large que celui choisi pour eux.
+const FAMILLES = ["sanctions", "automod", "tickets", "membres", "signalements", "animation", "config", "jeux", "economie"]
+const SANS_REPLI = ["jeux", "economie", "signalements"]
+
+// Famille d'une action de sendModLog (action inconnue : sanctions)
+const FAMILLE_ACTION = {
+    automod: "automod", ticket: "tickets", config: "config",
+    roles: "animation", giveaway: "animation", annonce: "animation", sondage: "animation",
+    filtre: "membres", signalement: "signalements"
+}
+const familleDe = action => FAMILLE_ACTION[action] ?? "sanctions"
+
+// Requêtes de la table log_channels (migration 004), préparées à la première utilisation
+const lireFamille = (guildId, famille) => db.sqlAll("SELECT channel_id FROM log_channels WHERE guild_id = ? AND famille = ?", [guildId, famille])[0]?.channel_id ?? null
+
+function salonsFamilles(guildId) {
+    return Object.fromEntries(db.sqlAll("SELECT famille, channel_id FROM log_channels WHERE guild_id = ?", [guildId]).map(l => [l.famille, l.channel_id]))
+}
+
+// Salon d'une famille (null : la famille suit le salon général, ou n'a pas de logs si elle est sans repli)
+function setSalonFamille(guildId, famille, channelId) {
+    if (!FAMILLES.includes(famille)) throw new Error(`Famille de logs inconnue : ${famille}`)
+    if (channelId) db.sqlRun(`INSERT INTO log_channels (guild_id, famille, channel_id) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id, famille) DO UPDATE SET channel_id = excluded.channel_id`, [guildId, famille, channelId])
+    else db.sqlRun("DELETE FROM log_channels WHERE guild_id = ? AND famille = ?", [guildId, famille])
+}
+
+// Renvoie le salon de logs d'une famille (ou le salon général) s'il existe encore et que le bot peut y écrire
+function getLogChannel(guild, famille = "sanctions") {
+    const id = lireFamille(guild.id, famille) ?? (SANS_REPLI.includes(famille) ? null : db.getLogChannel(guild.id))
     const channel = id ? guild.channels.cache.get(id) : null
     if (!channel?.isTextBased()) return null
     if (!channel.permissionsFor(guild.members.me)?.has([Flags.ViewChannel, Flags.SendMessages, Flags.EmbedLinks])) return null
@@ -21,9 +51,9 @@ function getLogChannel(guild) {
 }
 
 // Envoie une entrée dans le salon de logs. Ne lève jamais d'erreur : un log raté ne doit pas faire échouer l'action.
-async function sendModLog(interaction, { action, cible, raison, details }) {
+async function sendModLog(interaction, { action, cible, raison, details, famille = familleDe(action) }) {
     try {
-        const channel = getLogChannel(interaction.guild)
+        const channel = getLogChannel(interaction.guild, famille)
         if (!channel) return
 
         const embed = new Discord.EmbedBuilder()
@@ -42,4 +72,18 @@ async function sendModLog(interaction, { action, cible, raison, details }) {
     }
 }
 
-module.exports = { sendModLog, getLogChannel }
+// Envoie un embed déjà construit dans le salon d'une famille (événements sans modérateur : AutoMod, arrivées…).
+// Ne lève jamais d'erreur. Renvoie true si le log est parti.
+async function envoyerLog(guild, famille, embed) {
+    try {
+        const channel = getLogChannel(guild, famille)
+        if (!channel) return false
+        await channel.send({ embeds: [embed] })
+        return true
+    } catch (err) {
+        console.error(`Impossible d'envoyer le log (${famille}) :`, err.message)
+        return false
+    }
+}
+
+module.exports = { sendModLog, envoyerLog, getLogChannel, setSalonFamille, salonsFamilles, familleDe, FAMILLES, SANS_REPLI, COULEURS }

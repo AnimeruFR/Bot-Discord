@@ -41,4 +41,17 @@ async function traiterErreur(interaction, err, journal = console) {
     return incident
 }
 
-module.exports = { ErreurUtilisateur, traiterErreur, numeroIncident }
+// Refus visible par l'auteur seulement, quel que soit l'état de l'interaction. Après une réponse différée publique
+// (deferReply sans éphémère), on retire le « réfléchit… » public et le refus part en éphémère.
+async function refuser(interaction, texte) {
+    const reponse = { content: texte, flags: EPHEMERAL }
+    if (interaction.deferred && !interaction.ephemeral) {
+        await interaction.deleteReply().catch(() => {})
+        return interaction.followUp(reponse)
+    }
+    if (interaction.deferred) return interaction.editReply({ content: texte })
+    if (interaction.replied) return interaction.followUp(reponse)
+    return interaction.reply(reponse)
+}
+
+module.exports = { ErreurUtilisateur, traiterErreur, numeroIncident, refuser }

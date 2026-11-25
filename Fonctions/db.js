@@ -63,9 +63,13 @@ const requetes = {
         UNION SELECT guild_id FROM sanction_thresholds UNION SELECT guild_id FROM channel_locks
         UNION SELECT guild_id FROM ticket_types UNION SELECT guild_id FROM tickets UNION SELECT guild_id FROM role_panels
         UNION SELECT guild_id FROM giveaways UNION SELECT guild_id FROM announcements
-        UNION SELECT guild_id FROM guild_modules UNION SELECT guild_id FROM guild_salons_jeux`),
+        UNION SELECT guild_id FROM guild_modules UNION SELECT guild_id FROM guild_salons_jeux
+        UNION SELECT guild_id FROM log_channels UNION SELECT guild_id FROM staff_notes UNION SELECT guild_id FROM mod_reasons
+        UNION SELECT guild_id FROM case_edits UNION SELECT guild_id FROM ticket_macros UNION SELECT guild_id FROM account_filter
+        UNION SELECT guild_id FROM automod_config`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
-        "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux"]
+        "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux",
+        "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -176,10 +180,13 @@ const requetes = {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     listCases: db.prepare("SELECT * FROM cases WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT ?"),
     countCases: db.prepare("SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ?"),
+    countActiveCases: db.prepare("SELECT COUNT(*) AS total FROM cases WHERE guild_id = ? AND user_id = ? AND cancelled_at IS NULL"),
     addWarnCase: db.prepare(`INSERT INTO cases (guild_id, user_id, moderator_id, type, reason, warn_id, created_at)
         VALUES (?, ?, ?, 'warn', ?, ?, ?)`),
     anonymiserWarnCase: db.prepare("UPDATE cases SET reason = '(avertissement retiré)' WHERE guild_id = ? AND warn_id = ?"),
     purgeCases: db.prepare("DELETE FROM cases WHERE created_at < ?"),
+    purgeCaseEdits: db.prepare("DELETE FROM case_edits WHERE created_at < ? OR case_id NOT IN (SELECT id FROM cases)"),
+    purgeStaffNotes: db.prepare("DELETE FROM staff_notes WHERE created_at < ?"),
     purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
     reporterTempban: db.prepare("UPDATE tempbans SET retry_at = ? WHERE guild_id = ? AND user_id = ?"),
 
@@ -287,8 +294,16 @@ module.exports = {
     },
     listCases: (guildId, userId, limite = 15) => requetes.listCases.all(guildId, userId, limite),
     countCases: (guildId, userId) => requetes.countCases.get(guildId, userId).total,
+    // Sanctions non annulées d'un membre
+    countActiveCases: (guildId, userId) => requetes.countActiveCases.get(guildId, userId).total,
     // Historique gardé 2 ans au plus (voir docs/confidentialite.md)
-    purgeOldCases: avant => requetes.purgeCases.run(avant).changes,
+    // Notes du staff (#8) et trace des modifications (#12) suivent la même durée que l'historique
+    purgeOldCases(avant) {
+        const total = requetes.purgeCases.run(avant).changes
+        requetes.purgeStaffNotes.run(avant)
+        requetes.purgeCaseEdits.run(avant)
+        return total
+    },
     purgeOldWarns: avant => requetes.purgeWarns.run(avant).changes,
 
     setTempban: (guildId, userId, expiresAt) => requetes.setTempban.run(guildId, userId, expiresAt),

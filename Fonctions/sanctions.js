@@ -196,7 +196,16 @@ async function appliquerSeuil(interaction, user, total) {
     return t(interaction, "mod.auto.appliquee", { libelle })
 }
 
+// Contexte « sans interaction » : le bot agit lui-même (AutoMod). Mêmes champs que ceux lus par appliquerSeuil,
+// mais l'auteur est le bot : c'est SA permission et SON rôle le plus haut qui comptent.
+function contexteBot(bot, guild, me = guild.members.me) {
+    return { guild, guildId: guild.id, user: bot.user, client: bot, member: me, memberPermissions: me.permissions, locale: null }
+}
+
+// Après un warn posé par le bot (sans interaction)
+const appliquerSeuilBot = (bot, guild, user, total, me) => appliquerSeuil(contexteBot(bot, guild, me), user, total)
+
 module.exports = {
-    verifierBan, bannir, banAvecConfirmation, appliquerSeuil, sanctionInterdite,
+    verifierBan, bannir, banAvecConfirmation, appliquerSeuil, appliquerSeuilBot, contexteBot, sanctionInterdite,
     marqueurTempban, DUREE_MAX_MUTE, DUREE_MAX_TEMPBAN, PERMISSIONS, LIBELLES
 }

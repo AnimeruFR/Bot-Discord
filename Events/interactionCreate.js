@@ -2,12 +2,21 @@ const Discord = require('discord.js')
 const { traiterErreur } = require('../Fonctions/erreurs')
 const { liberer } = require('../Fonctions/cooldowns')
 const { controler, commandesVisibles } = require('../Fonctions/garde')
+const { verifierAcces } = require('../Fonctions/staff')
+const { motifIndisponible } = require('../Fonctions/modules')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
 module.exports = async (bot, interaction) => {
     try {
         if (interaction.isAutocomplete()) {
+            // Une commande peut fournir sa propre autocomplétion (raisons, réponses prédéfinies…) : seulement si la
+            // garde la laisserait l'utiliser (sinon, aucune proposition : on ne divulgue pas de données du staff)
+            const command = bot.commands.get(interaction.commandName)
+            if (command?.autocomplete) {
+                if (motifIndisponible(interaction.guildId, command) || !await verifierAcces(interaction, command)) return await interaction.respond([])
+                return await command.autocomplete(bot, interaction)
+            }
             // Autocomplétion de /help : seulement les commandes que ce membre peut utiliser (staff masqué, modules désactivés)
             const entry = String(interaction.options.getFocused()).toLowerCase()
             const choices = (await commandesVisibles(bot, interaction))
@@ -17,7 +26,8 @@ module.exports = async (bot, interaction) => {
             return await interaction.respond(choices)
         }
 
-        if (interaction.isChatInputCommand()) {
+        // Slash commandes et menus contextuels (clic droit sur un membre ou un message) : même garde
+        if (interaction.isChatInputCommand() || interaction.isContextMenuCommand?.()) {
             // On ne charge que les commandes connues (jamais un require construit depuis l'interaction)
             const command = bot.commands.get(interaction.commandName)
             if (!command) return

@@ -1,0 +1,22 @@
+{
+  "mac.hors_ticket": "Cette commande ne s'utilise que dans un ticket ouvert.",
+  "mac.staff_seul": "Seul le staff de ce ticket peut envoyer une réponse prédéfinie.",
+  "mac.introuvable": "Aucune réponse prédéfinie ne porte ce nom.",
+  "mac.nom_requis": "Indiquez le nom de la réponse.",
+  "mac.signature": "Réponse de l'équipe",
+  "mac.perm_gestion": "Il faut la permission « Gérer le serveur » pour ajouter ou retirer une réponse.",
+  "mac.nom_invalide": "Nom invalide : utilisez des lettres, des chiffres et des tirets.",
+  "mac.texte_invalide": "Le texte doit contenir entre 1 et {max} caractères.",
+  "mac.doublon": "Une réponse nommée « {nom} » existe déjà. Retirez-la d'abord pour la remplacer.",
+  "mac.limite": "Limite atteinte : {max} réponses par serveur au maximum.",
+  "mac.ajoute": "Réponse « {nom} » ajoutée.",
+  "mac.retire": "Réponse « {nom} » retirée.",
+  "mac.vide": "Aucune réponse prédéfinie sur ce serveur. Ajoutez-en avec /reponse ajouter.",
+  "mac.liste_titre": "**Réponses prédéfinies** ({n}/{max})",
+  "mac.form_titre": "Nouvelle réponse prédéfinie",
+  "mac.form_nom": "Nom (lettres, chiffres, tirets)",
+  "mac.form_texte": "Texte de la réponse",
+  "mac.log_envoi": "Réponse prédéfinie « {nom} » envoyée dans {salon}",
+  "mac.log_ajout": "Réponse prédéfinie « {nom} » ajoutée",
+  "mac.log_retrait": "Réponse prédéfinie « {nom} » retirée"
+}

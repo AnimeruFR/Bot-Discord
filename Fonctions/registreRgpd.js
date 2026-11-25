@@ -20,6 +20,9 @@
 //   auteur: true : la colonne désigne l'auteur d'une action sur la ligne d'un autre (modérateur, organisateur…) ;
 //             l'export d'un membre trouvé seulement par ces colonnes est réduit (id, dates, rôle), sans tiers
 //   liste: true : la colonne contient une liste JSON d'identifiants (l'identifiant est remplacé dans la liste)
+//   rattachee : { colonne, parent, cle, parentServeur, parentMembre, traitement, motif, duree } : lignes qui visent un membre
+//             seulement par leur ligne parente (ex. case_edits -> cases.user_id). Elles sont ajoutées, en entier, à l'export du
+//             membre visé ; elles ne changent rien à l'effacement (la conservation suit celle de la ligne parente)
 //   aucune : motif (table sans donnée de membre)
 
 const ANONYME = "0"
@@ -88,7 +91,35 @@ const REGISTRE = {
     announcements: {
         serveur: "guild_id",
         colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "L'annonce doit être publiée, l'auteur n'est plus identifié" } }
-    }
+    },
+    // Phase 1
+    log_channels: { serveur: "guild_id", aucune: "Salons de logs du serveur (#24), aucune donnée de membre" },
+    // Note du staff (#8) : même logique que l'historique des sanctions, jamais montrée au membre concerné.
+    staff_notes: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Intérêt légitime de modération (contexte du staff, purgé avec l'historique)", duree: "2 ans" },
+            author_id: { traitement: "anonymiser", auteur: true, motif: "La note reste utile au staff, son auteur n'est plus identifié" }
+        }
+    },
+    mod_reasons: { serveur: "guild_id", aucune: "Raisons de sanction prédéfinies (#10), aucune donnée de membre" },
+    // Trace des modifications d'une sanction (#12) : elle suit la sanction (purgée avec elle).
+    case_edits: {
+        serveur: "guild_id",
+        colonnes: { editor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié" } },
+        // Les modifications d'une sanction concernent aussi le membre sanctionné (raison avant / après)
+        rattachee: {
+            colonne: "case_id", parent: "cases", cle: "id", parentServeur: "guild_id", parentMembre: "user_id",
+            traitement: "conserver", motif: "Trace des modifications de la sanction du membre, purgée avec elle", duree: "2 ans"
+        }
+    },
+    // Réponse prédéfinie (#20) : texte du serveur, l'auteur n'est plus identifié.
+    ticket_macros: {
+        serveur: "guild_id",
+        colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "La réponse sert au staff du serveur, son auteur n'est plus identifié" } }
+    },
+    account_filter: { serveur: "guild_id", aucune: "Réglage du filtre des comptes récents (#3), aucune donnée de membre" },
+    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" }
 }
 
 const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]
@@ -101,6 +132,12 @@ function verifier(registre = REGISTRE) {
         if (def.aucune !== undefined) {
             if (!def.aucune) erreurs.push(`${table} : motif de "aucune" vide`)
             continue
+        }
+        if (def.rattachee) {
+            for (const champ of ["colonne", "parent", "cle", "parentServeur", "parentMembre", "motif"]) {
+                if (!def.rattachee[champ]) erreurs.push(`${table}.rattachee : ${champ} manquant`)
+            }
+            if (def.rattachee.traitement === "conserver" && !def.rattachee.duree) erreurs.push(`${table}.rattachee : durée manquante`)
         }
         if (!def.colonnes || !Object.keys(def.colonnes).length) erreurs.push(`${table} : colonnes manquantes (ou "aucune")`)
         for (const [colonne, c] of Object.entries(def.colonnes ?? {})) {
