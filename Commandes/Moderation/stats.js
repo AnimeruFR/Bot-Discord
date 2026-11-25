@@ -7,7 +7,7 @@ const { exigerPremium } = require('../../Fonctions/premium')
 
 const JOUR = 24 * 60 * 60 * 1000
 
-// Statistiques calculées à partir des lignes de tickets (fonction pure, testée dans check.js)
+// Statistiques calculées à partir des lignes de tickets (fonction pure, testée dans tests/tickets.test.js)
 function calculerStats(tickets, types, sansType = "Sans type") {
     const nomType = id => types.find(t => t.id === id)?.nom ?? sansType
     const pris = tickets.filter(t => t.claimed_at)

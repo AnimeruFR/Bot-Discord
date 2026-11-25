@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run check
+      - run: npm run couverture
+        if: matrix.node == 24
       - run: npm audit --omit=dev --audit-level=high
 
   # Construit l'image Docker de prod et vérifie qu'elle est saine (sans token : le bot n'est pas lancé)

@@ -139,7 +139,8 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 
 ## Vérification
 
-- `npm test` lance le lint (ESLint) puis `npm run check`, qui vérifie sans se connecter à Discord que toutes les commandes se chargent, que leurs définitions sont valides et que les règles de sécurité tiennent.
+- `npm test` lance le lint (ESLint) puis `npm run check`, qui exécute les tests `node:test` du dossier `tests/` (un fichier par domaine) sans se connecter à Discord : toutes les commandes se chargent, leurs définitions sont valides et les règles de sécurité tiennent.
+- `npm run couverture` lance les mêmes tests avec le rapport de couverture de code.
 - La CI GitHub Actions lance les mêmes vérifications et `npm audit` à chaque push sur `main` et à chaque pull request, puis construit l'image Docker et vérifie qu'elle tourne sans root et sans aucun secret. Elle ne demande aucun secret.
 - Dependabot propose chaque semaine les mises à jour des dépendances.
 
