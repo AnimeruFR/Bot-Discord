@@ -4,9 +4,11 @@ const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
 const { sendModLog } = require('../../Fonctions/logs')
 const donneesMembre = require('../../Fonctions/donneesMembre')
+const cooldowns = require('../../Fonctions/cooldowns')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DELAI_CONFIRMATION = 30 * 1000
+const COOLDOWN_EFFACEMENT = "privacy-effacer"
 
 function estAdmin(interaction) {
     return interaction.user.id === interaction.guild.ownerId || interaction.memberPermissions?.has(Discord.PermissionFlagsBits.Administrator)
@@ -58,20 +60,14 @@ module.exports = {
     }
 }
 
-async function supprimer(interaction) {
-    if (!interaction.inCachedGuild()) return interaction.reply({ content: t(interaction, "tk.pv_serveur"), flags: EPHEMERAL })
-    if (!estAdmin(interaction)) return interaction.reply({ content: t(interaction, "tk.pv_admin"), flags: EPHEMERAL })
-
+// Question avec deux boutons (confirmer / annuler). Renvoie le clic de confirmation (pas encore acquitté),
+// ou null si le membre a annulé ou n'a pas répondu à temps (la réponse est alors déjà envoyée).
+async function demanderConfirmation(interaction, { prefixe, question, confirmer, annuler, temps, annule }) {
     const boutons = new Discord.ActionRowBuilder().addComponents(
-        new Discord.ButtonBuilder().setCustomId(`privacy-oui-${interaction.id}`).setLabel(t(interaction, "tk.pv_tout")).setStyle(Discord.ButtonStyle.Danger),
-        new Discord.ButtonBuilder().setCustomId(`privacy-non-${interaction.id}`).setLabel(t(interaction, "tk.pv_annuler")).setStyle(Discord.ButtonStyle.Secondary)
+        new Discord.ButtonBuilder().setCustomId(`${prefixe}-oui-${interaction.id}`).setLabel(confirmer).setStyle(Discord.ButtonStyle.Danger),
+        new Discord.ButtonBuilder().setCustomId(`${prefixe}-non-${interaction.id}`).setLabel(annuler).setStyle(Discord.ButtonStyle.Secondary)
     )
-    const reponse = await interaction.reply({
-        content: t(interaction, "tk.pv_question"),
-        components: [boutons],
-        flags: EPHEMERAL,
-        withResponse: true
-    })
+    const reponse = await interaction.reply({ content: question, components: [boutons], flags: EPHEMERAL, withResponse: true })
 
     const clic = await reponse.resource.message.awaitMessageComponent({
         componentType: Discord.ComponentType.Button,
@@ -79,9 +75,30 @@ async function supprimer(interaction) {
         time: DELAI_CONFIRMATION
     }).catch(() => null)
 
-    if (!clic) return interaction.editReply({ content: t(interaction, "tk.pv_temps"), components: [] })
-    if (clic.customId.startsWith("privacy-non")) return clic.update({ content: t(interaction, "tk.pv_annule"), components: [] })
+    if (!clic) {
+        await interaction.editReply({ content: temps, components: [] })
+        return null
+    }
+    if (clic.customId.startsWith(`${prefixe}-non`)) {
+        await clic.update({ content: annule, components: [] })
+        return null
+    }
+    return clic
+}
 
+async function supprimer(interaction) {
+    if (!interaction.inCachedGuild()) return interaction.reply({ content: t(interaction, "tk.pv_serveur"), flags: EPHEMERAL })
+    if (!estAdmin(interaction)) return interaction.reply({ content: t(interaction, "tk.pv_admin"), flags: EPHEMERAL })
+
+    const clic = await demanderConfirmation(interaction, {
+        prefixe: "privacy",
+        question: t(interaction, "tk.pv_question"),
+        confirmer: t(interaction, "tk.pv_tout"),
+        annuler: t(interaction, "tk.pv_annuler"),
+        temps: t(interaction, "tk.pv_temps"),
+        annule: t(interaction, "tk.pv_annule")
+    })
+    if (!clic) return
     // Les droits ont pu changer pendant la confirmation
     if (!estAdmin(clic)) return clic.update({ content: t(interaction, "tk.pv_plus_admin"), components: [] })
 
@@ -114,35 +131,37 @@ async function effacerMoi(interaction) {
     const differe = donneesMembre.refusEffacement(interaction.guild.id, interaction.user.id)
     if (differe) return interaction.reply({ content: t(interaction, "rgpd.differe", { motif: differe }), flags: EPHEMERAL })
 
-    const boutons = new Discord.ActionRowBuilder().addComponents(
-        new Discord.ButtonBuilder().setCustomId(`rgpdmoi-oui-${interaction.id}`).setLabel(t(interaction, "rgpd.confirmer")).setStyle(Discord.ButtonStyle.Danger),
-        new Discord.ButtonBuilder().setCustomId(`rgpdmoi-non-${interaction.id}`).setLabel(t(interaction, "rgpd.annuler")).setStyle(Discord.ButtonStyle.Secondary)
-    )
-    const reponse = await interaction.reply({
-        content: t(interaction, "rgpd.question"),
-        components: [boutons],
-        flags: EPHEMERAL,
-        withResponse: true
+    // Une fois par heure : l'effacement est lourd et ne sert pas à être répété (libéré si rien n'est effacé)
+    const restant = cooldowns.prendre(COOLDOWN_EFFACEMENT, 60 * 60, interaction.guild.id, interaction.user.id)
+    if (restant > 0) return interaction.reply({ content: t(interaction, "rgpd.cooldown", { minutes: Math.ceil(restant / 60000) }), flags: EPHEMERAL })
+
+    const clic = await demanderConfirmation(interaction, {
+        prefixe: "rgpdmoi",
+        question: t(interaction, "rgpd.question"),
+        confirmer: t(interaction, "rgpd.confirmer"),
+        annuler: t(interaction, "rgpd.annuler"),
+        temps: t(interaction, "rgpd.temps"),
+        annule: t(interaction, "rgpd.annule")
+    }).catch(err => {
+        cooldowns.liberer(COOLDOWN_EFFACEMENT, interaction.guild.id, interaction.user.id)
+        throw err
     })
-
-    const clic = await reponse.resource.message.awaitMessageComponent({
-        componentType: Discord.ComponentType.Button,
-        filter: i => i.user.id === interaction.user.id && i.customId.endsWith(interaction.id),
-        time: DELAI_CONFIRMATION
-    }).catch(() => null)
-
-    if (!clic) return interaction.editReply({ content: t(interaction, "rgpd.temps"), components: [] })
-    if (clic.customId.startsWith("rgpdmoi-non")) return clic.update({ content: t(interaction, "rgpd.annule"), components: [] })
-
+    if (!clic) {
+        cooldowns.liberer(COOLDOWN_EFFACEMENT, interaction.guild.id, interaction.user.id)
+        return
+    }
     await clic.update({ content: t(interaction, "rgpd.en_cours"), components: [] })
 
+    let efface = false
     try {
         const resume = donneesMembre.effacer(interaction.guild.id, interaction.user.id)
+        efface = true
         const texte = donneesMembre.resumeTexte(resume)
         // Le log ne contient que l'identifiant du membre et le résumé (des nombres par table)
         await sendModLog(interaction, { action: "config", details: `Effacement RGPD du membre ${interaction.user.id} (/privacy moi) : ${texte}` })
         await interaction.editReply({ content: t(interaction, "rgpd.ok", { resume: texte }) })
     } catch (err) {
+        if (!efface) cooldowns.liberer(COOLDOWN_EFFACEMENT, interaction.guild.id, interaction.user.id) // rien n'a été effacé : le membre peut réessayer
         if (err.code === "RGPD_DIFFERE") return interaction.editReply({ content: t(interaction, "rgpd.differe", { motif: err.motif }) })
         console.error("Échec de l'effacement /privacy moi :", err)
         await interaction.editReply({ content: t(interaction, "rgpd.echec") })

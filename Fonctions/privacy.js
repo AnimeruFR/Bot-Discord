@@ -1,4 +1,5 @@
 const db = require('./db')
+const { purgerSauvegardesMigration } = require('./migrations')
 
 const RETENTION = 30 * 24 * 60 * 60 * 1000 // données gardées 30 jours après le départ du bot (réinvitation par erreur)
 const JOUR = 24 * 60 * 60 * 1000
@@ -53,6 +54,8 @@ function startPrivacySchedule(bot) {
             const effaces = purge(serveurs)
             db.purgeTicketCooldowns(Date.now() - 10 * 60 * 1000) // délais de tickets expirés
             db.purgeOldCases(Date.now() - CONSERVATION_HISTORIQUE) // historique des sanctions de plus de 2 ans
+            db.purgeOldWarns(Date.now() - CONSERVATION_HISTORIQUE) // avertissements de plus de 2 ans
+            purgerSauvegardesMigration() // copies avant-migration-*.db de plus de 30 jours (elles contiennent la base entière)
             db.purgeOldTickets(Date.now() - 90 * JOUR) // suivi des tickets supprimés depuis plus de 90 jours
             db.purgeOldGiveaways(Date.now() - 30 * JOUR) // giveaways terminés depuis plus de 30 jours (participants, gagnants)
             if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)

@@ -1,7 +1,7 @@
 {
   "rgpd.serveur": "Cette option s'utilise sur un serveur : vos données sont rangées par serveur.",
   "rgpd.export_ok": "Voici vos données sur ce serveur (fichier JSON). Seul vous pouvez voir ce message.",
-  "rgpd.question": "Effacer **vos données** sur ce serveur ?\n• **Effacées** : les données sans intérêt à conserver (par exemple vos délais de tickets, vos participations aux giveaways).\n• **Anonymisées** : votre identifiant est retiré des éléments qui servent à d'autres (tickets, giveaways, annonces, sanctions que vous avez données).\n• **Conservées** : les sanctions dont vous avez fait l'objet (2 ans, modération) et un éventuel ban temporaire en cours.\nCette action est irréversible (seules les sauvegardes récentes, jusqu'à 7 jours, contiennent encore ces données).",
+  "rgpd.question": "Effacer **vos données** sur ce serveur ?\n• **Effacées** : les données sans intérêt à conserver (par exemple vos participations aux giveaways).\n• **Anonymisées** : votre identifiant est retiré des éléments qui servent à d'autres (tickets, giveaways, annonces, sanctions que vous avez données).\n• **Conservées** : les sanctions dont vous avez fait l'objet (2 ans, modération) un éventuel ban temporaire en cours et votre délai anti-spam de tickets (10 min).\nCette action est irréversible (seules les sauvegardes récentes, jusqu'à 7 jours, contiennent encore ces données).",
   "rgpd.confirmer": "Effacer mes données",
   "rgpd.annuler": "Annuler",
   "rgpd.temps": "Temps écoulé, rien n'a été effacé.",
@@ -9,5 +9,6 @@
   "rgpd.en_cours": "Effacement en cours…",
   "rgpd.ok": "Vos données sur ce serveur ont été traitées : {resume}.",
   "rgpd.differe": "Votre effacement est différé : {motif}",
+  "rgpd.cooldown": "Vous avez déjà effacé vos données il y a moins d'une heure. Réessayez dans {minutes} min.",
   "rgpd.echec": "Échec de l'effacement : rien n'a été modifié (l'opération est annulée en bloc). Réessayez plus tard."
 }

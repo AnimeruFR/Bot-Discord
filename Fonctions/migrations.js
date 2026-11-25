@@ -139,7 +139,7 @@ function sauvegarderAvantMigration(db, fichier, { dossier = process.env.BACKUP_D
     const final = path.join(dossier, `${prefixe}-v${versionActuelle(db)}-${horodatage()}.db`)
     // Un autre processus (bot et tableau de bord démarrent parfois ensemble) vient de faire la même sauvegarde
     if (fs.existsSync(final)) return final
-    const temporaire = `${final}.tmp`
+    const temporaire = `${final}.${process.pid}.tmp` // le PID évite que deux processus écrivent le même fichier
     try {
         fs.mkdirSync(dossier, { recursive: true })
         fs.rmSync(temporaire, { force: true })
@@ -152,4 +152,40 @@ function sauvegarderAvantMigration(db, fichier, { dossier = process.env.BACKUP_D
     return final
 }
 
-module.exports = { listerMigrations, migrer, annuler, etat, sauvegarderAvantMigration, versionActuelle, DOSSIER }
+const MOTIF_SAUVEGARDE = /^avant-migration-v\d+-\d{8}-\d{6}\.db$/
+const CONSERVATION_SAUVEGARDES = 30 * 24 * 60 * 60 * 1000
+
+// RGPD : ces copies contiennent toute la base, donc des données déjà effacées. On les supprime après 30 jours.
+// Renvoie le nombre de fichiers supprimés.
+function purgerSauvegardesMigration({ dossier = process.env.BACKUP_DIR || "backups", maintenant = Date.now(), duree = CONSERVATION_SAUVEGARDES } = {}) {
+    if (!fs.existsSync(dossier)) return 0
+    let supprimees = 0
+    for (const nom of fs.readdirSync(dossier).filter(n => MOTIF_SAUVEGARDE.test(n))) {
+        const chemin = path.join(dossier, nom)
+        try {
+            if (maintenant - fs.statSync(chemin).mtimeMs <= duree) continue
+            fs.rmSync(chemin, { force: true })
+            supprimees++
+        } catch (err) {
+            console.error(`Suppression de la sauvegarde ${nom} impossible :`, err.message)
+        }
+    }
+    return supprimees
+}
+
+// Pour un processus qui ne migre pas (DATABASE_NO_MIGRATE=1, ex. le tableau de bord) : attend que le bot ait migré.
+// Réessaie toutes les `intervalle` ms pendant `delaiMax` ms au plus, puis lève une erreur claire.
+function attendreSchema(db, { intervalle = 2000, delaiMax = 60000, dormir = ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms), dossier = DOSSIER } = {}) {
+    let attendu = 0
+    for (;;) {
+        const { actuelle, derniere, enAttente } = etat(db, { dossier })
+        if (!enAttente.length) return
+        if (attendu >= delaiMax) {
+            throw new Error(`La base est en version ${actuelle} et le code attend la version ${derniere}, mais la migration est désactivée (DATABASE_NO_MIGRATE=1) : lance d'abord le bot (il migre la base), puis relance ce service`)
+        }
+        dormir(intervalle)
+        attendu += intervalle
+    }
+}
+
+module.exports = { listerMigrations, migrer, annuler, etat, sauvegarderAvantMigration, purgerSauvegardesMigration, attendreSchema, versionActuelle, DOSSIER }

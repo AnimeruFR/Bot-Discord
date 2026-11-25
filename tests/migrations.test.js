@@ -5,7 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { DatabaseSync } = require('node:sqlite')
-const { listerMigrations, migrer, annuler, etat, sauvegarderAvantMigration } = require('../Fonctions/migrations')
+const { listerMigrations, migrer, annuler, etat, sauvegarderAvantMigration, purgerSauvegardesMigration, attendreSchema } = require('../Fonctions/migrations')
 
 // Motif de rotation de Fonctions/backup.js (recopié : l'importer ouvrirait data/bot.db)
 const MOTIF = /^bot-\d{8}-\d{6}\.db$/
@@ -227,4 +227,46 @@ test('sauvegarde avant migration : base remplie seulement, nom hors rotation', (
     const verif = new DatabaseSync(copie, { readOnly: true })
     assert.strictEqual(verif.prepare("SELECT log_channel_id FROM guild_config").get().log_channel_id, 'c')
     verif.close()
+})
+
+test("sauvegardes avant migration : celles de plus de 30 jours sont supprimées, les autres fichiers intacts", () => {
+    const dossier = nouveauDossier()
+    const JOUR = 24 * 3600 * 1000
+    const ecrire = (nom, ageJours) => {
+        const chemin = path.join(dossier, nom)
+        fs.writeFileSync(chemin, "x")
+        const date = new Date(Date.now() - ageJours * JOUR)
+        fs.utimesSync(chemin, date, date)
+    }
+    ecrire("avant-migration-v1-20200101-000000.db", 31)
+    ecrire("avant-migration-v2-20200102-000000.db", 29)
+    ecrire("bot-20200101-000000.db", 400) // rotation de backup.js : pas concerné
+    assert.strictEqual(purgerSauvegardesMigration({ dossier }), 1)
+    assert.deepStrictEqual(fs.readdirSync(dossier).sort(), ["avant-migration-v2-20200102-000000.db", "bot-20200101-000000.db"])
+    assert.strictEqual(purgerSauvegardesMigration({ dossier: path.join(dossier, "absent") }), 0, "dossier absent : rien à faire")
+})
+
+test("sauvegarde avant migration : le fichier temporaire disparaît une fois la copie faite", () => {
+    const dossier = nouveauDossier()
+    const base = new DatabaseSync(":memory:")
+    ouvertes.push(base)
+    base.exec("CREATE TABLE t (a)")
+    const copie = sauvegarderAvantMigration(base, path.join(dossier, "x.db"), { dossier })
+    assert.ok(fs.existsSync(copie))
+    assert.deepStrictEqual(fs.readdirSync(dossier).filter(n => n.endsWith(".tmp")), [])
+})
+
+test("DATABASE_NO_MIGRATE : attend le bot toutes les 2 s, 60 s au plus, puis erreur claire", () => {
+    const base = new DatabaseSync(":memory:")
+    ouvertes.push(base)
+    const pauses = []
+    assert.throws(() => attendreSchema(base, { dormir: ms => pauses.push(ms) }), /DATABASE_NO_MIGRATE=1.*lance d'abord le bot/)
+    assert.strictEqual(pauses.length, 30)
+    assert.ok(pauses.every(ms => ms === 2000))
+
+    // Le bot migre pendant l'attente : on repart sans erreur
+    const pauses2 = []
+    attendreSchema(base, { dormir: ms => { pauses2.push(ms); if (pauses2.length === 3) migrer(base) } })
+    assert.strictEqual(pauses2.length, 3)
+    attendreSchema(base, { dormir: () => assert.fail("base à jour : aucune attente") })
 })

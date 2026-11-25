@@ -98,7 +98,7 @@ test("export puis effacement d'un membre : les autres membres et serveurs resten
     JSON.stringify(exportU) // sérialisable
 
     const resume = donneesMembre.effacer(G1, U)
-    assert.strictEqual(resume.ticket_cooldowns.effacees, 1)
+    assert.strictEqual(resume.ticket_cooldowns.conservees, 1, "délai anti-spam conservé")
     assert.strictEqual(resume.giveaway_entries.effacees, 1)
     assert.strictEqual(resume.warns.conservees, 1)
     assert.strictEqual(resume.warns.anonymisees, 1)
@@ -108,7 +108,7 @@ test("export puis effacement d'un membre : les autres membres et serveurs resten
     assert.strictEqual(resume.guild_config, undefined)
 
     // Effacé
-    assert.strictEqual(db.getTicketCooldown(G1, U), 0)
+    assert.ok(db.getTicketCooldown(G1, U) > 0, "le délai anti-spam reste (10 min)")
     assert.strictEqual(compter("SELECT COUNT(*) AS n FROM giveaway_entries WHERE user_id = ? AND giveaway_id = ?", [U, g1]), 0)
 
     // Conservé (sanctions reçues, ban en cours)
@@ -145,7 +145,7 @@ test("export puis effacement d'un membre : les autres membres et serveurs resten
 
     // Rejouer l'effacement ne change plus rien (hors lignes conservées)
     const encore = donneesMembre.effacer(G1, U)
-    assert.strictEqual(encore.ticket_cooldowns, undefined)
+    assert.strictEqual(encore.ticket_cooldowns.effacees, undefined)
     assert.strictEqual(encore.tickets, undefined)
     assert.strictEqual(encore.warns.anonymisees, undefined)
 })
@@ -170,7 +170,7 @@ test("l'effacement est atomique : une erreur au milieu n'efface rien", () => {
 
     // La transaction est bien terminée : une écriture suivante marche
     assert.doesNotThrow(() => donneesMembre.effacer(G3, U))
-    assert.strictEqual(db.getTicketCooldown(G3, U), 0)
+    assert.strictEqual(db.sqlAll("SELECT moderator_id FROM warns WHERE guild_id = ?", [G3])[0].moderator_id, "0")
 })
 
 test("refusEffacement : un motif diffère l'effacement sans rien modifier", () => {
@@ -185,6 +185,80 @@ test("refusEffacement : un motif diffère l'effacement sans rien modifier", () =
         donneesMembre.refusEffacement = original
     }
     assert.ok(db.getTicketCooldown(G4, U) > 0)
-    donneesMembre.effacer(G4, U)
-    assert.strictEqual(db.getTicketCooldown(G4, U), 0)
+    const resume = donneesMembre.effacer(G4, U)
+    assert.strictEqual(resume.ticket_cooldowns.conservees, 1)
+})
+
+test("export : une ligne trouvée seulement comme auteur sort sous forme réduite, sans tiers", () => {
+    const G5 = "888888888888888881"
+    const T = "999999999999999991" // sanctionné par U
+    db.sqlRun("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, 'secret', 5)", [G5, T, U])
+    db.sqlRun("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, 'reçu', 6)", [G5, U, MOD])
+    db.sqlRun("INSERT INTO cases (guild_id, user_id, moderator_id, type, reason, created_at) VALUES (?, ?, ?, 'ban', 'raison', 7)", [G5, T, U])
+    db.sqlRun("INSERT INTO tickets (channel_id, guild_id, owner_id, claimed_by, created_at) VALUES ('cx', ?, ?, ?, 8)", [G5, T, U])
+    db.sqlRun("INSERT INTO giveaways (guild_id, channel_id, prix, gagnants, ends_at, host_id, winners, previous_winners) VALUES (?, 'ch', 'Nitro', 1, 9, ?, ?, '[]')", [G5, U, JSON.stringify([T])])
+    db.sqlRun("INSERT INTO announcements (guild_id, channel_id, author_id, contenu, send_at) VALUES (?, 'ch', ?, 'texte', 10)", [G5, U])
+
+    const tables = donneesMembre.exporter(G5, U).tables
+    const texte = JSON.stringify(tables)
+    assert.ok(!texte.includes(T), "aucun identifiant de tiers")
+    assert.ok(!texte.includes("secret") && !texte.includes("raison") && !texte.includes("texte") && !texte.includes("Nitro"))
+
+    const donne = tables.warns.lignes.find(l => l.role_du_membre)
+    assert.deepStrictEqual(Object.keys(donne).sort(), ["created_at", "id", "role_du_membre"])
+    assert.deepStrictEqual(donne.role_du_membre, ["moderator_id"])
+    assert.strictEqual(tables.cases.lignes[0].created_at, 7)
+    assert.deepStrictEqual(tables.tickets.lignes[0].role_du_membre, ["claimed_by"])
+    assert.deepStrictEqual(tables.giveaways.lignes[0].role_du_membre, ["host_id"])
+    assert.strictEqual(tables.giveaways.lignes[0].ends_at, 9, "les dates sont gardées")
+    assert.deepStrictEqual(tables.announcements.lignes[0].role_du_membre, ["author_id"])
+
+    // Ligne qui le concerne : complète, avec l'identifiant du modérateur
+    const recu = tables.warns.lignes.find(l => l.reason === "reçu")
+    assert.strictEqual(recu.user_id, U)
+    assert.strictEqual(recu.moderator_id, MOD)
+})
+
+test("registre : le délai de tickets est conservé 10 min (anti-spam)", () => {
+    const c = REGISTRE.ticket_cooldowns.colonnes.user_id
+    assert.deepStrictEqual([c.traitement, c.duree], ["conserver", "10 min"])
+})
+
+// Interaction minimale pour exécuter /privacy moi effacer sans Discord
+function fausseInteraction(guildId, userId, reponseBouton) {
+    const id = `i${Math.random()}`
+    const reponses = []
+    const interaction = {
+        id, guildId, locale: "fr", guild: { id: guildId, ownerId: "0" },
+        user: { id: userId },
+        inCachedGuild: () => true,
+        inGuild: () => true,
+        reply: async options => {
+            reponses.push(options.content)
+            return { resource: { message: { awaitMessageComponent: async () => reponseBouton === "temps" ? Promise.reject(new Error("temps")) : ({
+                customId: `rgpdmoi-${reponseBouton}-${id}`, update: async () => {}
+            }) } } }
+        },
+        editReply: async options => { reponses.push(options.content) }
+    }
+    return { interaction, reponses }
+}
+
+test("/privacy moi effacer : une fois par heure, libéré si annulé ou si le délai de confirmation expire", async () => {
+    const commande = require('../Commandes/General/privacy')
+    const cooldowns = require('../Fonctions/cooldowns')
+    cooldowns.vider()
+    const G6 = "888888888888888882", W = "999999999999999992"
+    const lancer = async reponse => {
+        const { interaction, reponses } = fausseInteraction(G6, W, reponse)
+        await commande.run(null, interaction, { getBoolean: () => null, getString: () => "effacer" })
+        return reponses
+    }
+    await lancer("non")
+    await lancer("temps")
+    assert.doesNotMatch((await lancer("oui")).join(" "), /moins d.une heure/, "annulation et temps écoulé n'ont pas bloqué")
+    const bloquee = await lancer("oui")
+    assert.match(bloquee[0], /moins d'une heure/)
+    assert.strictEqual(bloquee.length, 1)
+    cooldowns.vider()
 })

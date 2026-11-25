@@ -37,3 +37,12 @@ test("RGPD (panne, retour, purge à 30 jours, isolation)", async () => {
     assert.ok(!db.guildsLeftBefore(Date.now() + 1).includes(G4), "retour sur le serveur : suppression annulée")
     assert.strictEqual(db.deleteGuildData(G4), 2, "le warn et sa ligne d'historique")
 })
+
+test("purgeOldWarns : les avertissements de plus de 2 ans sont effacés, les autres restent", () => {
+    const G5 = "555555555555555553", deuxAns = 2 * 365 * 24 * 3600 * 1000
+    db.sqlRun("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, 'vieux', ?)", [G5, U, MOD, Date.now() - deuxAns - 1000])
+    db.addWarn(G5, U, MOD, "récent")
+    assert.strictEqual(db.purgeOldWarns(Date.now() - deuxAns), 1)
+    assert.strictEqual(db.countWarns(G5, U), 1)
+    assert.strictEqual(db.purgeOldWarns(Date.now() - deuxAns), 0)
+})

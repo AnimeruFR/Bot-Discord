@@ -19,14 +19,42 @@ function conditionMembre(colonne, c) {
     return `CASE WHEN json_valid(${colonne}) THEN EXISTS (SELECT 1 FROM json_each(${colonne}) WHERE value = ?) ELSE 0 END`
 }
 
+// Cette ligne désigne-t-elle le membre par cette colonne ? (valeur simple, ou identifiant dans une liste JSON)
+function designe(ligne, colonne, c, userId) {
+    const valeur = ligne[colonne]
+    if (!c.liste) return valeur === userId
+    try {
+        return JSON.parse(valeur).includes(userId)
+    } catch {
+        return false
+    }
+}
+
+// Ligne où le membre apparaît seulement comme auteur d'une action (modérateur, organisateur…) : on ne donne que
+// son id, ses dates et son rôle. Le reste (membre sanctionné, raison, participants…) concerne d'autres personnes.
+function ligneReduite(ligne, roles) {
+    const reduite = {}
+    for (const [colonne, valeur] of Object.entries(ligne)) {
+        if (colonne === "id" || colonne.endsWith("_at")) reduite[colonne] = valeur
+    }
+    return { ...reduite, role_du_membre: roles }
+}
+
 // Toutes les données d'un membre sur un serveur, table par table (seules les tables où il apparaît sont listées)
 function exporter(guildId, userId) {
+    const u = String(userId)
     const tables = {}
     for (const [table, def] of tablesConcernees()) {
         const colonnes = Object.entries(def.colonnes)
         const conditions = colonnes.map(([colonne, c]) => conditionMembre(colonne, c)).join(" OR ")
-        const lignes = db.sqlAll(`SELECT * FROM ${table} WHERE ${conditionServeur(def)} AND (${conditions})`,
-            [String(guildId), ...colonnes.map(() => String(userId))])
+        const trouvees = db.sqlAll(`SELECT * FROM ${table} WHERE ${conditionServeur(def)} AND (${conditions})`,
+            [String(guildId), ...colonnes.map(() => u)])
+        const lignes = trouvees.map(ligne => {
+            const roles = colonnes.filter(([colonne, c]) => designe(ligne, colonne, c, u))
+            // Concerné lui-même (sanctionné, auteur du ticket, gagnant…) : ligne complète
+            if (roles.some(([, c]) => !c.auteur)) return ligne
+            return ligneReduite(ligne, roles.map(([colonne]) => colonne))
+        })
         if (!lignes.length) continue
         tables[table] = {
             traitement_a_l_effacement: Object.fromEntries(colonnes.map(([colonne, c]) =>
@@ -34,7 +62,7 @@ function exporter(guildId, userId) {
             lignes
         }
     }
-    return { serveur: String(guildId), membre: String(userId), exporte_le: new Date().toISOString(), tables }
+    return { serveur: String(guildId), membre: u, exporte_le: new Date().toISOString(), tables }
 }
 
 // Point d'extension : renvoie un motif (texte) si l'effacement doit être différé (gel économique, séquestre…), sinon null.

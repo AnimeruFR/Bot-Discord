@@ -2,7 +2,7 @@ const fs = require('fs')
 const path = require('path')
 const { DatabaseSync } = require('node:sqlite')
 const { loadEnv } = require('./env')
-const { migrer, etat, sauvegarderAvantMigration } = require('./migrations')
+const { migrer, etat, sauvegarderAvantMigration, attendreSchema } = require('./migrations')
 
 // Le .env doit être lu avant d'ouvrir la base, pour que DATABASE_PATH soit pris en compte
 loadEnv()
@@ -22,14 +22,18 @@ db.exec(`
 
 // Schéma : migrations versionnées (dossier migrations/, version dans PRAGMA user_version).
 // Si une migration échoue, l'erreur remonte et le bot ne démarre pas.
-if (etat(db).enAttente.length) {
-    // Base fichier déjà remplie : on la sauvegarde avant de toucher au schéma
-    const copie = sauvegarderAvantMigration(db, fichier)
-    if (copie) console.log(`Sauvegarde avant migration : ${copie}`)
+// DATABASE_NO_MIGRATE=1 (service dashboard) : ce processus ne sauvegarde ni ne migre, il attend que le bot l'ait fait.
+if (process.env.DATABASE_NO_MIGRATE === '1' && fichier !== ':memory:') {
+    attendreSchema(db)
+} else {
+    if (etat(db).enAttente.length) {
+        // Base fichier déjà remplie : on la sauvegarde avant de toucher au schéma
+        const copie = sauvegarderAvantMigration(db, fichier)
+        if (copie) console.log(`Sauvegarde avant migration : ${copie}`)
+    }
+    const migration = migrer(db)
+    if (migration.appliquees.length && fichier !== ':memory:') console.log(`Base migrée de v${migration.avant} à v${migration.apres}`)
 }
-const migration = migrer(db)
-if (migration.appliquees.length && fichier !== ':memory:') console.log(`Base migrée de v${migration.avant} à v${migration.apres}`)
-
 const requetes = {
     addWarn: db.prepare("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"),
     listWarns: db.prepare("SELECT * FROM warns WHERE guild_id = ? AND user_id = ? ORDER BY id DESC LIMIT ?"),
@@ -176,6 +180,7 @@ const requetes = {
         VALUES (?, ?, ?, 'warn', ?, ?, ?)`),
     anonymiserWarnCase: db.prepare("UPDATE cases SET reason = '(avertissement retiré)' WHERE guild_id = ? AND warn_id = ?"),
     purgeCases: db.prepare("DELETE FROM cases WHERE created_at < ?"),
+    purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
     reporterTempban: db.prepare("UPDATE tempbans SET retry_at = ? WHERE guild_id = ? AND user_id = ?"),
 
     setTempban: db.prepare(`INSERT INTO tempbans (guild_id, user_id, expires_at) VALUES (?, ?, ?)
@@ -284,6 +289,7 @@ module.exports = {
     countCases: (guildId, userId) => requetes.countCases.get(guildId, userId).total,
     // Historique gardé 2 ans au plus (voir docs/confidentialite.md)
     purgeOldCases: avant => requetes.purgeCases.run(avant).changes,
+    purgeOldWarns: avant => requetes.purgeWarns.run(avant).changes,
 
     setTempban: (guildId, userId, expiresAt) => requetes.setTempban.run(guildId, userId, expiresAt),
     removeTempban: (guildId, userId) => requetes.removeTempban.run(guildId, userId).changes > 0,
