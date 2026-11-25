@@ -37,7 +37,13 @@ test("traductions (fr/en complètes, variables, commandes localisées)", async (
         }
         for (const texte of textes) assert.ok(texte.length >= 1 && texte.length <= 100, `traduction trop longue dans /${command.name}`)
         const json = buildSlashCommand(command).toJSON()
-        assert.ok(json.description_localizations?.["en-US"], `localisation enregistrée pour /${command.name}`)
+        if (command.type) {
+            // Menu contextuel : c'est le nom (affiché au clic droit) qui est traduit, 32 caractères au plus
+            assert.ok(en.nom && en.nom.length <= 32 && command.name.length <= 32, `nom anglais du menu « ${command.name} »`)
+            assert.ok(json.name_localizations?.["en-US"], `localisation enregistrée pour le menu « ${command.name} »`)
+        } else {
+            assert.ok(json.description_localizations?.["en-US"], `localisation enregistrée pour /${command.name}`)
+        }
     }
     // t() : variables (même avec "$&"), repli anglais -> français, clé inconnue
     assert.strictEqual(i18n.t("fr", "ping.reponse", { ping: 42 }), "Ping : `42 ms`")
