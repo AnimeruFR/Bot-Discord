@@ -36,6 +36,7 @@
 - Lot G : intent privilégié **Server Members** accepté (bienvenue, vérification des participants de giveaway) : à cocher dans le Developer Portal. Rôles à boutons interdits pour tout rôle ayant une permission de modération, revérifié à chaque clic. Annonces : droits de l'auteur revérifiés à l'envoi, aucune mention active, envoyées « au plus une fois ». Giveaway : fin et gagnants écrits en une seule fois (jamais deux tirages), résultat republié après un crash.
 - Lot H : langue = celle imposée par le serveur (/config), sinon celle du client du membre (messages publics : langue du serveur). Noms de commandes non traduits (descriptions seulement). `/config` réutilise les validations des commandes (`Fonctions/config.js`) : jamais plus de droits que `/setlogs` et `/setticket`. Traduction progressive des messages (clés dans `locales/*.json`, test de cohérence fr/en).
 - H bis : messages publics et MP dans la langue du serveur, réponses dans celle du membre ; logs du salon de logs, raisons d'audit et transcripts restent en français ; textes écrits par les admins jamais traduits. Un fichier de traduction par domaine (moderation, tickets, engagement, dates, croissance) : une clé en double fait échouer le démarrage et les tests.
+- Leçon : le `.gitignore` et le `.dockerignore` n'excluent `config.js` qu'à la racine ; `scripts/check.js` échoue si un fichier de code est ignoré, et la CI charge toutes les commandes dans l'image Docker.
 - Lot I : liens du `.env` (`SUPPORT_URL`, `PRIVACY_URL`, `TERMS_URL`) acceptés seulement en https. Lien d'invitation avec `integration_type=0` (installation sur un serveur).
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
@@ -47,4 +48,4 @@
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Lots F (`62768d5`), G (`987e99a`), H (`a76bdfa`) commités, non poussés. H bis + I commités sur `lot-hbis-i/traductions-croissance`. À faire : pousser, PR dans l'ordre F, G, H, H bis + I. Côté Animeru : Server Members Intent, token, serveur de support, pages légales en ligne. Ensuite : lot J (monétisation, à revérifier dans la doc Discord) puis K (dashboard).
+Lots F (PR #9) et G (PR #10) fusionnés. Lot H, H bis et I : une seule PR depuis `lot-hbis-i/traductions-croissance` (le lot H seul était cassé : `Commandes/config.js` et `Fonctions/config.js` ignorés par une règle trop large du .gitignore, corrigé + test + étape de CI). Branche `lot-h/config-langues` à supprimer après la fusion. Ensuite : lot J (monétisation) puis K (dashboard).

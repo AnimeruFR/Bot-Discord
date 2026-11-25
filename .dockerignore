@@ -3,7 +3,7 @@
 .env.*
 data/
 backups/
-**/config.js
+config.js
 **/*.db
 **/*.db-*
 **/*.db.tmp

@@ -438,7 +438,24 @@ const { appliquerSeuil, marqueurTempban } = require('../Fonctions/sanctions')
     await testsLotG()
     await testsLotH()
     testsLotI()
+    testsFichiersSuivis()
 })()
+
+// 18. Aucun fichier de code ignoré par git (un .gitignore trop large a déjà fait oublier Commandes/config.js)
+function testsFichiersSuivis() {
+    const dossiers = ["Commandes", "Fonctions", "Events", "Loader", "scripts", "locales"]
+    const fichiers = dossiers.flatMap(d => fs.readdirSync(path.join(__dirname, "..", d), { recursive: true })
+        .filter(f => /\.(js|json)$/.test(f)).map(f => path.join(d, f)))
+    let ignores = ""
+    try {
+        ignores = execFileSync("git", ["check-ignore", "--no-index", ...fichiers], { cwd: path.join(__dirname, ".."), encoding: "utf8" })
+    } catch (err) {
+        // code 1 : aucun fichier ignoré (cas normal) ; git absent : test sauté
+        if (err.status !== 1) return console.log("(git indisponible : vérification des fichiers ignorés sautée)")
+    }
+    assert.strictEqual(ignores.trim(), "", `fichiers de code ignorés par git : ${ignores.trim()}`)
+    console.log("OK : aucun fichier de code ignoré par git")
+}
 
 // 17. Lot I : invitation et liens
 function testsLotI() {
