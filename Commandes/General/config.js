@@ -1,17 +1,21 @@
 const Discord = require('discord.js')
 const db = require('../../Fonctions/db')
 const { exigerPremium } = require('../../Fonctions/premium')
-const { sendModLog } = require('../../Fonctions/logs')
+const { sendModLog, FAMILLES, SANS_REPLI, salonsFamilles } = require('../../Fonctions/logs')
+const { getFiltreComptes } = require('../../Fonctions/antiraid')
 const { t, langueDe } = require('../../Fonctions/i18n')
 const { couleur, lireCouleur, formatCouleur } = require('../../Fonctions/apparence')
-const { peutConfigurerTickets, peutConfigurerStaff, changerSalonLogs, refusCategorie, refusRoleStaff } = require('../../Fonctions/config')
+const { peutConfigurerTickets, changerSalonLogs, changerSalonFamille, refusCategorie, refusRoleStaff, refusRoleFiltre, changerRoleStaff, changerModules, changerSalonsJeux, changerFiltreComptes, AGES_FILTRE } = require('../../Fonctions/config')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DUREE_SESSION = 5 * 60 * 1000
 const { INACTIVITES, LANGUES } = require('../../Fonctions/constantes')
 const { modulesConnus, nomModule } = require('../../Fonctions/modules')
-const SECTIONS = ["resume", "general", "modules", "staff", "logs", "tickets", "panneau"]
+const SECTIONS = ["resume", "general", "modules", "staff", "logs", "filtre", "tickets", "panneau"]
+
+// Réglage de départ du filtre (rien n'est appliqué tant qu'on n'a pas activé le filtre)
+const BROUILLON_FILTRE = { minAgeJours: 7, action: "role", roleId: null }
 
 // Une seule fenêtre /config par membre et par serveur : ouvrir la 2e ferme la 1re (pas d'état périmé)
 const sessions = new Map()
@@ -20,7 +24,8 @@ const row = (...composants) => new Discord.ActionRowBuilder().addComponents(...c
 const bouton = (id, texte, style = Discord.ButtonStyle.Secondary) => new Discord.ButtonBuilder().setCustomId(id).setLabel(texte).setStyle(style)
 
 // Message de /config pour une section, construit à partir de la base (toujours relue : jamais de valeur périmée)
-function vue(i, section) {
+// etat : famille de logs en cours de réglage ("general" ou une famille) et brouillon du filtre des comptes récents
+function vue(i, section, etat = {}) {
     const guild = i.guild
     const L = langueDe(i)
     const app = db.getApparence(guild.id)
@@ -64,13 +69,54 @@ function vue(i, section) {
         lignes.push(row(choix))
         if (actuel) lignes.push(row(bouton("cfg-role-staff-off", t(L, "config.bouton_retirer_staff"), Discord.ButtonStyle.Danger)))
     } else if (section === "logs") {
-        const actuel = db.getLogChannel(guild.id)
-        embed.setDescription(t(L, "config.logs_actuel", { salon: actuel ? `<#${actuel}>` : t(L, "config.aucun") }))
+        const general = db.getLogChannel(guild.id)
+        const parFamille = salonsFamilles(guild.id)
+        const cible = FAMILLES.includes(etat.famille) ? etat.famille : "general"
+        const lignesFamilles = FAMILLES.map(f => t(L, "config.logs_famille_ligne", {
+            famille: t(L, `config.famille_${f}`),
+            salon: parFamille[f] ? `<#${parFamille[f]}>` : t(L, SANS_REPLI.includes(f) ? "config.logs_famille_sans" : "config.logs_famille_suit")
+        }))
+        embed.setDescription([
+            t(L, "config.logs_general_actuel", { salon: general ? `<#${general}>` : t(L, "config.aucun") }),
+            ...lignesFamilles, "",
+            t(L, "config.logs_cible", { cible: cible === "general" ? t(L, "config.logs_cible_general") : t(L, `config.famille_${cible}`) }),
+            `-# ${t(L, "config.logs_note")}`
+        ].join("\n"))
+        lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-logs-famille").setPlaceholder(t(L, "config.choisir_famille_logs"))
+            .addOptions([{ label: t(L, "config.logs_option_general"), value: "general", default: cible === "general" },
+                ...FAMILLES.map(f => ({ label: t(L, `config.famille_${f}`), value: f, default: cible === f }))])))
+        const actuel = cible === "general" ? general : parFamille[cible]
         const choix = new Discord.ChannelSelectMenuBuilder().setCustomId("cfg-logs").setPlaceholder(t(L, "config.logs_choisir"))
             .setChannelTypes(Discord.ChannelType.GuildText)
         if (actuel && guild.channels.cache.has(actuel)) choix.setDefaultChannels(actuel)
         lignes.push(row(choix))
-        if (actuel) lignes.push(row(bouton("cfg-logs-off", t(L, "config.bouton_desactiver_logs"), Discord.ButtonStyle.Danger)))
+        if (actuel) lignes.push(row(bouton("cfg-logs-off", t(L, cible === "general" ? "config.bouton_desactiver_logs" : "config.bouton_retirer_famille"), Discord.ButtonStyle.Danger)))
+    } else if (section === "filtre") {
+        const reel = getFiltreComptes(guild.id)
+        const b = etat.brouillon ?? reel ?? BROUILLON_FILTRE
+        const decrire = r => t(L, r.action === "role" ? "config.filtre_action_role" : "config.filtre_action_kick", { role: r.roleId ? `<@&${r.roleId}>` : t(L, "config.aucun") })
+        const texte = [reel
+            ? t(L, "config.filtre_actif", { jours: reel.minAgeJours, action: decrire(reel) })
+            : t(L, "config.filtre_inactif")]
+        // Le brouillon n'est montré que s'il diffère de ce qui est enregistré
+        if (!reel || reel.minAgeJours !== b.minAgeJours || reel.action !== b.action || reel.roleId !== (b.action === "role" ? b.roleId : null)) {
+            texte.push(t(L, "config.filtre_brouillon", { jours: b.minAgeJours, action: decrire(b) }))
+            if (b.action === "role" && !b.roleId) texte.push(t(L, "config.filtre_attente_role"))
+        }
+        embed.setDescription([...texte, "", `-# ${t(L, "config.filtre_note")}`].join("\n"))
+        const ages = AGES_FILTRE.includes(b.minAgeJours) ? AGES_FILTRE : [...AGES_FILTRE, b.minAgeJours].sort((x, y) => x - y)
+        lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-filtre-age").setPlaceholder(t(L, "config.choisir_age_filtre"))
+            .addOptions(ages.map(j => ({ label: t(L, "config.filtre_age_option", { jours: j }), value: String(j), default: j === b.minAgeJours })))))
+        lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-filtre-action").setPlaceholder(t(L, "config.choisir_action_filtre"))
+            .addOptions(["role", "kick"].map(a => ({ label: t(L, `config.filtre_option_${a}`), value: a, default: a === b.action })))))
+        if (b.action === "role") {
+            const choixRole = new Discord.RoleSelectMenuBuilder().setCustomId("cfg-filtre-role").setPlaceholder(t(L, "config.choisir_role_filtre"))
+            if (b.roleId && guild.roles.cache.has(b.roleId)) choixRole.setDefaultRoles(b.roleId)
+            lignes.push(row(choixRole))
+        }
+        lignes.push(row(reel
+            ? bouton("cfg-filtre-off", t(L, "config.bouton_filtre_off"), Discord.ButtonStyle.Danger)
+            : bouton("cfg-filtre-on", t(L, "config.bouton_filtre_on"), Discord.ButtonStyle.Success)))
     } else if (section === "tickets") {
         const { categoryId, staffRoleId } = db.getTicketConfig(guild.id)
         const jours = db.getTicketInactivity(guild.id)
@@ -137,6 +183,9 @@ module.exports = {
         const reponse = await message.reply({ ...vue(message, "resume"), flags: EPHEMERAL, withResponse: true })
         const fenetre = reponse.resource.message
         let section = "resume"
+        let familleLogs = "general"
+        let brouillon = { ...(getFiltreComptes(message.guild.id) ?? BROUILLON_FILTRE) }
+        const voir = x => vue(x, section, { famille: familleLogs, brouillon })
 
         // Seul l'auteur, seulement sur CE message
         const collecteur = fenetre.createMessageComponentCollector({
@@ -165,16 +214,24 @@ module.exports = {
 
         // Choix refusé : le menu revient à la valeur réellement enregistrée, puis le motif est affiché
         const refuser = async (i, motif) => {
-            await i.update({ ...vue(i, section), content: "" })
+            await i.update({ ...voir(i), content: "" })
             return i.followUp({ content: motif, flags: EPHEMERAL })
         }
 
         // Applique un changement puis réaffiche la section (réponse au clic d'abord, log ensuite : délai de 3 s)
         const afficher = async (i, note) => {
-            const contenu = vue(i, section)
+            const contenu = voir(i)
             if (note) contenu.content = note
             else contenu.content = ""
             await i.update(contenu)
+        }
+
+        // Applique un changement partagé avec les commandes : réponse au clic d'abord (les logs prennent du temps), refus en éphémère
+        const appliquer = async (i, action) => {
+            await i.deferUpdate()
+            const resultat = await action()
+            await i.editReply({ ...voir(i), content: resultat.erreur || resultat.inchange ? "" : t(i, "config.enregistre") })
+            if (resultat.erreur) await i.followUp({ content: resultat.erreur, flags: EPHEMERAL })
         }
 
         async function traiter(i) {
@@ -189,6 +246,7 @@ module.exports = {
             switch (i.customId) {
                 case "cfg-section":
                     section = SECTIONS.includes(i.values[0]) ? i.values[0] : "resume"
+                    if (section === "filtre") brouillon = { ...(getFiltreComptes(guild.id) ?? brouillon) }
                     return afficher(i)
 
                 case "cfg-langue": {
@@ -208,7 +266,7 @@ module.exports = {
                     const valeur = lireCouleur(m.fields.getTextInputValue("couleur"))
                     if (valeur === null) return m.reply({ content: t(m, "config.couleur_invalide"), flags: EPHEMERAL })
                     db.setCouleur(guild.id, valeur)
-                    await m.update({ ...vue(m, section), content: t(m, "config.enregistre") })
+                    await m.update({ ...voir(m), content: t(m, "config.enregistre") })
                     return sendModLog(m, { action: "config", details: `Couleur des embeds : ${formatCouleur(valeur)}` })
                 }
                 case "cfg-couleur-defaut":
@@ -219,52 +277,55 @@ module.exports = {
                 case "cfg-modules":
                 case "cfg-salons-jeux":
                 case "cfg-salons-jeux-tous": {
-                    // « Admin uniquement » : couper un module change ce que tout le serveur peut faire
-                    if (i.user.id !== guild.ownerId && !i.memberPermissions.has(Flags.Administrator)) {
-                        return i.reply({ content: t(i, "config.modules_permission"), flags: EPHEMERAL })
-                    }
-                    let details
-                    if (i.customId === "cfg-modules") {
-                        const connus = modulesConnus(i.client.commands?.values() ?? [])
-                        const actifs = new Set(i.values.filter(v => connus.includes(v)))
-                        const avant = db.getModules(guild.id)
-                        const changes = connus.filter(m => (avant[m] !== false) !== actifs.has(m))
-                        if (!changes.length) return afficher(i)
-                        db.transaction(() => { for (const m of changes) db.setModule(guild.id, m, actifs.has(m)) })
-                        details = `Modules : ${changes.map(m => `${m} ${actifs.has(m) ? "activé" : "désactivé"}`).join(", ")}`
-                    } else {
-                        const salons = i.customId === "cfg-salons-jeux" ? i.values.filter(id => guild.channels.cache.get(id)?.type === Discord.ChannelType.GuildText) : []
-                        db.setSalonsJeux(guild.id, salons)
-                        details = `Salons de jeux : ${salons.length ? salons.map(id => `<#${id}>`).join(", ") : "tous"}`
-                    }
-                    await afficher(i, t(i, "config.enregistre"))
-                    return sendModLog(i, { action: "config", details })
+                    // « Admin uniquement » : couper un module change ce que tout le serveur peut faire (vérifié dans changerModules)
+                    const connus = modulesConnus(i.client.commands?.values() ?? [])
+                    return appliquer(i, () => {
+                        if (i.customId === "cfg-modules") return changerModules(i, connus, i.values)
+                        return changerSalonsJeux(i, i.customId === "cfg-salons-jeux" ? i.values : [])
+                    })
                 }
 
                 case "cfg-role-staff":
                 case "cfg-role-staff-off": {
-                    // Donner le rôle staff délègue des droits de modération : il faut les avoir soi-même
-                    if (!peutConfigurerStaff(i)) return i.reply({ content: t(i, "config.staff_permission"), flags: EPHEMERAL })
-                    let role = null
-                    if (i.customId === "cfg-role-staff") {
-                        role = guild.roles.cache.get(i.values[0])
-                        const refus = role ? refusRoleStaff(i, role) : t(i, "tk.role_introuvable")
-                        if (refus) return refuser(i, refus)
-                    }
-                    db.setStaffRole(guild.id, role?.id ?? null)
-                    await afficher(i, t(i, "config.enregistre"))
-                    return sendModLog(i, { action: "config", details: `Rôle staff du serveur : ${role ?? "aucun"}` })
+                    // Donner le rôle staff délègue des droits de modération : il faut les avoir soi-même (vérifié dans changerRoleStaff)
+                    const role = i.customId === "cfg-role-staff" ? guild.roles.cache.get(i.values[0]) : null
+                    if (i.customId === "cfg-role-staff" && !role) return refuser(i, t(i, "tk.role_introuvable"))
+                    return appliquer(i, () => changerRoleStaff(i, role))
                 }
+
+                case "cfg-logs-famille":
+                    familleLogs = i.values[0] === "general" || FAMILLES.includes(i.values[0]) ? i.values[0] : "general"
+                    return afficher(i)
 
                 case "cfg-logs":
                 case "cfg-logs-off": {
                     const salon = i.customId === "cfg-logs" ? guild.channels.cache.get(i.values[0]) : null
                     if (i.customId === "cfg-logs" && !salon) return refuser(i, t(i, "tk.salon_introuvable"))
-                    // Validation et double traçage partagés avec /setlogs (réponse au clic d'abord : les logs prennent du temps)
-                    await i.deferUpdate()
-                    const resultat = await changerSalonLogs(i, salon)
-                    const note = resultat.erreur ?? (resultat.inchange ? "" : t(i, "config.enregistre"))
-                    return i.editReply({ ...vue(i, section), content: note })
+                    // Validation et double traçage partagés avec /setlogs
+                    return appliquer(i, () => familleLogs === "general" ? changerSalonLogs(i, salon) : changerSalonFamille(i, familleLogs, salon))
+                }
+
+                case "cfg-filtre-age":
+                case "cfg-filtre-action":
+                case "cfg-filtre-role":
+                case "cfg-filtre-on":
+                case "cfg-filtre-off": {
+                    if (i.customId === "cfg-filtre-role") {
+                        const role = guild.roles.cache.get(i.values[0])
+                        const refus = role ? refusRoleFiltre(i, role) : t(i, "tk.role_introuvable")
+                        if (refus) return refuser(i, refus)
+                    }
+                    if (i.customId === "cfg-filtre-age") brouillon.minAgeJours = Number(i.values[0])
+                    else if (i.customId === "cfg-filtre-action") brouillon.action = i.values[0] === "kick" ? "kick" : "role"
+                    else if (i.customId === "cfg-filtre-role") brouillon.roleId = i.values[0]
+                    const actif = Boolean(getFiltreComptes(guild.id))
+                    // Filtre déjà actif : chaque changement s'applique tout de suite, sauf un rôle encore manquant (le brouillon attend)
+                    return appliquer(i, async () => {
+                        if (i.customId === "cfg-filtre-off") return changerFiltreComptes(i, null)
+                        if (!actif && i.customId !== "cfg-filtre-on") return { inchange: true }
+                        if (actif && brouillon.action === "role" && !brouillon.roleId) return { inchange: true }
+                        return changerFiltreComptes(i, brouillon)
+                    })
                 }
 
                 case "cfg-categorie":
@@ -311,7 +372,7 @@ module.exports = {
                     const titre = m.fields.getTextInputValue("titre").trim()
                     const texte = m.fields.getTextInputValue("texte").trim()
                     db.setPanneauTicket(guild.id, titre, texte)
-                    await m.update({ ...vue(m, section), content: t(m, "config.enregistre") })
+                    await m.update({ ...voir(m), content: t(m, "config.enregistre") })
                     // Texte tronqué dans le log (limite d'un champ d'embed)
                     return sendModLog(m, { action: "config", details: `Panneau de tickets : « ${titre || "titre par défaut"} » – ${(texte || "texte par défaut").slice(0, 300)}` })
                 }
