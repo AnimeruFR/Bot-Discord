@@ -369,7 +369,7 @@ async function closeTicket(bot, interaction) {
 }
 
 async function supprimerTicket(bot, interaction, channel, ownerId) {
-    const logs = getLogChannel(interaction.guild)
+    const logs = getLogChannel(interaction.guild, "tickets")
     const peutJoindre = logs?.permissionsFor(interaction.guild.members.me)?.has(Flags.AttachFiles)
     const contenu = await messageContentActive(bot)
     let avertissement = !logs

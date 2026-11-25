@@ -88,7 +88,30 @@ const REGISTRE = {
     announcements: {
         serveur: "guild_id",
         colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "L'annonce doit être publiée, l'auteur n'est plus identifié" } }
-    }
+    },
+    // Phase 1
+    log_channels: { serveur: "guild_id", aucune: "Salons de logs du serveur (#24), aucune donnée de membre" },
+    // Note du staff (#8) : même logique que l'historique des sanctions, jamais montrée au membre concerné.
+    staff_notes: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Intérêt légitime de modération (contexte du staff, purgé avec l'historique)", duree: "2 ans" },
+            author_id: { traitement: "anonymiser", auteur: true, motif: "La note reste utile au staff, son auteur n'est plus identifié" }
+        }
+    },
+    mod_reasons: { serveur: "guild_id", aucune: "Raisons de sanction prédéfinies (#10), aucune donnée de membre" },
+    // Trace des modifications d'une sanction (#12) : elle suit la sanction (purgée avec elle).
+    case_edits: {
+        serveur: "guild_id",
+        colonnes: { editor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié" } }
+    },
+    // Réponse prédéfinie (#20) : texte du serveur, l'auteur n'est plus identifié.
+    ticket_macros: {
+        serveur: "guild_id",
+        colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "La réponse sert au staff du serveur, son auteur n'est plus identifié" } }
+    },
+    account_filter: { serveur: "guild_id", aucune: "Réglage du filtre des comptes récents (#3), aucune donnée de membre" },
+    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" }
 }
 
 const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]

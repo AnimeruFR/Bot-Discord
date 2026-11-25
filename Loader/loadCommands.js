@@ -38,13 +38,22 @@ function listerCommandes(racine = RACINE) {
     return fichiers
 }
 
+// Discord limite à 5 les menus contextuels de chaque type (clic droit sur un membre, sur un message)
+const MAX_MENUS_PAR_TYPE = 5
+
 module.exports = (bot, { silencieux = false } = {}) => {
+    const menus = { user: 0, message: 0 }
     for (const { fichier, module, sousModule } of listerCommandes()) {
         const nomFichier = path.relative(RACINE, fichier)
         const command = require(fichier)
         if (!command.name || typeof command.name !== 'string') throw new TypeError(`La commande ${nomFichier} n'a pas de nom valide !`)
         if (typeof command.run !== 'function') throw new TypeError(`La commande ${nomFichier} n'a pas de fonction run !`)
         if (bot.commands.has(command.name)) throw new Error(`Deux commandes s'appellent « ${command.name} » (${nomFichier})`)
+        if (command.type !== undefined) {
+            if (!(command.type in menus)) throw new TypeError(`${nomFichier} : type de menu contextuel inconnu (user ou message)`)
+            if (command.options?.length || command.dm) throw new TypeError(`${nomFichier} : un menu contextuel n'a ni option ni accès en MP`)
+            if (++menus[command.type] > MAX_MENUS_PAR_TYPE) throw new Error(`Plus de ${MAX_MENUS_PAR_TYPE} menus contextuels de type ${command.type} (${nomFichier})`)
+        }
         command.module = module
         command.sousModule = sousModule
         verifierDeclaration(command)

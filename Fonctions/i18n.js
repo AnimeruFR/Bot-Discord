@@ -21,7 +21,22 @@ function charger(langue) {
     return tout
 }
 const textes = Object.fromEntries(LANGUES.map(l => [l, charger(l)]))
-const commandesEn = JSON.parse(fs.readFileSync(path.join(dossier, 'commandes.en.json'), 'utf8'))
+// Traductions anglaises des commandes : locales/commandes.en.json + un fichier par domaine dans locales/commandes.en/
+// (une commande traduite deux fois est une erreur)
+function chargerCommandesEn() {
+    const tout = JSON.parse(fs.readFileSync(path.join(dossier, 'commandes.en.json'), 'utf8'))
+    const sousDossier = path.join(dossier, 'commandes.en')
+    if (fs.existsSync(sousDossier)) {
+        for (const f of fs.readdirSync(sousDossier).filter(f => f.endsWith('.json')).sort()) {
+            for (const [nom, def] of Object.entries(JSON.parse(fs.readFileSync(path.join(sousDossier, f), 'utf8')))) {
+                if (nom in tout) throw new Error(`Traduction de commande en double : ${nom} (${f})`)
+                tout[nom] = def
+            }
+        }
+    }
+    return tout
+}
+const commandesEn = chargerCommandesEn()
 const manquantes = new Set() // clés introuvables déjà signalées (un seul avertissement par clé)
 
 // Langue à utiliser. cible : une interaction (réponse à un membre) ou un serveur (message public).
