@@ -105,7 +105,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
 - Page top.gg, serveur de support, README « vitrine », lien d'invitation avec les permissions minimales.
 - La **vérification** du bot se demande dans le Developer Portal quand il approche des 75 à 100 serveurs (obligatoire à 100 serveurs).
 
-### Lot J – Monétisation (idée 22)
+### Lot J – Monétisation (idée 22) ✅ fait côté code (`/premium`, entitlements, `docs/monetisation.md`) ; activation dans le Developer Portal à faire
 - **Prérequis Discord** (à revérifier dans la documentation officielle avant de commencer) :
   - application vérifiée et rattachée à une **équipe** dans le Developer Portal ;
   - liens vers les conditions d'utilisation et la politique de confidentialité ;

@@ -16,7 +16,8 @@
 | H – Configuration et langues | `/config` interactive, traductions FR/EN (commandes + messages principaux), couleur et texte du panneau personnalisables | ✅ Commité sur `lot-h/config-langues` (part du lot G) |
 | H bis – Traduction complète | toutes les réponses aux membres en FR/EN (473 clés, dictionnaires par domaine dans `locales/fr/` et `locales/en/`) ; logs et raisons d'audit restent en français | ✅ Commité sur `lot-hbis-i/traductions-croissance` (part du lot H) |
 | I – Croissance | `/invite` et `npm run invite` (permissions minimales, jamais Administrateur), `/about`, README vitrine, `docs/vitrine.md` (fiche top.gg FR/EN, serveur de support, vérification) | ✅ Commité sur la même branche |
-| J et K | Voir `ROADMAP.md` (monétisation, dashboard) | ⏳ À faire |
+| J – Monétisation | premium par serveur (Premium Apps de Discord) : `Fonctions/premium.js` (entitlements + cache), `/premium`, bouton d'achat natif, `npm run premium:test`, `docs/monetisation.md` | ✅ Commité sur `lot-j/monetisation` |
+| K | Tableau de bord web (voir `ROADMAP.md`) | ⏳ À faire |
 
 ## Décisions prises
 - Token et rôle staff dans `.env` (`process.loadEnvFile`), plus de `config.js`.
@@ -38,6 +39,7 @@
 - H bis : messages publics et MP dans la langue du serveur, réponses dans celle du membre ; logs du salon de logs, raisons d'audit et transcripts restent en français ; textes écrits par les admins jamais traduits. Un fichier de traduction par domaine (moderation, tickets, engagement, dates, croissance) : une clé en double fait échouer le démarrage et les tests.
 - Leçon : le `.gitignore` et le `.dockerignore` n'excluent `config.js` qu'à la racine ; `scripts/check.js` échoue si un fichier de code est ignoré, et la CI charge toutes les commandes dans l'image Docker.
 - Lot I : liens du `.env` (`SUPPORT_URL`, `PRIVACY_URL`, `TERMS_URL`) acceptés seulement en https. Lien d'invitation avec `integration_type=0` (installation sur un serveur).
+- Lot J : premium désactivé tant que `PREMIUM_SKU_ID` est vide (tout gratuit). Premium = confort seulement (créer/modifier des types de tickets, transcript HTML, `/stats`, couleur et texte du panneau) ; les types déjà créés, le transcript texte et toute la modération restent gratuits. Entitlements = source de vérité, cache 10 min vidé par les événements ; en cas de panne de Discord, dernière valeur connue. Le script de test ne supprime que les entitlements de test (type 4).
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
 ## À faire par Animeru
@@ -48,4 +50,4 @@
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Lots F (PR #9) et G (PR #10) fusionnés. Lot H, H bis et I : une seule PR depuis `lot-hbis-i/traductions-croissance` (le lot H seul était cassé : `Commandes/config.js` et `Fonctions/config.js` ignorés par une règle trop large du .gitignore, corrigé + test + étape de CI). Branche `lot-h/config-langues` à supprimer après la fusion. Ensuite : lot J (monétisation) puis K (dashboard).
+Lots A à I fusionnés dans `main` (PR #9, #10, #11). Lot J commité sur `lot-j/monetisation`, à pousser puis PR. Côté Animeru avant de vendre : app vérifiée et dans une équipe, propriétaire majeur, 2FA, pages légales en ligne, statut pour encaisser (voir `docs/monetisation.md`). Ensuite : lot K (tableau de bord web).

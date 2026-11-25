@@ -72,6 +72,10 @@ Règles :
   Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
 - **Apparence** : couleur des embeds (`#RRGGBB`) et titre/texte du panneau de tickets, à appliquer en repostant le panneau avec `/ticket`.
 
+## Premium (facultatif)
+
+Sans configuration, **tout est gratuit** (bot auto-hébergé). Pour vendre un abonnement par serveur avec les Premium Apps de Discord, renseigne `PREMIUM_SKU_ID` : la création de types de tickets, le transcript HTML, `/stats` et la personnalisation (couleur, texte du panneau) deviennent premium, avec le bouton d'achat natif de Discord. **La modération et la sécurité ne sont jamais payantes.** `/premium` affiche le statut du serveur ; `PREMIUM_GUILD_IDS` offre le premium à des serveurs ; `npm run premium:test -- --env=dev --guild ID` donne un premium de test sans payer. Conditions de Discord, mise en place et points légaux : [docs/monetisation.md](docs/monetisation.md).
+
 ## Animation
 
 - **Rôles à boutons** : `/roles action:Créer texte:Notifications` poste un panneau, puis `/roles action:Ajouter panneau:<ID> role:@Annonces texte:"🔔 Annonces"`. Les membres cliquent pour prendre ou retirer le rôle (`unique:True` : un seul rôle du panneau à la fois). Par sécurité, un rôle avec une permission de modération ou d'administration (Bannir, Gérer les messages, Administrateur…) ne peut **jamais** être distribué ainsi, et c'est revérifié à chaque clic.
@@ -153,5 +157,6 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
 | `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs, tickets, panneau |
 | `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
+| `/premium` | aucune | Statut premium du serveur, fonctions premium, bouton d'achat |
 | `/about` | aucune | Serveurs, version, durée en ligne, liens (support, confidentialité, conditions) |
 | `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |

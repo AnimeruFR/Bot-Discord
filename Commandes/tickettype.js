@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
+const { exigerPremium } = require('../Fonctions/premium')
 const { sendModLog } = require('../Fonctions/logs')
 const { t } = require('../Fonctions/i18n')
 const { roleValide, categorieUtilisable } = require('../Fonctions/tickets')
@@ -104,6 +105,8 @@ module.exports = {
                 return message.reply({ content: t(message, "tk.role_superieur"), flags: EPHEMERAL })
             }
         }
+
+        if (!await exigerPremium(message, "types")) return
 
         if (action === "ajouter") {
             if (!nom) return message.reply({ content: t(message, "tk.ty_nom_requis"), flags: EPHEMERAL })

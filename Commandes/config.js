@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
+const { exigerPremium } = require('../Fonctions/premium')
 const { sendModLog } = require('../Fonctions/logs')
 const { t, langueDe } = require('../Fonctions/i18n')
 const { couleur, lireCouleur, formatCouleur } = require('../Fonctions/apparence')
@@ -169,6 +170,7 @@ module.exports = {
                 }
 
                 case "cfg-couleur": {
+                    if (!await exigerPremium(i, "apparence")) return
                     const app = db.getApparence(guild.id)
                     const m = await demander(i, { titre: t(i, "config.modal_couleur"), champs: [{ id: "couleur", label: t(i, "config.modal_couleur_champ"), requis: true, max: 7, valeur: app.couleur === null ? "" : formatCouleur(app.couleur) }] })
                     if (!m) return
@@ -225,6 +227,7 @@ module.exports = {
                 }
 
                 case "cfg-panneau": {
+                    if (!await exigerPremium(i, "apparence")) return
                     const app = db.getApparence(guild.id)
                     const m = await demander(i, {
                         titre: t(i, "config.modal_panneau"),

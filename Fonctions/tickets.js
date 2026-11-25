@@ -4,6 +4,7 @@ const { t, langueDe } = require('./i18n')
 const db = require('./db')
 const { getLogChannel, sendModLog } = require('./logs')
 const { buildTranscript, sendAttachments, messageContentActive } = require('./transcript')
+const { estPremium } = require('./premium')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -429,8 +430,11 @@ async function supprimerTicket(bot, interaction, channel, ownerId) {
             const fichier = new Discord.AttachmentBuilder(Buffer.from(texte, "utf8"), { name: `transcript-${channel.name}.txt` })
             await logs.send({ embeds: [embed], files: [fichier] })
             // HTML dans un 2e message : chaque envoi reste sous la limite de taille de Discord
-            if (html) await logs.send({ files: [new Discord.AttachmentBuilder(Buffer.from(html, "utf8"), { name: `transcript-${channel.name}.html` })] })
-            else await logs.send(t(L, "tk.html_gros"))
+            // Version HTML : fonction premium (le transcript texte, qui sert de preuve, reste toujours envoyé)
+            if (await estPremium(bot, interaction.guild.id, interaction)) {
+                if (html) await logs.send({ files: [new Discord.AttachmentBuilder(Buffer.from(html, "utf8"), { name: `transcript-${channel.name}.html` })] })
+                else await logs.send(t(L, "tk.html_gros"))
+            }
 
             const ignorees = await sendAttachments(logs, pieces, channel.name)
             if (ignorees.length) await logs.send(t(L, "tk.pieces_ignorees", { nombre: ignorees.length }))

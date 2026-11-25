@@ -2,7 +2,7 @@
   "name": "bot-discord",
   "version": "1.3.0",
   "private": true,
-  "description": "Bot Discord de modération et de tickets",
+  "description": "Bot Discord de mod\u00e9ration et de tickets",
   "main": "main.js",
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning main.js",
@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "check": "node --disable-warning=ExperimentalWarning scripts/check.js",
     "test": "npm run lint && npm run check",
-    "invite": "node --disable-warning=ExperimentalWarning scripts/invite.js"
+    "invite": "node --disable-warning=ExperimentalWarning scripts/invite.js",
+    "premium:test": "node --disable-warning=ExperimentalWarning scripts/premium-test.js"
   },
   "engines": {
     "node": ">=22.13"
