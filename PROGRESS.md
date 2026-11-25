@@ -51,5 +51,11 @@
 4. Compléter les espaces réservés de `docs/conditions.md` et `docs/confidentialite.md` avant de les publier.
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
+## Plan v2 : bot tout-en-un (25/11/2026)
+- Branche `docs/plan-ameliorations` (non commitée) : `docs/PLAN-AMELIORATIONS.md` (100 idées notées, classement, phases 0 à 6, backlog), `docs/ECONOMIE.md` (sources, puits, gains par jour, anti-inflation, courbe d'XP), section 4 de `ROADMAP.md`.
+- Critique du plan (sonnet) : 3 bloquants corrigés (signalement rangé dans `General/` + garde staff sur les boutons, plus aucun bonus d'XP premium, mises seulement via le module Casino), plafonds de transfert toutes voies, registre RGPD effacer/anonymiser/conserver, dépendances et limites Discord corrigées.
+- Décisions du plan : modules `Commandes/Moderation/`, `Commandes/Communaute/<Sous-module>/`, `Commandes/General/` ; monnaie par serveur, sans valeur réelle ; tirages de cartes seulement en monnaie gagnée ou gratuits ; premium jamais en monnaie ni en tirage, +10 % d'XP max ; pas de banque à intérêts ; casino, RPG complet, bataille navale et confessions en backlog.
+- **État : en attente de validation par Animeru. Aucun code écrit.**
+
 ## Prochaine étape
-Lots A à J fusionnés dans `main`. Lot K (tableau de bord) codé sur `lot-k/dashboard`, tribunal passé, commité (à pousser puis PR). Toute la roadmap est alors couverte ; restent les points reportés ci-dessus et, côté Animeru, la mise en ligne (intent, token, pages légales, vérification, reverse proxy).
+Lots A à K fusionnés dans `main` (PR #13). Valider (ou modifier) `docs/PLAN-AMELIORATIONS.md`, puis commencer la phase 0, une idée par branche `feat/<n°>-<slug>`. Côté Animeru, la mise en ligne reste à faire (intent, token, pages légales, vérification, reverse proxy).
