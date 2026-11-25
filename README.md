@@ -72,6 +72,22 @@ Règles :
   Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
 - **Apparence** : couleur des embeds (`#RRGGBB`) et titre/texte du panneau de tickets, à appliquer en repostant le panneau avec `/ticket`.
 
+## Tableau de bord web (facultatif)
+
+Un site pour configurer le bot sans commande : langue, couleur, salon de logs, tickets (catégorie, rôle staff, inactivité), texte du panneau, bienvenue et au revoir. Connexion avec Discord ; seuls les membres qui ont « Gérer le serveur » voient un serveur, et il applique **exactement les mêmes règles** que les commandes (permissions des tickets, hiérarchie des rôles, premium). Il écrit dans la même base que le bot : un changement s'applique tout de suite.
+
+1. Developer Portal > *OAuth2* : copie le **Client Secret** dans `DISCORD_CLIENT_SECRET`, et ajoute `${DASHBOARD_URL}/callback` dans *Redirects* (ex. `http://localhost:3000/callback` en dev).
+2. Renseigne `DASHBOARD_URL` (origine exacte, sans `/` final) et lance `npm run dashboard:dev`, puis ouvre l'URL.
+3. En prod (Docker) : `docker compose up -d` lance aussi le service `dashboard`, qui n'écoute que sur `127.0.0.1:3000`. Mets un reverse proxy HTTPS devant, par exemple avec Caddy :
+   ```
+   bot.exemple.fr {
+       reverse_proxy 127.0.0.1:3000
+   }
+   ```
+   avec `DASHBOARD_URL=https://bot.exemple.fr` et `DASHBOARD_TRUST_PROXY=1` (déjà dans `.env.prod.example`).
+
+Sécurité : sessions côté serveur (cookie `__Host-` HttpOnly, Secure, SameSite), jeton CSRF + vérification de l'origine sur chaque envoi, droits revérifiés à chaque requête (pas d'accès au serveur d'un autre), aucun script dans les pages (CSP stricte), limite de débit par IP, aucune dépendance ajoutée. Les sessions sont en mémoire : un redémarrage du site déconnecte tout le monde.
+
 ## Premium (facultatif)
 
 Sans configuration, **tout est gratuit** (bot auto-hébergé). Pour vendre un abonnement par serveur avec les Premium Apps de Discord, renseigne `PREMIUM_SKU_ID` : la création de types de tickets, le transcript HTML, `/stats` et la personnalisation (couleur, texte du panneau) deviennent premium, avec le bouton d'achat natif de Discord. **La modération et la sécurité ne sont jamais payantes.** `/premium` affiche le statut du serveur ; `PREMIUM_GUILD_IDS` offre le premium à des serveurs ; `npm run premium:test -- --env=dev --guild ID` donne un premium de test sans payer. Conditions de Discord, mise en place et points légaux : [docs/monetisation.md](docs/monetisation.md).

@@ -16,7 +16,9 @@
     "check": "node --disable-warning=ExperimentalWarning scripts/check.js",
     "test": "npm run lint && npm run check",
     "invite": "node --disable-warning=ExperimentalWarning scripts/invite.js",
-    "premium:test": "node --disable-warning=ExperimentalWarning scripts/premium-test.js"
+    "premium:test": "node --disable-warning=ExperimentalWarning scripts/premium-test.js",
+    "dashboard": "node --disable-warning=ExperimentalWarning dashboard/index.js",
+    "dashboard:dev": "node --disable-warning=ExperimentalWarning dashboard/index.js --env=dev"
   },
   "engines": {
     "node": ">=22.13"

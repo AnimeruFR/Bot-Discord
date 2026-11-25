@@ -17,7 +17,7 @@
 | H bis – Traduction complète | toutes les réponses aux membres en FR/EN (473 clés, dictionnaires par domaine dans `locales/fr/` et `locales/en/`) ; logs et raisons d'audit restent en français | ✅ Commité sur `lot-hbis-i/traductions-croissance` (part du lot H) |
 | I – Croissance | `/invite` et `npm run invite` (permissions minimales, jamais Administrateur), `/about`, README vitrine, `docs/vitrine.md` (fiche top.gg FR/EN, serveur de support, vérification) | ✅ Commité sur la même branche |
 | J – Monétisation | premium par serveur (Premium Apps de Discord) : `Fonctions/premium.js` (entitlements + cache), `/premium`, bouton d'achat natif, `npm run premium:test`, `docs/monetisation.md` | ✅ Commité sur `lot-j/monetisation` |
-| K | Tableau de bord web (voir `ROADMAP.md`) | ⏳ À faire |
+| K – Tableau de bord web | `dashboard/` (node:http, OAuth2 Discord, sessions, CSRF, IDOR, mêmes règles que les commandes, CSP stricte), service Docker, tribunal de fin de jalon passé (jalon validé) | ✅ Commité sur `lot-k/dashboard` |
 
 ## Décisions prises
 - Token et rôle staff dans `.env` (`process.loadEnvFile`), plus de `config.js`.
@@ -40,6 +40,8 @@
 - Leçon : le `.gitignore` et le `.dockerignore` n'excluent `config.js` qu'à la racine ; `scripts/check.js` échoue si un fichier de code est ignoré, et la CI charge toutes les commandes dans l'image Docker.
 - Lot I : liens du `.env` (`SUPPORT_URL`, `PRIVACY_URL`, `TERMS_URL`) acceptés seulement en https. Lien d'invitation avec `integration_type=0` (installation sur un serveur).
 - Lot J : premium désactivé tant que `PREMIUM_SKU_ID` est vide (tout gratuit). Premium = confort seulement (créer/modifier des types de tickets, transcript HTML, `/stats`, couleur et texte du panneau) ; les types déjà créés, le transcript texte et toute la modération restent gratuits. Entitlements = source de vérité, cache 10 min vidé par les événements ; en cas de panne de Discord, dernière valeur connue. Le script de test ne supprime que les entitlements de test (type 4).
+- Lot K : site sans dépendance (`node:http`), pages rendues côté serveur sans JavaScript, même base que le bot (SQLite avec `timeout` 5 s, écritures du site en transaction). Contrats entre modules : `dashboard/CONTRATS.md`.
+- Reporté par le tribunal du lot K (à traiter plus tard) : sessions persistantes en base ; contrôle de version du formulaire (deux admins en même temps) ; modérateur en timeout ; relecture des droits au GET (5 min) ; sessions par utilisateur ; cache premium du site (10 min) ; regroupement IPv6 /64 ; avertissement « journal non envoyé » ; édition des seuils et types de tickets depuis le site ; env dédié au service dashboard, healthcheck HTTP ; découpage de `enregistrer`.
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
 ## À faire par Animeru
@@ -50,4 +52,4 @@
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Lots A à I fusionnés dans `main` (PR #9, #10, #11). Lot J commité sur `lot-j/monetisation`, à pousser puis PR. Côté Animeru avant de vendre : app vérifiée et dans une équipe, propriétaire majeur, 2FA, pages légales en ligne, statut pour encaisser (voir `docs/monetisation.md`). Ensuite : lot K (tableau de bord web).
+Lots A à J fusionnés dans `main`. Lot K (tableau de bord) codé sur `lot-k/dashboard`, tribunal passé, commité (à pousser puis PR). Toute la roadmap est alors couverte ; restent les points reportés ci-dessus et, côté Animeru, la mise en ligne (intent, token, pages légales, vérification, reverse proxy).

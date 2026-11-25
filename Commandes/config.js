@@ -9,7 +9,7 @@ const { peutConfigurerTickets, changerSalonLogs, refusCategorie, refusRoleStaff 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DUREE_SESSION = 5 * 60 * 1000
-const INACTIVITES = [0, 1, 2, 3, 7, 14, 30]
+const { INACTIVITES, LANGUES } = require('../Fonctions/constantes')
 const SECTIONS = ["resume", "general", "logs", "tickets", "panneau"]
 
 // Une seule fenêtre /config par membre et par serveur : ouvrir la 2e ferme la 1re (pas d'état périmé)
@@ -32,7 +32,7 @@ function vue(i, section) {
     if (section === "general") {
         embed.setDescription(`**${t(L, "config.langue")}** : ${t(L, `config.langue_${app.langue}`)}\n**${t(L, "config.couleur")}** : ${app.couleur === null ? t(L, "config.couleur_defaut") : formatCouleur(app.couleur)}`)
         lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-langue")
-            .addOptions(["auto", "fr", "en"].map(l => ({ label: t(L, `config.langue_${l}`), value: l, default: l === app.langue })))))
+            .addOptions(LANGUES.map(l => ({ label: t(L, `config.langue_${l}`), value: l, default: l === app.langue })))))
         lignes.push(row(bouton("cfg-couleur", t(L, "config.bouton_couleur"), Discord.ButtonStyle.Primary), bouton("cfg-couleur-defaut", t(L, "config.bouton_couleur_defaut"))))
     } else if (section === "logs") {
         const actuel = db.getLogChannel(guild.id)
@@ -163,7 +163,7 @@ module.exports = {
                     return afficher(i)
 
                 case "cfg-langue": {
-                    const langue = ["auto", "fr", "en"].includes(i.values[0]) ? i.values[0] : "auto"
+                    const langue = LANGUES.includes(i.values[0]) ? i.values[0] : "auto"
                     db.setLangue(guild.id, langue)
                     await afficher(i, t(i, "config.enregistre"))
                     return sendModLog(i, { action: "config", details: `Langue du bot : ${langue}` })

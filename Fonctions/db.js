@@ -11,7 +11,8 @@ loadEnv()
 const fichier = process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 'bot.db')
 if (fichier !== ':memory:') fs.mkdirSync(path.dirname(fichier), { recursive: true })
 
-const db = new DatabaseSync(fichier)
+// timeout : le bot et le tableau de bord écrivent dans la même base ; on attend jusqu'à 5 s qu'elle se libère
+const db = new DatabaseSync(fichier, { timeout: 5000 })
 // La table des sanctions est-elle nouvelle ? (dans ce cas on y reprend les warns existants, voir plus bas)
 const casesExistait = Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'cases'").get())
 db.exec(`
@@ -582,6 +583,19 @@ module.exports = {
     // channelId null : désactivé
     setWelcome: (guildId, type, channelId, message) =>
         (type === "aurevoir" ? requetes.setGoodbye : requetes.setWelcome).run(guildId, channelId, channelId ? message : null),
+
+    // Exécute fn() en une seule transaction : tout est écrit, ou rien (ROLLBACK puis erreur relancée)
+    transaction(fn) {
+        db.exec("BEGIN IMMEDIATE")
+        try {
+            const resultat = fn()
+            db.exec("COMMIT")
+            return resultat
+        } catch (err) {
+            db.exec("ROLLBACK")
+            throw err
+        }
+    },
 
     backupTo: destination => requetes.backup.run(destination),
     fichier,
