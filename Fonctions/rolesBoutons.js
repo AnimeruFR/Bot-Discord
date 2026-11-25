@@ -21,29 +21,32 @@ function salonDangereux(guild, role) {
 }
 
 // Le rôle peut-il être distribué par un bouton ? Renvoie un message d'erreur, ou null.
+// cible : langue du message d'erreur (interaction, serveur ou "fr" ; français par défaut).
 // Revérifié à CHAQUE clic : le rôle a pu gagner une permission ou monter depuis la création du panneau.
-function refusRole(guild, role, configurateur = null) {
-    if (!role) return "Ce rôle n'existe plus."
-    if (role.id === guild.id) return "@everyone ne peut pas être distribué."
-    if (role.managed) return "Ce rôle est géré par une intégration (bot, boost…)."
-    if (role.permissions.any(PERMS_DANGEREUSES)) return `Le rôle ${role} a des permissions de modération ou d'administration : il ne peut pas être distribué par un bouton.`
+function refusRole(guild, role, configurateur = null, cible = null) {
+    const l = cible ?? "fr"
+    if (!role) return t(l, "eng.refus.inexistant")
+    if (role.id === guild.id) return t(l, "eng.refus.everyone")
+    if (role.managed) return t(l, "eng.refus.gere")
+    if (role.permissions.any(PERMS_DANGEREUSES)) return t(l, "eng.refus.dangereux", { role })
     const salon = salonDangereux(guild, role)
-    if (salon) return `Le rôle ${role} a des permissions de modération dans ${salon} : il ne peut pas être distribué par un bouton.`
-    if (role.comparePositionTo(guild.members.me.roles.highest) >= 0) return `Le rôle ${role} est au-dessus de mon rôle le plus haut : je ne peux pas le donner.`
+    if (salon) return t(l, "eng.refus.dangereux_salon", { role, salon })
+    if (role.comparePositionTo(guild.members.me.roles.highest) >= 0) return t(l, "eng.refus.au_dessus", { role })
     if (configurateur && configurateur.id !== guild.ownerId && role.comparePositionTo(configurateur.roles.highest) >= 0) {
-        return "Vous ne pouvez proposer qu'un rôle inférieur à votre rôle le plus haut."
+        return t(l, "eng.refus.configurateur")
     }
     return null
 }
 
-// Contenu du message d'un panneau (titre échappé, un bouton par rôle)
-function contenuPanneau(panel, boutons) {
+// Contenu du message d'un panneau (titre échappé, un bouton par rôle). cible : le serveur (langue du message public)
+function contenuPanneau(panel, boutons, cible = null) {
+    const l = cible ?? "fr"
     const embed = new Discord.EmbedBuilder()
         .setColor(0x5865F2)
         .setTitle(panel.titre.slice(0, 256))
         .setDescription(boutons.length
-            ? `Clique sur un bouton pour prendre ou retirer le rôle.${panel.mode === "unique" ? "\nUn seul rôle de ce panneau à la fois." : ""}`
-            : "Aucun rôle pour l'instant. Un modérateur peut en ajouter avec `/roles action:Ajouter`.")
+            ? t(l, "eng.panneau.description") + (panel.mode === "unique" ? t(l, "eng.panneau.unique") : "")
+            : t(l, "eng.panneau.vide"))
     const lignes = []
     for (let i = 0; i < boutons.length; i += 5) {
         lignes.push(new Discord.ActionRowBuilder().addComponents(boutons.slice(i, i + 5).map(b =>
@@ -63,7 +66,7 @@ async function rafraichirPanneau(guild, panel) {
         db.removeRolePanel(guild.id, panel.message_id)
         return false
     }
-    await message.edit(contenuPanneau(panel, db.listRoleButtons(guild.id, panel.message_id)))
+    await message.edit(contenuPanneau(panel, db.listRoleButtons(guild.id, panel.message_id), guild))
     return true
 }
 

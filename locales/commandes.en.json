@@ -321,5 +321,15 @@
     "description": "Interactive bot settings (logs, tickets, language, appearance)",
     "options": {},
     "choix": {}
+  },
+  "invite": {
+    "description": "Link to add the bot to a server",
+    "options": {},
+    "choix": {}
+  },
+  "about": {
+    "description": "About the bot (servers, version, links)",
+    "options": {},
+    "choix": {}
   }
 }

@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const { formatReason, checkHierarchy, fetchMember } = require('../Fonctions/moderation')
 const { appliquerSeuil } = require('../Fonctions/sanctions')
 const { sendModLog } = require('../Fonctions/logs')
+const { t } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 
 module.exports = {
@@ -30,7 +31,7 @@ module.exports = {
         await message.deferReply()
         const user = args.getUser("membre")
         const member = await fetchMember(message.guild, user.id)
-        if (!member) return message.editReply("Ce membre n'est pas sur le serveur !")
+        if (!member) return message.editReply(t(message, "mod.absent"))
 
         const reason = formatReason(args.getString("raison"))
 
@@ -44,15 +45,15 @@ module.exports = {
         const id = db.addWarn(message.guild.id, user.id, message.user.id, raisonBrute)
         const total = db.countWarns(message.guild.id, user.id)
 
-        const prevenu = await user.send(`Tu as reçu un avertissement sur le serveur ${message.guild.name} pour la raison : ***${reason}***`)
+        const prevenu = await user.send(t(message.guild, "mod.warn.mp", { serveur: message.guild.name, reason }))
             .then(() => true)
             .catch(() => false)
 
-        await message.editReply(`${message.user} a warn ${user} pour la raison : ***${reason}*** (warn n°${id}, ${total} au total)${prevenu ? "" : "\n(Le membre n'a pas pu être prévenu en MP.)"}`)
+        await message.editReply(t(message, "mod.warn.reponse", { moderateur: message.user, user, reason, id, total }) + (prevenu ? "" : t(message, "mod.warn.pas_prevenu")))
         await sendModLog(message, { action: "warn", cible: user, raison: raisonBrute, details: `Warn n°${id}, ${total} au total` })
 
         // Sanction automatique configurée avec /sanctions (seuil atteint)
         const auto = await appliquerSeuil(message, user, total)
-        if (auto) await message.followUp(`Seuil de ${total} avertissements atteint pour ${user}. ${auto}`)
+        if (auto) await message.followUp(t(message, "mod.warn.seuil", { total, user, auto }))
     }
 }

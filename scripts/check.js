@@ -437,7 +437,31 @@ const { appliquerSeuil, marqueurTempban } = require('../Fonctions/sanctions')
     await testsLotF()
     await testsLotG()
     await testsLotH()
+    testsLotI()
 })()
+
+// 17. Lot I : invitation et liens
+function testsLotI() {
+    const { Flags } = Discord.PermissionsBitField
+    const { permissionsMinimales, lienInvitation, lienValide } = require('../Fonctions/invitation')
+    const perms = permissionsMinimales()
+    assert.ok(!perms.has(Flags.Administrator, false), "jamais Administrateur")
+    for (const utile of [Flags.ManageRoles, Flags.BanMembers, Flags.ModerateMembers, Flags.AttachFiles, Flags.SendPolls, Flags.ManageGuild]) assert.ok(perms.has(utile, false))
+    // /lock exige que le bot possède les droits qu'il retire à @everyone
+    const { DROITS_VERROU } = require('../Fonctions/verrou')
+    for (const droit of DROITS_VERROU) assert.ok(perms.has(Flags[droit], false), `${droit} demandé (nécessaire à /lock)`)
+    const lien = new URL(lienInvitation("123456789012345678"))
+    assert.strictEqual(lien.hostname, "discord.com")
+    assert.strictEqual(lien.searchParams.get("scope"), "bot applications.commands")
+    assert.strictEqual(lien.searchParams.get("permissions"), perms.bitfield.toString())
+    assert.throws(() => lienInvitation("abc&redirect_uri=https://piege.example"), /invalide/, "ID d'application vérifié")
+    assert.strictEqual(lienValide("https://discord.gg/abc"), "https://discord.gg/abc")
+    for (const faux of ["http://exemple.com", "javascript:alert(1)", "", null, "pas un lien", `https://exemple.com/${"a".repeat(600)}`]) assert.strictEqual(lienValide(faux), null, `lien ${String(faux).slice(0, 30)} refusé`)
+    const { dureeCourte } = require('../Commandes/about')
+    assert.strictEqual(dureeCourte(3 * 86400000 + 4 * 3600000), "3 j 4 h")
+    assert.strictEqual(dureeCourte(90 * 60000), "1 h 30 min")
+    console.log("OK : invitation (permissions minimales, liens sûrs)")
+}
 
 // 16. Lot H : langues, apparence, /config
 async function testsLotH() {

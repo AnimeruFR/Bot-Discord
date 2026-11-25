@@ -5,7 +5,8 @@ const { t } = require('../Fonctions/i18n')
 const { envoyer, salonUtilisable } = require('../Fonctions/bienvenue')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
-const NOMS = { bienvenue: "bienvenue", aurevoir: "au revoir" }
+// Nom du type de message dans la langue de la personne qui configure
+const nomType = (cible, type) => t(cible, `eng.bienvenue.nom_${type}`)
 // Messages par défaut dans la langue du serveur
 const DEFAUTS = { bienvenue: "bienvenue.defaut", aurevoir: "aurevoir.defaut" }
 
@@ -58,40 +59,40 @@ module.exports = {
 
         if (action === "voir") {
             const config = db.getWelcome(guild.id)
-            const ligne = t => config[t]
-                ? `**${NOMS[t]}** : <#${config[t].channelId}>${salonUtilisable(guild, config[t].channelId) ? "" : " ⚠️ (je ne peux pas y écrire)"}\n> ${Discord.escapeMarkdown(config[t].message).slice(0, 300)}`
-                : `**${NOMS[t]}** : désactivé`
+            const ligne = k => config[k]
+                ? t(message, "eng.bienvenue.ligne", {
+                    nom: nomType(message, k), salon: config[k].channelId,
+                    alerte: salonUtilisable(guild, config[k].channelId) ? "" : t(message, "eng.bienvenue.alerte"),
+                    texte: Discord.escapeMarkdown(config[k].message).slice(0, 300)
+                })
+                : t(message, "eng.bienvenue.ligne_desactive", { nom: nomType(message, k) })
             return message.reply({ content: `${ligne("bienvenue")}\n\n${ligne("aurevoir")}`, flags: EPHEMERAL })
         }
 
         if (action === "desactiver") {
             db.setWelcome(guild.id, type, null, null)
-            await message.reply({ content: `Messages de ${NOMS[type]} désactivés.`, flags: EPHEMERAL })
-            return sendModLog(message, { action: "config", details: `Messages de ${NOMS[type]} désactivés` })
+            await message.reply({ content: t(message, "eng.bienvenue.desactives", { nom: nomType(message, type) }), flags: EPHEMERAL })
+            return sendModLog(message, { action: "config", details: `Messages de ${t("fr", `eng.bienvenue.nom_${type}`)} désactivés` })
         }
 
         if (action === "tester") {
             const resultat = await envoyer(message.member, type, { test: true })
-            const textes = {
-                envoye: "Message de test envoyé.",
-                desactive: `Les messages de ${NOMS[type]} sont désactivés.`,
-                salon: "Je ne peux pas écrire dans le salon configuré.",
-                erreur: "L'envoi a échoué (voir la console du bot)."
-            }
-            return message.reply({ content: textes[resultat] ?? "Envoi impossible.", flags: EPHEMERAL })
+            const cles = { envoye: "test_envoye", desactive: "test_desactive", salon: "test_salon", erreur: "test_erreur" }
+            const contenu = t(message, `eng.bienvenue.${cles[resultat] ?? "test_autre"}`, { nom: nomType(message, type) })
+            return message.reply({ content: contenu, flags: EPHEMERAL })
         }
 
         // configurer
         const channel = args.getChannel("salon")
-        if (!channel) return message.reply({ content: "Précise le salon (option `salon`).", flags: EPHEMERAL })
-        if (!salonUtilisable(guild, channel.id)) return message.reply({ content: `Je ne peux pas écrire dans ${channel}.`, flags: EPHEMERAL })
+        if (!channel) return message.reply({ content: t(message, "eng.bienvenue.salon_manquant"), flags: EPHEMERAL })
+        if (!salonUtilisable(guild, channel.id)) return message.reply({ content: t(message, "eng.bienvenue.salon_bot", { salon: channel }), flags: EPHEMERAL })
         const texte = args.getString("message")?.trim() || t(guild, DEFAUTS[type])
         db.setWelcome(guild.id, type, channel.id, texte)
         await message.reply({
-            content: `Messages de ${NOMS[type]} envoyés dans ${channel}.\nAperçu : ${texte.slice(0, 300)}\n-# Seul le nouveau membre est mentionné ; @everyone et les rôles écrits dans le texte ne notifient personne. 10 messages par minute au maximum (anti-raid).`,
+            content: t(message, "eng.bienvenue.configure", { nom: nomType(message, type), salon: channel, texte: texte.slice(0, 300) }),
             flags: EPHEMERAL,
             allowedMentions: { parse: [] }
         })
-        await sendModLog(message, { action: "config", details: `Messages de ${NOMS[type]} configurés dans ${channel}` })
+        await sendModLog(message, { action: "config", details: `Messages de ${t("fr", `eng.bienvenue.nom_${type}`)} configurés dans ${channel}` })
     }
 }

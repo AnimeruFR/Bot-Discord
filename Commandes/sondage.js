@@ -1,5 +1,6 @@
 const Discord = require('discord.js')
 const { sendModLog } = require('../Fonctions/logs')
+const { t } = require('../Fonctions/i18n')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -11,11 +12,13 @@ const MAX_TEXTE_CHOIX = 55
 const MAX_HEURES = 768 // 32 jours
 
 // "Oui ; Non ; Peut-être" -> liste nettoyée (sans vides ni doublons). Renvoie { choix } ou { erreur }.
-function lireChoix(texte) {
+// cible : langue des erreurs (interaction, serveur ou "fr" ; français par défaut)
+function lireChoix(texte, cible = null) {
+    const l = cible ?? "fr"
     const choix = [...new Set(texte.split(";").map(c => c.trim()).filter(Boolean))]
-    if (choix.length < 2) return { erreur: "Il faut au moins 2 choix différents, séparés par `;`." }
-    if (choix.length > MAX_CHOIX) return { erreur: `${MAX_CHOIX} choix au maximum.` }
-    if (choix.some(c => c.length > MAX_TEXTE_CHOIX)) return { erreur: `Chaque choix fait ${MAX_TEXTE_CHOIX} caractères au maximum.` }
+    if (choix.length < 2) return { erreur: t(l, "eng.sondage.min_choix") }
+    if (choix.length > MAX_CHOIX) return { erreur: t(l, "eng.sondage.max_choix", { max: MAX_CHOIX }) }
+    if (choix.some(c => c.length > MAX_TEXTE_CHOIX)) return { erreur: t(l, "eng.sondage.choix_long", { max: MAX_TEXTE_CHOIX }) }
     return { choix }
 }
 
@@ -61,17 +64,17 @@ module.exports = {
     ],
 
     async run(bot, message, args) {
-        const { choix, erreur } = lireChoix(args.getString("choix"))
+        const { choix, erreur } = lireChoix(args.getString("choix"), message)
         if (erreur) return message.reply({ content: erreur, flags: EPHEMERAL })
         const question = args.getString("question").trim()
-        if (!question) return message.reply({ content: "La question ne peut pas être vide.", flags: EPHEMERAL })
+        if (!question) return message.reply({ content: t(message, "eng.sondage.question_vide"), flags: EPHEMERAL })
 
         const channel = args.getChannel("salon") ?? message.channel
         if (!channel.permissionsFor(message.guild.members.me)?.has([Flags.ViewChannel, Flags.SendMessages, Flags.SendPolls])) {
-            return message.reply({ content: `Je ne peux pas publier de sondage dans ${channel} (il me faut Envoyer des messages et Créer des sondages).`, flags: EPHEMERAL })
+            return message.reply({ content: t(message, "eng.sondage.salon_bot", { salon: channel }), flags: EPHEMERAL })
         }
         if (!channel.permissionsFor(message.member)?.has([Flags.ViewChannel, Flags.SendMessages, Flags.SendPolls])) {
-            return message.reply({ content: `Vous ne pouvez pas publier de sondage dans ${channel}.`, flags: EPHEMERAL })
+            return message.reply({ content: t(message, "eng.sondage.salon_membre", { salon: channel }), flags: EPHEMERAL })
         }
 
         await channel.send({
@@ -82,7 +85,7 @@ module.exports = {
                 allowMultiselect: args.getBoolean("multiple") ?? false
             }
         })
-        await message.reply({ content: `Sondage publié dans ${channel}.`, flags: EPHEMERAL })
+        await message.reply({ content: t(message, "eng.sondage.publie", { salon: channel }), flags: EPHEMERAL })
         await sendModLog(message, { action: "sondage", details: `Sondage publié dans ${channel} : ${question.slice(0, 200)}` })
     }
 }

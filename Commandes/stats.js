@@ -1,13 +1,14 @@
 const Discord = require('discord.js')
 const { couleur } = require('../Fonctions/apparence')
 const { formatDuree } = require('../Fonctions/moderation')
+const { t, langueDe } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 
 const JOUR = 24 * 60 * 60 * 1000
 
 // Statistiques calculées à partir des lignes de tickets (fonction pure, testée dans check.js)
-function calculerStats(tickets, types) {
-    const nomType = id => types.find(t => t.id === id)?.nom ?? "Sans type"
+function calculerStats(tickets, types, sansType = "Sans type") {
+    const nomType = id => types.find(t => t.id === id)?.nom ?? sansType
     const pris = tickets.filter(t => t.claimed_at)
     const notes = tickets.filter(t => t.rating)
     const parType = new Map()
@@ -37,23 +38,23 @@ module.exports = {
 
     async run(bot, message) {
         const guildId = message.guild.id
-        const s = calculerStats(db.ticketsSince(guildId, Date.now() - 30 * JOUR), db.listTicketTypes(guildId))
-        if (s.total === 0) return message.reply({ content: "Aucun ticket ouvert ces 30 derniers jours.", flags: Discord.MessageFlags.Ephemeral })
+        const s = calculerStats(db.ticketsSince(guildId, Date.now() - 30 * JOUR), db.listTicketTypes(guildId), t(message, "tk.sta_sans_type"))
+        if (s.total === 0) return message.reply({ content: t(message, "tk.sta_aucun"), flags: Discord.MessageFlags.Ephemeral })
 
         const embed = new Discord.EmbedBuilder()
             .setColor(couleur(message.guild))
-            .setTitle("Tickets – 30 derniers jours")
+            .setTitle(t(message, "tk.sta_titre"))
             .addFields(
-                { name: "Ouverts", value: String(s.total), inline: true },
-                { name: "En cours", value: String(s.enCours), inline: true },
-                { name: "Fermés", value: String(s.fermes), inline: true },
-                { name: "Prise en charge moyenne", value: s.delaiPriseEnCharge === null ? "—" : formatDuree(Math.max(1000, s.delaiPriseEnCharge)), inline: true },
-                { name: "Note moyenne", value: s.noteMoyenne === null ? "—" : `${s.noteMoyenne.toFixed(1)} / 5 (${s.nombreNotes} note(s))`, inline: true },
+                { name: t(message, "tk.sta_ouverts"), value: String(s.total), inline: true },
+                { name: t(message, "tk.sta_en_cours"), value: String(s.enCours), inline: true },
+                { name: t(message, "tk.sta_fermes"), value: String(s.fermes), inline: true },
+                { name: t(message, "tk.sta_prise"), value: s.delaiPriseEnCharge === null ? "—" : formatDuree(Math.max(1000, s.delaiPriseEnCharge), langueDe(message)), inline: true },
+                { name: t(message, "tk.sta_note"), value: s.noteMoyenne === null ? "—" : t(message, "tk.sta_notes", { note: s.noteMoyenne.toFixed(1), nombre: s.nombreNotes }), inline: true },
                 // Noms de types écrits par les admins : échappés pour ne pas casser la mise en forme
-                { name: "Par type", value: s.parType.map(([nom, n]) => `${Discord.escapeMarkdown(nom)} : ${n}`).join("\n").slice(0, 1024) },
-                { name: "Staff le plus actif", value: s.topStaff.length ? s.topStaff.map(([id, n], i) => `${i + 1}. <@${id}> : ${n}`).join("\n") : "Aucune prise en charge" }
+                { name: t(message, "tk.sta_par_type"), value: s.parType.map(([nom, n]) => `${Discord.escapeMarkdown(nom)} : ${n}`).join("\n").slice(0, 1024) },
+                { name: t(message, "tk.sta_top"), value: s.topStaff.length ? s.topStaff.map(([id, n], i) => `${i + 1}. <@${id}> : ${n}`).join("\n") : t(message, "tk.sta_aucune_prise") }
             )
-            .setFooter({ text: "Tickets suivis depuis la mise à jour du lot F" })
+            .setFooter({ text: t(message, "tk.sta_pied") })
 
         await message.reply({ embeds: [embed], flags: Discord.MessageFlags.Ephemeral })
     }

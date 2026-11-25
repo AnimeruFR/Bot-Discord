@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason, checkHierarchy, fetchMember } = require('../Fonctions/moderation')
 const { sendModLog } = require('../Fonctions/logs')
+const { t } = require('../Fonctions/i18n')
 const db = require('../Fonctions/db')
 
 module.exports = {
@@ -32,17 +33,17 @@ module.exports = {
         const reason = formatReason(raisonBrute)
 
         const member = await fetchMember(message.guild, user.id)
-        if (!member) return message.editReply("Ce membre n'est pas sur le serveur !")
+        if (!member) return message.editReply(t(message, "mod.absent"))
 
         const erreur = checkHierarchy(message, member, "unmute")
         if (erreur) return message.editReply(erreur)
-        if (!member.moderatable) return message.editReply("Je ne peux pas unmute ce membre (rôle trop haut pour moi) !")
-        if (!member.isCommunicationDisabled()) return message.editReply("Ce membre n'est pas mute !")
+        if (!member.moderatable) return message.editReply(t(message, "mod.unmute.pas_moderatable"))
+        if (!member.isCommunicationDisabled()) return message.editReply(t(message, "mod.unmute.pas_mute"))
 
         await member.timeout(null, auditReason(message, raisonBrute))
         db.addCase(message.guild.id, { userId: user.id, moderatorId: message.user.id, type: "unmute", reason: raisonBrute })
-        await message.editReply(`${message.user} a unmute ${user} pour la raison : ***${reason}***`)
+        await message.editReply(t(message, "mod.unmute.reponse", { moderateur: message.user, user, reason }))
         await sendModLog(message, { action: "unmute", cible: user, raison: raisonBrute })
-        await user.send(`Tu as été unmute sur le serveur ${message.guild.name} pour la raison : ***${reason}***`).catch(() => {})
+        await user.send(t(message.guild, "mod.unmute.mp", { serveur: message.guild.name, reason })).catch(() => {})
     }
 }

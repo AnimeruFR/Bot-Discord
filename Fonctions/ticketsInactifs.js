@@ -1,4 +1,5 @@
 const db = require('./db')
+const { t } = require('./i18n')
 const { sendModLog } = require('./logs')
 const { ticketOwnerId, fermerPourAuteur, retirerAccesAuteur, accesAuteurRetire } = require('./tickets')
 
@@ -61,7 +62,7 @@ async function traiterInactifs(bot, maintenant = Date.now()) {
                         db.setTicketWarned(channel.id, null) // quelqu'un a répondu : avertissement annulé
                     } else if (maintenant - ticket.warned_at >= DELAI_APRES_AVERTISSEMENT) {
                         await fermerPourAuteur(channel, ownerId, `Ticket inactif depuis plus de ${jours} jour(s)`)
-                        await channel.send("🔒 Ticket fermé automatiquement pour inactivité. Le staff peut maintenant le supprimer.").catch(() => {})
+                        await channel.send(t(guild, "tk.inactif_ferme")).catch(() => {})
                         await sendModLog({ guild, user: bot.user }, { action: "ticket", details: `Ticket ${channel} fermé pour inactivité (${jours} jour(s) sans message).` })
                         bilan.fermes++
                     }
@@ -69,7 +70,7 @@ async function traiterInactifs(bot, maintenant = Date.now()) {
                 }
 
                 if (maintenant - activite >= jours * JOUR) {
-                    const avertissement = await channel.send(`⏰ <@${ownerId}>, ce ticket est sans message depuis ${jours} jour(s). Sans réponse dans les 24 h, il sera fermé automatiquement.`)
+                    const avertissement = await channel.send(t(guild, "tk.inactif_avert", { auteur: `<@${ownerId}>`, jours }))
                     db.setTicketWarned(channel.id, maintenant, avertissement.id)
                     bilan.avertis++
                 }

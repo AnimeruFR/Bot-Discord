@@ -3,7 +3,24 @@ const path = require('path')
 
 const LANGUES = ["fr", "en"]
 const dossier = path.join(__dirname, '..', 'locales')
-const textes = Object.fromEntries(LANGUES.map(l => [l, JSON.parse(fs.readFileSync(path.join(dossier, `${l}.json`), 'utf8'))]))
+// Textes d'une langue : locales/<langue>.json + tous les fichiers de locales/<langue>/ (un par domaine).
+// Une même clé définie deux fois est une erreur (deux traductions qui se marcheraient dessus).
+function charger(langue) {
+    const fichiers = [path.join(dossier, `${langue}.json`)]
+    const sousDossier = path.join(dossier, langue)
+    if (fs.existsSync(sousDossier)) {
+        for (const f of fs.readdirSync(sousDossier).filter(f => f.endsWith('.json')).sort()) fichiers.push(path.join(sousDossier, f))
+    }
+    const tout = {}
+    for (const fichier of fichiers) {
+        for (const [cle, texte] of Object.entries(JSON.parse(fs.readFileSync(fichier, 'utf8')))) {
+            if (cle in tout) throw new Error(`Traduction en double : ${cle} (${path.basename(fichier)})`)
+            tout[cle] = texte
+        }
+    }
+    return tout
+}
+const textes = Object.fromEntries(LANGUES.map(l => [l, charger(l)]))
 const commandesEn = JSON.parse(fs.readFileSync(path.join(dossier, 'commandes.en.json'), 'utf8'))
 const manquantes = new Set() // clés introuvables déjà signalées (un seul avertissement par clé)
 

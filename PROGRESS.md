@@ -14,8 +14,9 @@
 | F – Tickets pro | types (`/tickettype`), formulaire, prise en charge, `/ticket ajouter/retirer`, fermeture des inactifs, transcript HTML, notes en MP, `/stats` | ✅ Commité sur `lot-f/tickets-pro` |
 | G – Engagement | rôles à boutons, giveaways, sondages natifs, annonces programmées, bienvenue/au revoir (intent Server Members) | ✅ Commité sur `lot-g/engagement` (part du lot F) |
 | H – Configuration et langues | `/config` interactive, traductions FR/EN (commandes + messages principaux), couleur et texte du panneau personnalisables | ✅ Commité sur `lot-h/config-langues` (part du lot G) |
-| H bis | Traduire les réponses restantes (commandes de modération, tickets côté staff, sanctions…) avec `t()` | ⏳ Progressif |
-| I à K | Voir `ROADMAP.md` (croissance, monétisation, dashboard) | ⏳ À faire, dans l'ordre |
+| H bis – Traduction complète | toutes les réponses aux membres en FR/EN (473 clés, dictionnaires par domaine dans `locales/fr/` et `locales/en/`) ; logs et raisons d'audit restent en français | ✅ Commité sur `lot-hbis-i/traductions-croissance` (part du lot H) |
+| I – Croissance | `/invite` et `npm run invite` (permissions minimales, jamais Administrateur), `/about`, README vitrine, `docs/vitrine.md` (fiche top.gg FR/EN, serveur de support, vérification) | ✅ Commité sur la même branche |
+| J et K | Voir `ROADMAP.md` (monétisation, dashboard) | ⏳ À faire |
 
 ## Décisions prises
 - Token et rôle staff dans `.env` (`process.loadEnvFile`), plus de `config.js`.
@@ -34,6 +35,8 @@
 - Lot F : rôle staff figé sur le ticket à sa création (modifier un type ne change pas l'accès aux tickets existants). Contenu du formulaire jamais stocké en base. Inactivité mesurée sur le dernier message d'un humain, relu via l'API (pas d'intent messages ajouté). Transcript HTML envoyé dans un 2e message (chaque envoi reste sous la limite de Discord). `/ticket` sans permission par défaut : chaque action vérifie ses droits.
 - Lot G : intent privilégié **Server Members** accepté (bienvenue, vérification des participants de giveaway) : à cocher dans le Developer Portal. Rôles à boutons interdits pour tout rôle ayant une permission de modération, revérifié à chaque clic. Annonces : droits de l'auteur revérifiés à l'envoi, aucune mention active, envoyées « au plus une fois ». Giveaway : fin et gagnants écrits en une seule fois (jamais deux tirages), résultat republié après un crash.
 - Lot H : langue = celle imposée par le serveur (/config), sinon celle du client du membre (messages publics : langue du serveur). Noms de commandes non traduits (descriptions seulement). `/config` réutilise les validations des commandes (`Fonctions/config.js`) : jamais plus de droits que `/setlogs` et `/setticket`. Traduction progressive des messages (clés dans `locales/*.json`, test de cohérence fr/en).
+- H bis : messages publics et MP dans la langue du serveur, réponses dans celle du membre ; logs du salon de logs, raisons d'audit et transcripts restent en français ; textes écrits par les admins jamais traduits. Un fichier de traduction par domaine (moderation, tickets, engagement, dates, croissance) : une clé en double fait échouer le démarrage et les tests.
+- Lot I : liens du `.env` (`SUPPORT_URL`, `PRIVACY_URL`, `TERMS_URL`) acceptés seulement en https. Lien d'invitation avec `integration_type=0` (installation sur un serveur).
 - Monétisation éventuelle : premium par serveur via les Premium Apps Discord, jamais sur les fonctions de sécurité de base.
 
 ## À faire par Animeru
@@ -44,4 +47,4 @@
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
 ## Prochaine étape
-Lots F (`62768d5`) et G (`987e99a`) commités, non poussés. Lot H codé sur `lot-h/config-langues` (part du lot G), pas encore commité. À faire : commiter H, pousser F, G, H et ouvrir les PR dans l'ordre. Cocher « Server Members Intent » avant de lancer le bot. Ensuite : lot I (croissance) ou H bis (traduction du reste).
+Lots F (`62768d5`), G (`987e99a`), H (`a76bdfa`) commités, non poussés. H bis + I commités sur `lot-hbis-i/traductions-croissance`. À faire : pousser, PR dans l'ordre F, G, H, H bis + I. Côté Animeru : Server Members Intent, token, serveur de support, pages légales en ligne. Ensuite : lot J (monétisation, à revérifier dans la doc Discord) puis K (dashboard).

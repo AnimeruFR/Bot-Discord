@@ -1,6 +1,7 @@
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const { sendModLog } = require('../Fonctions/logs')
+const { t } = require('../Fonctions/i18n')
 const { refusRole, contenuPanneau, rafraichirPanneau, MAX_BOUTONS } = require('../Fonctions/rolesBoutons')
 
 const { Flags } = Discord.PermissionsBitField
@@ -64,60 +65,63 @@ module.exports = {
 
         if (action === "liste") {
             const panneaux = db.listRolePanels(guild.id)
-            const lignes = panneaux.map(p => `• \`${p.message_id}\` dans <#${p.channel_id}> – **${Discord.escapeMarkdown(p.titre)}** (${db.listRoleButtons(guild.id, p.message_id).length} rôle(s)${p.mode === "unique" ? ", un seul à la fois" : ""})`)
-            return message.reply({ content: lignes.length ? lignes.join("\n") : "Aucun panneau. Exemple : `/roles action:Créer texte:Choisis tes notifications`", flags: EPHEMERAL })
+            const lignes = panneaux.map(p => t(message, "eng.roles.ligne", {
+                id: p.message_id, salon: p.channel_id, titre: Discord.escapeMarkdown(p.titre),
+                nombre: db.listRoleButtons(guild.id, p.message_id).length, unique: p.mode === "unique" ? t(message, "eng.roles.ligne_unique") : ""
+            }))
+            return message.reply({ content: lignes.length ? lignes.join("\n") : t(message, "eng.roles.aucun"), flags: EPHEMERAL })
         }
 
-        if (!me.permissions.has(Flags.ManageRoles)) return message.reply({ content: "Il me faut la permission « Gérer les rôles ».", flags: EPHEMERAL })
+        if (!me.permissions.has(Flags.ManageRoles)) return message.reply({ content: t(message, "eng.roles.perm_bot"), flags: EPHEMERAL })
 
         if (action === "creer") {
             const channel = args.getChannel("salon") ?? message.channel
-            const titre = args.getString("texte")?.trim() || "Choisis tes rôles"
+            const titre = args.getString("texte")?.trim() || t(guild, "eng.roles.titre_defaut")
             if (!channel.permissionsFor(me)?.has([Flags.ViewChannel, Flags.SendMessages, Flags.EmbedLinks])) {
-                return message.reply({ content: `Je ne peux pas écrire dans ${channel}.`, flags: EPHEMERAL })
+                return message.reply({ content: t(message, "eng.roles.salon_bot", { salon: channel }), flags: EPHEMERAL })
             }
             if (!channel.permissionsFor(message.member)?.has([Flags.ViewChannel, Flags.SendMessages])) {
-                return message.reply({ content: `Vous ne pouvez pas écrire dans ${channel}.`, flags: EPHEMERAL })
+                return message.reply({ content: t(message, "eng.roles.salon_membre", { salon: channel }), flags: EPHEMERAL })
             }
-            if (db.listRolePanels(guild.id).length >= MAX_PANNEAUX) return message.reply({ content: `${MAX_PANNEAUX} panneaux au maximum.`, flags: EPHEMERAL })
+            if (db.listRolePanels(guild.id).length >= MAX_PANNEAUX) return message.reply({ content: t(message, "eng.roles.max_panneaux", { max: MAX_PANNEAUX }), flags: EPHEMERAL })
 
             const panel = { titre, mode: args.getBoolean("unique") ? "unique" : "multiple" }
-            const envoye = await channel.send(contenuPanneau(panel, []))
+            const envoye = await channel.send(contenuPanneau(panel, [], guild))
             db.addRolePanel(guild.id, { messageId: envoye.id, channelId: channel.id, ...panel })
-            await message.reply({ content: `Panneau créé dans ${channel} (ID \`${envoye.id}\`). Ajoute des rôles avec \`/roles action:Ajouter panneau:${envoye.id} role:@rôle\`.`, flags: EPHEMERAL })
+            await message.reply({ content: t(message, "eng.roles.cree", { salon: channel, id: envoye.id }), flags: EPHEMERAL })
             return sendModLog(message, { action: "roles", details: `Panneau de rôles créé dans ${channel} : ${titre}` })
         }
 
         const panel = db.getRolePanel(guild.id, args.getString("panneau")?.trim() ?? "")
-        if (!panel) return message.reply({ content: "Panneau introuvable : donne l'ID du message (voir `/roles action:Voir`).", flags: EPHEMERAL })
+        if (!panel) return message.reply({ content: t(message, "eng.roles.introuvable"), flags: EPHEMERAL })
 
         if (action === "supprimer") {
             db.removeRolePanel(guild.id, panel.message_id)
             await guild.channels.cache.get(panel.channel_id)?.messages.delete(panel.message_id).catch(() => {})
-            await message.reply({ content: "Panneau supprimé.", flags: EPHEMERAL })
+            await message.reply({ content: t(message, "eng.roles.supprime"), flags: EPHEMERAL })
             return sendModLog(message, { action: "roles", details: `Panneau de rôles supprimé : ${panel.titre}` })
         }
 
         const role = args.getRole("role")
-        if (!role) return message.reply({ content: "Précise le rôle (option `role`).", flags: EPHEMERAL })
+        if (!role) return message.reply({ content: t(message, "eng.roles.role_manquant"), flags: EPHEMERAL })
 
         if (action === "ajouter") {
-            const refus = refusRole(guild, guild.roles.cache.get(role.id), message.member)
+            const refus = refusRole(guild, guild.roles.cache.get(role.id), message.member, message)
             if (refus) return message.reply({ content: refus, flags: EPHEMERAL })
             const boutons = db.listRoleButtons(guild.id, panel.message_id)
             if (!boutons.some(b => b.role_id === role.id) && boutons.length >= MAX_BOUTONS) {
-                return message.reply({ content: `${MAX_BOUTONS} rôles au maximum par panneau.`, flags: EPHEMERAL })
+                return message.reply({ content: t(message, "eng.roles.max_boutons", { max: MAX_BOUTONS }), flags: EPHEMERAL })
             }
             db.addRoleButton(guild.id, panel.message_id, role.id, args.getString("texte")?.trim() || role.name)
         } else {
             // Retirer un rôle d'un panneau ne donne rien à personne : pas de contrôle de hiérarchie nécessaire
-            if (!db.removeRoleButton(guild.id, panel.message_id, role.id)) return message.reply({ content: "Ce rôle n'est pas sur ce panneau.", flags: EPHEMERAL })
+            if (!db.removeRoleButton(guild.id, panel.message_id, role.id)) return message.reply({ content: t(message, "eng.roles.pas_sur_panneau"), flags: EPHEMERAL })
         }
 
         if (!await rafraichirPanneau(guild, panel)) {
-            return message.reply({ content: "Le message du panneau a été supprimé : panneau oublié. Crée-en un nouveau.", flags: EPHEMERAL })
+            return message.reply({ content: t(message, "eng.roles.message_supprime"), flags: EPHEMERAL })
         }
-        await message.reply({ content: `Rôle ${role} ${action === "ajouter" ? "ajouté au" : "retiré du"} panneau.`, flags: EPHEMERAL })
+        await message.reply({ content: t(message, action === "ajouter" ? "eng.roles.role_ajoute" : "eng.roles.role_retire", { role }), flags: EPHEMERAL })
         await sendModLog(message, { action: "roles", details: `${role} ${action === "ajouter" ? "ajouté au" : "retiré du"} panneau « ${panel.titre} »` })
     }
 }

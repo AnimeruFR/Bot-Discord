@@ -30,7 +30,7 @@ module.exports = {
     ],
 
     async run(bot, message, args) {
-        const { duree, erreur } = parseDuree(args.getString("duree"), { max: DUREE_MAX_TEMPBAN })
+        const { duree, erreur } = parseDuree(args.getString("duree"), { max: DUREE_MAX_TEMPBAN, cible: message })
         if (erreur) return message.reply({ content: erreur, flags: Discord.MessageFlags.Ephemeral })
         await banAvecConfirmation(message, { user: args.getUser("membre"), raisonBrute: args.getString("raison"), duree })
     }

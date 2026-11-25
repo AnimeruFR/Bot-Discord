@@ -1,0 +1,13 @@
+{
+  "crois.invite": "Ajoute le bot à ton serveur avec le bouton ci-dessous. Il ne demande que les permissions dont il a besoin (jamais Administrateur).",
+  "crois.bouton_inviter": "Ajouter le bot",
+  "crois.bouton_support": "Serveur de support",
+  "crois.bouton_confidentialite": "Confidentialité",
+  "crois.bouton_conditions": "Conditions d'utilisation",
+  "crois.about_titre": "À propos de {nom}",
+  "crois.about_description": "Bot de modération, de tickets et d'animation, en français et en anglais. `/help` pour la liste des commandes, `/config` pour le configurer.",
+  "crois.serveurs": "Serveurs",
+  "crois.version": "Version",
+  "crois.en_ligne": "En ligne depuis",
+  "crois.commandes": "Commandes"
+}
