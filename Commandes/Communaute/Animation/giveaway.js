@@ -14,6 +14,8 @@ module.exports = {
     name: "giveaway",
     description: "Giveaways : lancer, terminer, relancer un tirage",
     permission: Discord.PermissionFlagsBits.ManageGuild,
+    // Participation d'un membre : publique (onClicGiveaway vérifie que le giveaway est en cours)
+    composants: [{ prefixe: "giveaway:", types: ["bouton"], public: true, gestionnaire: giveaways.onClicGiveaway }],
     dm: false,
     category: "Engagement",
     options: [

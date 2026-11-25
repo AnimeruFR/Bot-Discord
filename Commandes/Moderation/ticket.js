@@ -2,7 +2,8 @@ const Discord = require('discord.js')
 const { couleur } = require('../../Fonctions/apparence')
 const { t, langueDe } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
-const { gererMembre, menuTypes, isStaff } = require('../../Fonctions/tickets')
+const tickets = require('../../Fonctions/tickets')
+const { gererMembre, menuTypes, isStaff } = tickets
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -15,6 +16,16 @@ module.exports = {
     // Chaque action revérifie ensuite ses propres droits (voir run).
     permission: Discord.PermissionFlagsBits.ManageMessages,
     acces: interaction => isStaff(interaction, interaction.channel),
+    // Boutons, menu et formulaire des tickets : cliqués par les membres (ouvrir, fermer le sien, noter),
+    // donc publics ; chaque gestionnaire vérifie lui-même qui clique (auteur, staff du ticket…)
+    composants: [
+        { id: "ticket", types: ["bouton"], public: true, gestionnaire: tickets.onBoutonTicket },
+        { id: "close", types: ["bouton"], public: true, gestionnaire: tickets.closeTicket },
+        { id: "claim", types: ["bouton"], public: true, gestionnaire: tickets.claimTicket },
+        { prefixe: "note:", types: ["bouton"], public: true, gestionnaire: tickets.noterTicket },
+        { id: "ticket-type", types: ["menu"], public: true, gestionnaire: tickets.onMenuType },
+        { prefixe: "ticket-form:", types: ["modal"], public: true, gestionnaire: tickets.onFormulaire }
+    ],
     dm: false,
     category: "Modération",
     options: [

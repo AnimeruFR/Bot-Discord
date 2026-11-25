@@ -48,6 +48,7 @@ module.exports = (bot, { silencieux = false } = {}) => {
         command.sousModule = sousModule
         verifierDeclaration(command)
         bot.commands.set(command.name, command)
+        bot.routeur?.enregistrerCommande(command)
         if (!silencieux) console.log(`Commande ${nomFichier} chargée avec succès !`)
     }
 }

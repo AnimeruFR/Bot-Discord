@@ -2,7 +2,7 @@ const Discord = require('discord.js')
 const db = require('../../../Fonctions/db')
 const { sendModLog } = require('../../../Fonctions/logs')
 const { t } = require('../../../Fonctions/i18n')
-const { refusRole, contenuPanneau, rafraichirPanneau, MAX_BOUTONS } = require('../../../Fonctions/rolesBoutons')
+const { refusRole, contenuPanneau, rafraichirPanneau, onClicRole, MAX_BOUTONS } = require('../../../Fonctions/rolesBoutons')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -13,6 +13,8 @@ module.exports = {
     description: "Panneaux de rôles à boutons (les membres prennent ou retirent un rôle eux-mêmes)",
     permission: Discord.PermissionFlagsBits.ManageRoles,
     dm: false,
+    // Clic d'un membre sur un rôle du panneau : public, le rôle est revérifié à chaque clic (onClicRole)
+    composants: [{ prefixe: "role:", types: ["bouton"], public: true, gestionnaire: onClicRole }],
     category: "Configuration",
     options: [
         {

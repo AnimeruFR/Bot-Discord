@@ -21,6 +21,8 @@ const bot = new Discord.Client({
 })
 
 bot.commands = new Discord.Collection()
+// Boutons, menus et formulaires persistants déclarés par les commandes (`composants`)
+bot.routeur = require('./Fonctions/routeur').creerRouteur()
 bot.color = "#FF0000"
 
 loadCommands(bot)
