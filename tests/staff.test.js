@@ -5,7 +5,7 @@ const assert = require('assert')
 const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const loadCommands = require('../Loader/loadCommands')
-const { verifierAcces, verifierDeclaration, estStaff } = require('../Fonctions/staff')
+const { verifierAcces, verifierDeclaration } = require('../Fonctions/staff')
 const interactionCreate = require('../Events/interactionCreate')
 
 const { Flags } = Discord.PermissionsBitField
@@ -13,7 +13,8 @@ const G = "111111111111111111", STAFF = "555555555555555555", AUTRE = "666666666
 
 const bot = { commands: new Discord.Collection() }
 loadCommands(bot, { silencieux: true })
-const moderation = [...bot.commands.values()].filter(c => c.module === "moderation")
+// Modules staff : Modération et Tickets
+const moderation = [...bot.commands.values()].filter(c => ["moderation", "tickets"].includes(c.module))
 
 // Fausse interaction de commande : permissions et rôles du membre au choix
 function fausse({ perms = [], roles = [], rolesBruts = false, guild = true, commande = "x" } = {}) {
@@ -33,6 +34,7 @@ function fausse({ perms = [], roles = [], rolesBruts = false, guild = true, comm
 
 test("toutes les commandes de modération déclarent une permission bigint et ne marchent pas en MP", () => {
     assert.ok(moderation.length >= 20)
+    assert.deepStrictEqual([...new Set(moderation.map(c => c.module))].sort(), ["moderation", "tickets"])
     for (const c of moderation) {
         assert.strictEqual(typeof c.permission, "bigint", c.name)
         assert.ok(!c.dm, `${c.name} en MP`)
@@ -43,6 +45,7 @@ test("une commande de modération mal déclarée empêche le chargement", () => 
     assert.throws(() => verifierDeclaration({ name: "x", module: "moderation", permission: "Aucune" }))
     assert.throws(() => verifierDeclaration({ name: "x", module: "moderation", permission: 0n }))
     assert.throws(() => verifierDeclaration({ name: "x", module: "moderation", permission: Flags.BanMembers, dm: true }))
+    assert.throws(() => verifierDeclaration({ name: "x", module: "tickets", permission: "Aucune" }), "Tickets aussi")
     assert.doesNotThrow(() => verifierDeclaration({ name: "x", module: "general", permission: "Aucune" }))
 })
 
@@ -83,14 +86,6 @@ test("hors Modération, seule la permission déclarée compte", async () => {
     assert.strictEqual(await verifierAcces(fausse({ perms: giveaway.permission }), giveaway), true)
 })
 
-test("estStaff : permission de modération ou rôle staff", () => {
-    db.setStaffRole(G, STAFF)
-    assert.strictEqual(estStaff(fausse()), false)
-    assert.strictEqual(estStaff(fausse({ perms: Flags.ModerateMembers })), true)
-    assert.strictEqual(estStaff(fausse({ roles: [STAFF] })), true)
-    assert.strictEqual(estStaff(fausse({ guild: false })), false)
-    db.setStaffRole(G, null)
-})
 
 test("de bout en bout : la commande n'est jamais exécutée pour un membre refusé", async () => {
     let executee = false

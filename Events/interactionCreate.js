@@ -1,21 +1,16 @@
 const Discord = require('discord.js')
-const { t } = require('../Fonctions/i18n')
 const { traiterErreur } = require('../Fonctions/erreurs')
-const { verifierCommande } = require('../Fonctions/cooldowns')
-const { verifierAcces } = require('../Fonctions/staff')
-const { motifIndisponible, salonsRequis } = require('../Fonctions/modules')
+const { liberer } = require('../Fonctions/cooldowns')
+const { controler, commandesVisibles } = require('../Fonctions/garde')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
-const refuser = interaction => interaction.reply({ content: t(interaction, "commun.permission"), flags: EPHEMERAL })
-const indisponible = (interaction, motif) => interaction.reply({ content: t(interaction, `modules.${motif}`), flags: EPHEMERAL })
 
 module.exports = async (bot, interaction) => {
     try {
         if (interaction.isAutocomplete()) {
-            // Autocomplétion de /help : seulement les commandes que ce membre peut voir (staff masqué, modules désactivés)
+            // Autocomplétion de /help : seulement les commandes que ce membre peut utiliser (staff masqué, modules désactivés)
             const entry = String(interaction.options.getFocused()).toLowerCase()
-            const visibles = bot.commands.get("help")?.commandesVisibles?.(bot, interaction) ?? []
-            const choices = visibles
+            const choices = (await commandesVisibles(bot, interaction))
                 .filter(cmd => cmd.name.includes(entry))
                 .slice(0, 25)
                 .map(cmd => ({ name: cmd.name, value: cmd.name }))
@@ -27,34 +22,23 @@ module.exports = async (bot, interaction) => {
             const command = bot.commands.get(interaction.commandName)
             if (!command) return
 
-            // Module désactivé sur ce serveur (/config) ou coupé en urgence (DESACTIVER) : #87, #96
-            const motif = motifIndisponible(interaction.guildId, command)
-            if (motif) return await indisponible(interaction, motif)
+            // Module, droits (revérifiés à chaque appel : un admin peut ouvrir une commande à d'autres dans
+            // Paramètres > Intégrations), salons de jeux et délai : même garde que les composants (Fonctions/garde.js)
+            const refus = await controler(interaction, command)
+            if (refus) return await interaction.reply({ content: refus, flags: EPHEMERAL })
 
-            // Les permissions par défaut d'une slash commande peuvent être modifiées par un admin du serveur
-            // (Paramètres > Intégrations) : on revérifie donc les droits réels du membre à chaque appel (garde staff, #1)
-            if (!await verifierAcces(interaction, command)) return await refuser(interaction)
-
-            // Jeux limités à certains salons (/config)
-            const salons = salonsRequis(interaction.guildId, interaction.channelId, command)
-            if (salons) {
-                return await interaction.reply({ content: t(interaction, "modules.salons_jeux", { salons: salons.map(id => `<#${id}>`).join(", ") }), flags: EPHEMERAL })
+            try {
+                return await command.run(bot, interaction, interaction.options)
+            } catch (err) {
+                // La commande a échoué : le membre peut réessayer sans attendre son délai
+                liberer(command.name, interaction.guildId, interaction.user.id)
+                throw err
             }
-
-            // Délai entre deux utilisations (`cooldown` dans la commande), vérifié après les droits :
-            // un membre refusé ne bloque pas son propre délai
-            const restant = verifierCommande(command, interaction)
-            if (restant > 0) {
-                const fin = Math.ceil((Date.now() + restant) / 1000)
-                return await interaction.reply({ content: t(interaction, "commun.cooldown", { quand: `<t:${fin}:R>` }), flags: EPHEMERAL })
-            }
-
-            return await command.run(bot, interaction, interaction.options)
         }
 
-        // Boutons, menus et formulaires persistants : déclarés par les commandes (`composants`), routés par préfixe (#89).
-        // Les boutons de confirmation, eux, sont attendus directement par la commande qui les a posés (awaitMessageComponent).
-        await bot.routeur?.router(bot, interaction, refuser, indisponible)
+        // Boutons, menus et formulaires persistants : déclarés par les commandes (`composants`), routés par préfixe (#89),
+        // avec la même garde. Les boutons de confirmation, eux, sont attendus par la commande qui les a posés.
+        await bot.routeur.router(bot, interaction)
     } catch (err) {
         // Erreur attendue (ErreurUtilisateur) : message clair ; sinon numéro d'incident montré au membre et écrit dans les logs
         await traiterErreur(interaction, err)

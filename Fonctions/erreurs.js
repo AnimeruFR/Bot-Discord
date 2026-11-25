@@ -25,7 +25,7 @@ const decrire = interaction => interaction?.commandName ? `/${interaction.comman
 async function traiterErreur(interaction, err, journal = console) {
     const attendue = err instanceof ErreurUtilisateur
     const incident = attendue ? null : numeroIncident()
-    if (!attendue) journal.error(`[incident ${incident}] Erreur sur ${decrire(interaction)} :`, err)
+    if (!attendue) journal.error(`[incident ${incident}] Erreur sur ${decrire(interaction)} (serveur ${interaction?.guildId ?? "MP"}, membre ${interaction?.user?.id ?? "?"}) :`, err)
     if (!interaction?.isRepliable?.()) return incident
 
     // Sans traduction possible (base indisponible…), message en français

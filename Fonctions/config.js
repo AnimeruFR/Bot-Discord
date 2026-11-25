@@ -16,8 +16,8 @@ const peutConfigurerTickets = interaction => Boolean(interaction.memberPermissio
 
 // Rôle staff du serveur (idée #1) : il ouvre des commandes de modération (warn, historique…),
 // donc seul quelqu'un qui a lui-même « Gérer le serveur » et « Exclure temporairement » peut le choisir
-const PERMISSION_STAFF = P.ManageGuild | P.ModerateMembers
-const peutConfigurerStaff = interaction => Boolean(interaction.memberPermissions?.has(PERMISSION_STAFF))
+const PERMISSION_CHOISIR_ROLE_STAFF = P.ManageGuild | P.ModerateMembers
+const peutConfigurerStaff = interaction => Boolean(interaction.memberPermissions?.has(PERMISSION_CHOISIR_ROLE_STAFF))
 
 // Salon de logs valable ? Renvoie un message d'erreur, ou null.
 // cible : interaction (langue du membre) ; sans elle, français.
@@ -65,4 +65,4 @@ function refusRoleStaff(interaction, role) {
     return null
 }
 
-module.exports = { PERMISSION_TICKETS, PERMISSION_STAFF, peutConfigurerTickets, peutConfigurerStaff, refusSalonLogs, changerSalonLogs, refusCategorie, refusRoleStaff }
+module.exports = { PERMISSION_TICKETS, PERMISSION_CHOISIR_ROLE_STAFF, peutConfigurerTickets, peutConfigurerStaff, refusSalonLogs, changerSalonLogs, refusCategorie, refusRoleStaff }

@@ -53,3 +53,26 @@ test("la purge retire les délais expirés", () => {
     assert.strictEqual(cooldowns.prendre("a", 1, G, U, 5000), 0)
     assert.ok(cooldowns.prendre("b", 100, G, U, 5000) > 0)
 })
+
+test("une commande qui échoue libère son délai (A8)", async () => {
+    const Discord = require('discord.js')
+    const interactionCreate = require('../Events/interactionCreate')
+    let appels = 0
+    const commande = { name: "fragile", module: "general", permission: "Aucune", cooldown: 60,
+        run: async () => { appels++; if (appels === 1) throw new Error("panne") } }
+    const bot = { commands: new Discord.Collection([["fragile", commande]]) }
+    const appel = () => ({
+        commandName: "fragile", guildId: G, channelId: "1", locale: "fr", user: { id: U },
+        inGuild: () => true, memberPermissions: new Discord.PermissionsBitField([]), member: { roles: { cache: new Set() } },
+        isAutocomplete: () => false, isChatInputCommand: () => true, isRepliable: () => true, options: {},
+        replied: false, deferred: false, reply: async () => {}, followUp: async () => {}
+    })
+    const erreur = console.error
+    console.error = () => {}
+    try {
+        await interactionCreate(bot, appel())
+        await interactionCreate(bot, appel())
+        await interactionCreate(bot, appel())
+    } finally { console.error = erreur }
+    assert.strictEqual(appels, 2, "réessai permis après l'échec, puis délai normal après le succès")
+})

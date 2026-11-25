@@ -12,7 +12,8 @@ const G = "111111111111111111", STAFF = "555555555555555555"
 const bot = { commands: new Discord.Collection(), user: { displayAvatarURL: () => "https://cdn.discordapp.com/x.png", username: "bot" } }
 loadCommands(bot, { silencieux: true })
 const help = bot.commands.get("help")
-const moderation = [...bot.commands.values()].filter(c => c.module === "moderation").map(c => c.name)
+const { commandesVisibles } = require('../Fonctions/garde')
+const moderation = [...bot.commands.values()].filter(c => ["moderation", "tickets"].includes(c.module)).map(c => c.name)
 
 function membre({ perms = [], roles = [], guild = true, choix = null, focus = "" } = {}) {
     const reponses = []
@@ -25,29 +26,32 @@ function membre({ perms = [], roles = [], guild = true, choix = null, focus = ""
         reply: async r => reponses.push(r), respond: async r => reponses.push(r)
     }
 }
-const noms = i => help.commandesVisibles(bot, i).map(c => c.name)
+const noms = async i => (await commandesVisibles(bot, i)).map(c => c.name)
 const texteEmbed = r => JSON.stringify(r.embeds[0].toJSON())
 
-test("un membre normal ne voit aucune commande staff, ni dans /help ni en MP", () => {
+test("un membre normal ne voit aucune commande staff ni d'admin, ni dans /help ni en MP", async () => {
     for (const i of [membre(), membre({ guild: false })]) {
-        const visibles = noms(i)
+        const visibles = await noms(i)
         assert.ok(visibles.includes("help") && visibles.includes("ping"))
         for (const nom of moderation) assert.ok(!visibles.includes(nom), nom)
+        for (const nom of ["giveaway", "config", "roles"]) assert.ok(!visibles.includes(nom), `${nom} (admin)`)
     }
 })
 
-test("le staff (permission ou rôle staff) voit les commandes de modération", () => {
-    assert.ok(noms(membre({ perms: Flags.ModerateMembers })).includes("ban"))
+test("chacun voit exactement ce qu'il peut utiliser", async () => {
+    assert.ok((await noms(membre({ perms: Flags.BanMembers }))).includes("ban"))
+    assert.ok(!(await noms(membre({ perms: Flags.ModerateMembers }))).includes("ban"), "pas Bannir : pas /ban")
     db.setStaffRole(G, STAFF)
-    assert.ok(noms(membre({ roles: [STAFF] })).includes("warn"))
+    const staff = await noms(membre({ roles: [STAFF] }))
+    assert.ok(staff.includes("warn") && !staff.includes("ban"), "rôle staff : warn oui, ban non")
     db.setStaffRole(G, null)
 })
 
-test("un module désactivé disparaît de /help", () => {
+test("un module désactivé disparaît de /help", async () => {
     db.setModule(G, "communaute.animation", false)
-    assert.ok(!noms(membre()).includes("quoi"))
+    assert.ok(!(await noms(membre())).includes("quoi"))
     db.setModule(G, "communaute.animation", true)
-    assert.ok(noms(membre()).includes("quoi"))
+    assert.ok((await noms(membre())).includes("quoi"))
 })
 
 test("/help groupe par module et cache la Modération au membre", async () => {

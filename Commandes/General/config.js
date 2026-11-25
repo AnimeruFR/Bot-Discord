@@ -10,7 +10,7 @@ const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DUREE_SESSION = 5 * 60 * 1000
 const { INACTIVITES, LANGUES } = require('../../Fonctions/constantes')
-const { modulesConnus } = require('../../Fonctions/modules')
+const { modulesConnus, nomModule } = require('../../Fonctions/modules')
 const SECTIONS = ["resume", "general", "modules", "staff", "logs", "tickets", "panneau"]
 
 // Une seule fenêtre /config par membre et par serveur : ouvrir la 2e ferme la 1re (pas d'état périmé)
@@ -104,12 +104,6 @@ function vue(i, section) {
         }))
     }
     return { embeds: [embed], components: lignes }
-}
-
-// Nom affiché d'un module ("communaute.animation" -> "Communauté › Animation")
-function nomModule(L, cle) {
-    const [module, sous] = cle.split(".")
-    return sous ? t(L, "modules.nom_sous", { sous: t(L, `modules.sous_${sous}`) }) : t(L, `modules.nom_${module}`)
 }
 
 // Formulaire (modal) ouvert depuis un bouton, attendu sur place (pas de route globale : personne d'autre ne peut le soumettre)

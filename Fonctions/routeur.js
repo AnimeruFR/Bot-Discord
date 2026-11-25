@@ -1,13 +1,15 @@
-const { verifierAcces } = require('./staff')
-const { motifIndisponible } = require('./modules')
+const Discord = require('discord.js')
+const { controler } = require('./garde')
 
 // Routeur des composants persistants (idée #89) : boutons, menus déroulants et formulaires (modals).
 // Chaque commande déclare les siens dans `composants`, le loader les enregistre ici :
 //   composants: [{ id: "close", types: ["bouton"], gestionnaire: (bot, interaction) => … }]
 //   composants: [{ prefixe: "jeu:", types: ["bouton", "menu"], gestionnaire }]
 // Un composant hérite du module et des droits de sa commande (permission, roleStaffSuffit, acces) :
-// dans le module Modération, il passe donc par la garde staff comme la commande. Les composants
-// cliqués par les membres (ouvrir un ticket…) le déclarent avec `public: true` et vérifient eux-mêmes leurs droits.
+// dans un module staff, il passe donc par la garde staff comme la commande. Les composants cliqués par les membres
+// (ouvrir un ticket…) le déclarent avec `public: true` et vérifient eux-mêmes leurs droits.
+// Tous passent par la garde commune (Fonctions/garde.js) : module actif, droits, salons de jeux, et délai
+// (`cooldown` en secondes déclaré sur le composant ; celui de la commande ne s'applique pas à ses boutons).
 // Les boutons de confirmation attendus par une commande (awaitMessageComponent) ne sont pas enregistrés :
 // le routeur les ignore.
 
@@ -51,18 +53,13 @@ function creerRouteur() {
         && (r.id !== undefined ? interaction.customId === r.id : interaction.customId.startsWith(r.prefixe)))
 
     // Traite le composant. Renvoie false s'il n'est pas enregistré (laissé à un collecteur ou ignoré).
-    // refuser(interaction) : droits insuffisants ; indisponible(interaction, motif) : module désactivé ou coupé
-    async function router(bot, interaction, refuser, indisponible = refuser) {
+    async function router(bot, interaction) {
         if (!interaction.isButton() && !interaction.isAnySelectMenu() && !interaction.isModalSubmit()) return false
         const route = trouver(interaction)
         if (!route) return false
-        const motif = motifIndisponible(interaction.guildId, route)
-        if (motif) {
-            await indisponible(interaction, motif)
-            return true
-        }
-        if (!route.public && !await verifierAcces(interaction, route)) {
-            await refuser(interaction)
+        const refus = await controler(interaction, route, { cleDelai: `composant:${route.id ?? route.prefixe}` })
+        if (refus) {
+            await interaction.reply({ content: refus, flags: Discord.MessageFlags.Ephemeral })
             return true
         }
         await route.gestionnaire(bot, interaction)
@@ -72,4 +69,4 @@ function creerRouteur() {
     return { enregistrer, enregistrerCommande, router, routes }
 }
 
-module.exports = { creerRouteur, TYPES }
+module.exports = { creerRouteur }

@@ -6,7 +6,7 @@ const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const tickets = require('../Fonctions/tickets')
 const { ticketOwnerId, roleValide } = tickets
-const { calculerStats } = require('../Commandes/Moderation/stats')
+const { calculerStats } = require('../Commandes/Tickets/stats')
 const { traiterInactifs } = require('../Fonctions/ticketsInactifs')
 
 const { Flags } = Discord.PermissionsBitField

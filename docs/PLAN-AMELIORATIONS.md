@@ -447,8 +447,8 @@ Si l'effort réel dépasse l'estimation de plus de 2 points, on s'arrête et on 
 
 | Phase | État |
 |---|---|
-| 0 – Fondations | ⏳ à valider |
-| 1 – Quick wins | ⏳ |
+| 0 – Fondations | ✅ codée (branche `phase-0/fondations`) : #86 ✅ · #88 ✅ · #92 ✅ · #91 ✅ · #90 ✅ · #1 ✅ · #89 ✅ · #87 ✅ · #96 ✅ · #95 ✅ · #93 ✅ ; tribunal de fin de jalon : **jalon validé**, corrections appliquées |
+| 1 – Quick wins | ⏳ prochaine phase |
 | 2 – Modération avancée | ⏳ |
 | 3 – Cœur ludique | ⏳ |
 | 4 – Multijoueur et phares | ⏳ |

@@ -16,10 +16,10 @@ test("chaque commande appartient à un module connu", () => {
     const bot = chargerCommandes()
     const parModule = {}
     for (const c of bot.commands.values()) {
-        assert.ok(["moderation", "communaute", "general"].includes(c.module), `module de ${c.name}`)
+        assert.ok(["moderation", "tickets", "communaute", "general"].includes(c.module), `module de ${c.name}`)
         assert.ok(c.module !== "communaute" || /^[a-z]+$/.test(c.sousModule ?? ""), `sous-module de ${c.name}`)
         parModule[c.module] = (parModule[c.module] ?? 0) + 1
     }
-    assert.ok(parModule.moderation && parModule.communaute && parModule.general, "les trois modules ont des commandes")
+    assert.ok(parModule.moderation && parModule.tickets && parModule.communaute && parModule.general, "les quatre modules ont des commandes")
     assert.strictEqual(require('../Loader/loadCommands').listerCommandes().length, bot.commands.size, "un fichier = une commande")
 })

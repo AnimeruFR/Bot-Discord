@@ -1,16 +1,17 @@
-const Discord = require('discord.js')
 const db = require('./db')
 
-// Garde du module Modération (idée #1).
+// Garde des modules réservés au staff : Modération et Tickets (idée #1).
 // Discord n'affiche une commande qu'aux membres qui ont sa permission par défaut, mais un admin peut l'ouvrir
 // à d'autres dans Paramètres > Intégrations : on ne s'y fie jamais, tout est revérifié ici à chaque appel.
 //
-// Une commande ou un composant (bouton, menu, modal) du module Modération est autorisé si :
+// Une commande ou un composant (bouton, menu, modal) d'un module staff est autorisé si :
 //   1. le membre a la permission Discord déclarée (`permission`, toujours un bigint) ;
 //   2. ou la commande déclare `roleStaffSuffit: true` et le membre a le rôle staff du serveur (/config) ;
 //      réservé aux actions sans pouvoir propre au bot (warn, historique…) : un rôle staff ne fait jamais bannir ;
 //   3. ou la commande déclare une fonction `acces(interaction)` qui l'autorise (ex. : staff d'un ticket).
-// Une commande de modération sans permission bigint est refusée à tout le monde (on échoue fermé).
+// Une commande staff sans permission bigint est refusée à tout le monde (on échoue fermé).
+const MODULES_STAFF = ["moderation", "tickets"]
+const estModuleStaff = declaration => MODULES_STAFF.includes(declaration.module)
 
 const ID = /^\d{17,20}$/
 
@@ -35,17 +36,18 @@ function aRoleStaff(interaction) {
 // La déclaration (commande ou composant) est-elle bien formée pour le module Modération ?
 // Appelée au chargement : une commande staff mal déclarée empêche le bot de démarrer (et fait échouer les tests).
 function verifierDeclaration(declaration) {
-    if (declaration.module !== "moderation") return
+    if (!estModuleStaff(declaration)) return
     if (typeof declaration.permission !== "bigint" || declaration.permission === 0n) {
-        throw new Error(`${declaration.name ?? "?"} (Modération) doit déclarer une permission Discord (bigint)`)
+        throw new Error(`${declaration.name ?? "?"} (${declaration.module}) doit déclarer une permission Discord (bigint)`)
     }
-    if (declaration.dm) throw new Error(`${declaration.name ?? "?"} (Modération) ne peut pas être utilisable en MP`)
+    if (declaration.dm) throw new Error(`${declaration.name ?? "?"} (${declaration.module}) ne peut pas être utilisable en MP`)
 }
 
 // Accès à une commande ou à un composant. Renvoie true si le membre peut l'utiliser.
 async function verifierAcces(interaction, declaration) {
-    if (declaration.module !== "moderation") {
-        // Hors Modération : seule la permission déclarée compte (S15, inchangé)
+    if (!estModuleStaff(declaration)) {
+        // Hors modules staff : seule la permission déclarée compte. Elle est revérifiée ici car un admin peut ouvrir
+        // la commande à d'autres rôles dans Paramètres > Intégrations (faille S15 de l'audit, corrigée au lot A).
         if (typeof declaration.permission !== "bigint" || !interaction.inGuild?.()) return true
         return Boolean(interaction.memberPermissions?.has(declaration.permission))
     }
@@ -54,17 +56,12 @@ async function verifierAcces(interaction, declaration) {
     if (typeof declaration.permission !== "bigint" || declaration.permission === 0n) return false
     if (interaction.memberPermissions?.has(declaration.permission)) return true
     if (declaration.roleStaffSuffit && aRoleStaff(interaction)) return true
-    if (typeof declaration.acces === "function") return Boolean(await declaration.acces(interaction))
+    if (typeof declaration.acces === "function") {
+        // Règle propre à la commande (ex. staff d'un ticket) : une erreur vaut refus
+        try { return Boolean(await declaration.acces(interaction)) } catch { return false }
+    }
     return false
 }
 
-// Le membre fait-il partie du staff ? (permission de modération ou rôle staff) Sert à /help et à l'autocomplétion.
-const PERMISSIONS_STAFF = [Discord.PermissionFlagsBits.ModerateMembers, Discord.PermissionFlagsBits.KickMembers,
-    Discord.PermissionFlagsBits.BanMembers, Discord.PermissionFlagsBits.ManageMessages, Discord.PermissionFlagsBits.ManageGuild]
-function estStaff(interaction) {
-    if (!interaction.inGuild?.()) return false
-    if (PERMISSIONS_STAFF.some(p => interaction.memberPermissions?.has(p))) return true
-    return aRoleStaff(interaction)
-}
 
-module.exports = { verifierAcces, verifierDeclaration, estStaff, aRoleStaff, aLeRole, roleStaff }
+module.exports = { verifierAcces, verifierDeclaration, aRoleStaff, aLeRole, roleStaff, MODULES_STAFF }

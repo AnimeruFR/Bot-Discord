@@ -11,7 +11,9 @@ const G = "111111111111111111"
 
 // Faux composant : type et customId au choix, permissions du membre au choix
 function clic(customId, { type = "bouton", perms = [], guild = true } = {}) {
+    const reponses = []
     return {
+        reponses, reply: async r => reponses.push(r), user: { id: "777777777777777777" }, channelId: "333333333333333333",
         customId, guildId: guild ? G : null, locale: "fr",
         isButton: () => type === "bouton", isAnySelectMenu: () => type === "menu", isModalSubmit: () => type === "modal",
         inGuild: () => guild,
@@ -46,18 +48,42 @@ test("déclarations invalides ou en collision refusées", () => {
 
 test("un composant du module Modération passe par la garde staff", async () => {
     const r = creerRouteur()
-    let execute = 0, refus = 0
+    let execute = 0
     r.enregistrerCommande({
         name: "signaler", module: "moderation", permission: Flags.ModerateMembers,
         composants: [{ prefixe: "mod:", types: ["bouton"], gestionnaire: () => execute++ }]
     })
-    const refuser = async () => refus++
-    assert.strictEqual(await r.router(null, clic("mod:warn:1"), refuser), true)
-    assert.deepStrictEqual([execute, refus], [0, 1], "membre sans droit : refusé, gestionnaire jamais appelé")
-    await r.router(null, clic("mod:warn:1", { perms: Flags.ModerateMembers }), refuser)
-    assert.deepStrictEqual([execute, refus], [1, 1])
-    await r.router(null, clic("mod:warn:1", { guild: false, perms: Flags.ModerateMembers }), refuser)
-    assert.deepStrictEqual([execute, refus], [1, 2], "hors serveur : refusé")
+    const sansDroit = clic("mod:warn:1")
+    assert.strictEqual(await r.router(null, sansDroit), true)
+    assert.strictEqual(execute, 0, "membre sans droit : refusé, gestionnaire jamais appelé")
+    assert.ok(sansDroit.reponses[0].flags, "refus éphémère")
+    await r.router(null, clic("mod:warn:1", { perms: Flags.ModerateMembers }))
+    assert.strictEqual(execute, 1)
+    const horsServeur = clic("mod:warn:1", { guild: false, perms: Flags.ModerateMembers })
+    await r.router(null, horsServeur)
+    assert.strictEqual(execute, 1, "hors serveur : refusé")
+})
+
+test("les composants passent par la même garde que les commandes : délai et salons de jeux (A1)", async () => {
+    const db = require('../Fonctions/db')
+    const r = creerRouteur()
+    let execute = 0
+    r.enregistrerCommande({
+        name: "quiz", module: "communaute", sousModule: "jeux", permission: "Aucune",
+        composants: [{ prefixe: "quiz:", types: ["bouton"], public: true, cooldown: 30, gestionnaire: () => execute++ }]
+    })
+    await r.router(null, clic("quiz:1"))
+    const deuxieme = clic("quiz:2")
+    await r.router(null, deuxieme)
+    assert.strictEqual(execute, 1, "2e clic dans le délai : refusé")
+    assert.ok(deuxieme.reponses[0].content.includes("<t:"))
+
+    require('../Fonctions/cooldowns').vider()
+    db.setSalonsJeux(G, ["999999999999999999"])
+    const horsSalon = clic("quiz:3")
+    await r.router(null, horsSalon)
+    assert.strictEqual(execute, 1, "hors des salons de jeux : refusé")
+    db.setSalonsJeux(G, [])
 })
 
 test("les composants existants sont tous enregistrés, sans collision", async () => {

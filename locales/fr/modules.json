@@ -12,5 +12,6 @@
   "modules.sous_niveaux": "Niveaux",
   "modules.sous_collection": "Collection",
   "modules.sous_aventure": "Aventure",
-  "modules.sous_casino": "Casino"
+  "modules.sous_casino": "Casino",
+  "modules.nom_tickets": "🎫 Tickets"
 }

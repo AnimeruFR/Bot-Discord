@@ -79,7 +79,7 @@ Un site pour configurer le bot sans commande : langue, couleur, salon de logs, t
 
 1. Developer Portal > *OAuth2* : copie le **Client Secret** dans `DISCORD_CLIENT_SECRET`, et ajoute `${DASHBOARD_URL}/callback` dans *Redirects* (ex. `http://localhost:3000/callback` en dev).
 2. Renseigne `DASHBOARD_URL` (origine exacte, sans `/` final) et lance `npm run dashboard:dev`, puis ouvre l'URL.
-3. En prod (Docker) : `docker compose up -d` lance aussi le service `dashboard`, qui n'écoute que sur `127.0.0.1:3000`. Mets un reverse proxy HTTPS devant, par exemple avec Caddy :
+3. En prod (Docker) : `docker compose up -d` lance aussi le service `dashboard` (`DATABASE_NO_MIGRATE=1` : il attend que le bot ait migré la base), qui n'écoute que sur `127.0.0.1:3000`. Mets un reverse proxy HTTPS devant, par exemple avec Caddy :
    ```
    bot.exemple.fr {
        reverse_proxy 127.0.0.1:3000
@@ -167,6 +167,11 @@ Les commandes sont rangées par module dans `Commandes/` : le dossier décide du
 | `/unwarn numero` | Exclure temporairement | Retire un avertissement (pas les siens, ni ceux d'un supérieur) |
 | `/setlogs [salon]` | Gérer le serveur | Salon des logs de modération (sans salon : désactive) |
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
+
+### 🎫 Tickets (staff ; les boutons des tickets restent ouverts aux membres) – `Commandes/Tickets/`
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
 | `/ticket action [membre]` | Panneau : Gérer les messages ; ajouter/retirer : staff du ticket | Poste le panneau, ajoute ou retire un membre d'un ticket |
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
 | `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |

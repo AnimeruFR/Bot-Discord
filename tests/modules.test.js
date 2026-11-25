@@ -69,7 +69,7 @@ test("salons de jeux : seulement pour les sous-modules de jeu", () => {
 
 test("modulesConnus liste les modules désactivables et les sous-modules présents", () => {
     assert.deepStrictEqual(modules.modulesConnus([jeu, animation, warn, aide, { ...jeu, name: "pendu" }]),
-        ["moderation", "communaute", "communaute.animation", "communaute.jeux"])
+        ["moderation", "tickets", "communaute", "communaute.animation", "communaute.jeux"])
 })
 
 test("la purge d'un serveur efface aussi ses modules et salons de jeux", () => {
@@ -119,4 +119,18 @@ test("de bout en bout : module désactivé = rien ne s'exécute", async () => {
     assert.strictEqual(executions, 2, "hors des salons de jeux : refusé")
     assert.ok(horsSalon.reponses[0].content.includes(`<#${AUTRE}>`))
     db.setSalonsJeux(G, [])
+})
+
+test("moduleActif et estCoupeCle : pour les événements et tâches sans commande (A2)", () => {
+    assert.strictEqual(modules.moduleActif(G, "communaute.niveaux"), true)
+    db.setModule(G, "communaute.niveaux", false)
+    assert.strictEqual(modules.moduleActif(G, "communaute.niveaux"), false)
+    db.setModule(G, "communaute.niveaux", true)
+    db.setModule(G, "communaute", false)
+    assert.strictEqual(modules.moduleActif(G, "communaute.niveaux"), false, "parent désactivé")
+    db.setModule(G, "communaute", true)
+    process.env.DESACTIVER = "communaute"
+    assert.strictEqual(modules.estCoupeCle("communaute.economie"), true)
+    assert.strictEqual(modules.moduleActif(G, "communaute.economie"), false, "coupé en urgence")
+    assert.strictEqual(modules.moduleActif(G, "general"), true)
 })

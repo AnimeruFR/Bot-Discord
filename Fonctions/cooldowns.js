@@ -35,4 +35,4 @@ function verifierCommande(command, interaction, maintenant = Date.now()) {
 
 const vider = () => delais.clear() // pour les tests
 
-module.exports = { prendre, liberer, verifierCommande, purger, vider, MAX_ENTREES }
+module.exports = { prendre, liberer, verifierCommande, purger, vider }

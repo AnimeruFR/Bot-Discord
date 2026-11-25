@@ -6,9 +6,10 @@ const RACINE = path.join(__dirname, '..', 'Commandes')
 
 // Les commandes sont rangées par module : le dossier décide du module, jamais le fichier lui-même.
 //   Commandes/Moderation/x.js            -> module "moderation" (staff uniquement)
+//   Commandes/Tickets/x.js               -> module "tickets" (configuration staff ; boutons des membres publics)
 //   Commandes/Communaute/<Sous>/x.js     -> module "communaute", sous-module "<sous>" en minuscules
 //   Commandes/General/x.js               -> module "general" (aide, configuration, confidentialité…)
-const MODULES = { Moderation: "moderation", Communaute: "communaute", General: "general" }
+const MODULES = { Moderation: "moderation", Tickets: "tickets", Communaute: "communaute", General: "general" }
 
 // Liste des fichiers de commandes avec leur module, dans un ordre stable
 function listerCommandes(racine = RACINE) {
@@ -48,10 +49,10 @@ module.exports = (bot, { silencieux = false } = {}) => {
         command.sousModule = sousModule
         verifierDeclaration(command)
         bot.commands.set(command.name, command)
-        bot.routeur?.enregistrerCommande(command)
+        // Pas de routeur pour npm run deploy ni pour certains tests : seules les définitions comptent alors
+        if (bot.routeur) bot.routeur.enregistrerCommande(command)
         if (!silencieux) console.log(`Commande ${nomFichier} chargée avec succès !`)
     }
 }
 
 module.exports.listerCommandes = listerCommandes
-module.exports.MODULES = MODULES

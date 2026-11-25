@@ -1,27 +1,14 @@
 const Discord = require('discord.js')
 const { couleur } = require('../../Fonctions/apparence')
 const { t, langueDe, traductionsCommande } = require('../../Fonctions/i18n')
-const { estStaff } = require('../../Fonctions/staff')
-const { motifIndisponible } = require('../../Fonctions/modules')
+const { nomModule, cleDe } = require('../../Fonctions/modules')
+const { commandesVisibles } = require('../../Fonctions/garde')
 
 // Description d'une commande dans la langue de la personne
 const description = (command, langue) => langue === "en" ? traductionsCommande(command.name)?.description ?? command.description : command.description
 
-// Nom du groupe affiché : module, ou « Communauté › sous-module »
-const groupe = (command, langue) => command.module === "communaute" && command.sousModule
-    ? t(langue, "modules.nom_sous", { sous: t(langue, `modules.sous_${command.sousModule}`) })
-    : t(langue, `modules.nom_${command.module}`)
-
-// Commandes que CE membre peut voir (idée #95) : jamais celles du staff pour un membre normal,
-// jamais celles d'un module désactivé ou coupé. Sert aussi à l'autocomplétion.
-function commandesVisibles(bot, interaction) {
-    const staff = estStaff(interaction)
-    return [...bot.commands.values()].filter(c =>
-        (c.module !== "moderation" || staff) && !motifIndisponible(interaction.guildId, c))
-}
-
-// Ordre d'affichage : Général, Communauté (par sous-module), Modération en dernier
-const ORDRE = { general: 0, communaute: 1, moderation: 2 }
+// Ordre d'affichage : Général, Communauté (par sous-module), Tickets, Modération en dernier
+const ORDRE = { general: 0, communaute: 1, tickets: 2, moderation: 3 }
 
 module.exports = {
     name: "help",
@@ -38,11 +25,11 @@ module.exports = {
             autocomplete: true
         }
     ],
-    commandesVisibles,
 
     async run(bot, message, args) {
         const langue = langueDe(message)
-        const visibles = commandesVisibles(bot, message)
+        // Seulement ce que ce membre peut utiliser : rien du staff pour un membre, rien d'un module désactivé
+        const visibles = await commandesVisibles(bot, message)
         const nom = args.getString("commande")
         // Une commande cachée à ce membre est traitée comme inconnue (on ne confirme pas qu'elle existe)
         const command = nom ? visibles.find(c => c.name === nom) : null
@@ -60,7 +47,7 @@ module.exports = {
                 || (a.sousModule ?? "").localeCompare(b.sousModule ?? "") || a.name.localeCompare(b.name))
             const groupes = new Map()
             for (const c of tri) {
-                const g = groupe(c, langue)
+                const g = nomModule(langue, cleDe(c))
                 if (!groupes.has(g)) groupes.set(g, [])
                 groupes.get(g).push(c)
             }
@@ -80,7 +67,7 @@ module.exports = {
             embed.setTitle(t(langue, "help.commande_titre", { nom: command.name }))
                 .setDescription(t(langue, "help.commande_detail", {
                     nom: command.name, description: description(command, langue), permission,
-                    dm: t(langue, command.dm ? "help.oui" : "help.non"), categorie: groupe(command, langue)
+                    dm: t(langue, command.dm ? "help.oui" : "help.non"), categorie: nomModule(langue, cleDe(command))
                 }))
         }
         await message.reply({ embeds: [embed], flags: Discord.MessageFlags.Ephemeral })
