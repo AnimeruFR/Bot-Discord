@@ -276,16 +276,18 @@
     "choix": {}
   },
   "ticket": {
-    "description": "Tickets: post the panel, add or remove a member from a ticket",
+    "description": "Tickets: post the panel, add or remove a member, transfer a ticket",
     "options": {
       "action": "What to do?",
-      "membre": "The member to add or remove"
+      "membre": "The member to add or remove",
+      "type": "Destination type (to transfer)"
     },
     "choix": {
       "action": {
         "panneau": "Post the panel here",
         "ajouter": "Add a member to this ticket",
-        "retirer": "Remove a member from this ticket"
+        "retirer": "Remove a member from this ticket",
+        "transferer": "Transfer this ticket to another type"
       }
     }
   },
@@ -297,14 +299,27 @@
       "nom": "Name shown in the menu (e.g. Support, Report, Partnership)",
       "description": "Short description shown in the menu",
       "categorie": "Category for tickets of this type",
-      "staff": "Role that can see and manage tickets of this type"
+      "staff": "Role that can see and manage tickets of this type",
+      "minutes": "Target time to claim, in minutes (empty: remove it)",
+      "libelle": "Label of the field to add (45 characters at most)",
+      "style": "Size of the field's answer (short by default)",
+      "requis": "Is the field required? (yes by default)",
+      "champ": "Number of the field to remove (see the field list)"
     },
     "choix": {
       "action": {
         "liste": "View types",
         "ajouter": "Add a type",
         "modifier": "Edit a type",
-        "retirer": "Remove a type"
+        "retirer": "Remove a type",
+        "delai": "Set a type's target time",
+        "champs": "View the form fields",
+        "champ_ajouter": "Add a field to the form",
+        "champ_retirer": "Remove a field from the form"
+      },
+      "style": {
+        "court": "Short (one line)",
+        "long": "Long (several lines)"
       }
     }
   },

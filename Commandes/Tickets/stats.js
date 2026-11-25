@@ -8,7 +8,25 @@ const { exigerPremium } = require('../../Fonctions/premium')
 const JOUR = 24 * 60 * 60 * 1000
 
 // Statistiques calculées à partir des lignes de tickets (fonction pure, testée dans tests/tickets.test.js)
-function calculerStats(tickets, types, sansType = "Sans type") {
+// Pris en charge dans le délai : parmi les tickets dont le type a un délai cible, ceux pris à temps sur ceux dont le sort est connu
+// (pris en charge, ou délai dépassé sans prise en charge). Un ticket encore dans son délai n'est pas compté.
+function tauxDansLeDelai(tickets, types, maintenant) {
+    let dans = 0, total = 0
+    for (const t of tickets) {
+        const delai = types.find(ty => ty.id === t.type_id)?.sla_minutes
+        if (!delai) continue
+        const limite = t.created_at + delai * 60000
+        if (t.claimed_at) {
+            total++
+            if (t.claimed_at <= limite) dans++
+        } else if (maintenant > limite) {
+            total++
+        }
+    }
+    return total ? { dans, total } : null
+}
+
+function calculerStats(tickets, types, sansType = "Sans type", maintenant = Date.now()) {
     const nomType = id => types.find(t => t.id === id)?.nom ?? sansType
     const pris = tickets.filter(t => t.claimed_at)
     const notes = tickets.filter(t => t.rating)
@@ -20,6 +38,7 @@ function calculerStats(tickets, types, sansType = "Sans type") {
         total: tickets.length,
         enCours: tickets.filter(t => t.status === "ouvert").length,
         fermes: tickets.filter(t => t.status !== "ouvert").length,
+        dansLeDelai: tauxDansLeDelai(tickets, types, maintenant),
         delaiPriseEnCharge: pris.length ? pris.reduce((s, t) => s + (t.claimed_at - t.created_at), 0) / pris.length : null,
         noteMoyenne: notes.length ? notes.reduce((s, t) => s + t.rating, 0) / notes.length : null,
         nombreNotes: notes.length,
@@ -51,6 +70,7 @@ module.exports = {
                 { name: t(message, "tk.sta_en_cours"), value: String(s.enCours), inline: true },
                 { name: t(message, "tk.sta_fermes"), value: String(s.fermes), inline: true },
                 { name: t(message, "tk.sta_prise"), value: s.delaiPriseEnCharge === null ? "—" : formatDuree(Math.max(1000, s.delaiPriseEnCharge), langueDe(message)), inline: true },
+                { name: t(message, "tk.sta_sla"), value: s.dansLeDelai ? t(message, "tk.sta_sla_valeur", { pourcent: Math.round(100 * s.dansLeDelai.dans / s.dansLeDelai.total), dans: s.dansLeDelai.dans, total: s.dansLeDelai.total }) : "—", inline: true },
                 { name: t(message, "tk.sta_note"), value: s.noteMoyenne === null ? "—" : t(message, "tk.sta_notes", { note: s.noteMoyenne.toFixed(1), nombre: s.nombreNotes }), inline: true },
                 // Noms de types écrits par les admins : échappés pour ne pas casser la mise en forme
                 { name: t(message, "tk.sta_par_type"), value: s.parType.map(([nom, n]) => `${Discord.escapeMarkdown(nom)} : ${n}`).join("\n").slice(0, 1024) },

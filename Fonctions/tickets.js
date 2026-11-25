@@ -5,6 +5,7 @@ const db = require('./db')
 const { getLogChannel, sendModLog } = require('./logs')
 const { buildTranscript, sendAttachments, messageContentActive } = require('./transcript')
 const { estPremium } = require('./premium')
+const { refuser } = require('./erreurs')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -16,6 +17,10 @@ const MAX_SALONS_CATEGORIE = 50 // limite de Discord
 const DELAI_CONFIRMATION = 30 * 1000
 const DELAI_NOTE = 7 * 24 * 60 * 60 * 1000 // une note est acceptée pendant 7 jours
 const MAX_MEMBRES_AJOUTES = 10 // par ticket, avec /ticket ajouter
+const MAX_CHAMPS = 5 // champs du formulaire d'un type (limite de Discord : 5 lignes dans un formulaire)
+const SLA_MIN = 5 // délai cible d'un type, en minutes
+const SLA_MAX = 10080 // 7 jours
+const DROITS_TICKET = Object.fromEntries(PERMS_TICKET.map(p => [new Discord.PermissionsBitField(p).toArray()[0], true]))
 
 const enCours = new Set() // ouvertures/fermetures en cours (évite les doubles clics)
 const dernierePrise = new Map() // salon -> date de la dernière prise en charge (anti double clic)
@@ -144,23 +149,76 @@ async function onMenuType(bot, interaction) {
     }
 }
 
+// Champs du formulaire d'un type, dans l'ordre (aucun : formulaire par défaut, sujet + détails)
+function champsDuType(guildId, typeId) {
+    if (!typeId) return []
+    return db.sqlAll("SELECT * FROM ticket_fields WHERE guild_id = ? AND type_id = ? ORDER BY position, id", [guildId, typeId])
+}
+
+// Ajoute un champ en dernière position. false si le type en a déjà MAX_CHAMPS (compte et ajout dans la même transaction).
+function ajouterChamp(guildId, typeId, { label, style, required }) {
+    return db.transaction(() => {
+        const champs = champsDuType(guildId, typeId)
+        if (champs.length >= MAX_CHAMPS) return false
+        const position = champs.length ? champs[champs.length - 1].position + 1 : 1
+        db.sqlRun("INSERT INTO ticket_fields (guild_id, type_id, label, style, required, position) VALUES (?, ?, ?, ?, ?, ?)",
+            [guildId, typeId, label, style === "long" ? "long" : "court", required ? 1 : 0, position])
+        return true
+    })
+}
+
+// Retire le champ n° `rang` (1 = premier) et renvoie sa ligne, ou null s'il n'existe pas
+function retirerChamp(guildId, typeId, rang) {
+    return db.transaction(() => {
+        const champs = champsDuType(guildId, typeId)
+        const champ = champs[rang - 1]
+        if (!champ) return null
+        db.sqlRun("DELETE FROM ticket_fields WHERE guild_id = ? AND id = ?", [guildId, champ.id])
+        champs.filter(c => c !== champ).forEach((c, i) => db.sqlRun("UPDATE ticket_fields SET position = ? WHERE id = ?", [i + 1, c.id]))
+        return champ
+    })
+}
+
+// Délai cible d'un type en minutes (null : aucun). false si le type n'existe pas ou si le délai est hors limites.
+function definirDelai(guildId, typeId, minutes) {
+    if (minutes !== null && !(Number.isInteger(minutes) && minutes >= SLA_MIN && minutes <= SLA_MAX)) return false
+    return db.sqlRun("UPDATE ticket_types SET sla_minutes = ? WHERE guild_id = ? AND id = ?", [minutes, guildId, typeId]) > 0
+}
+
+// Trace d'un ticket (transfert, alerte de délai…) : des faits seulement, jamais le contenu d'un message
+function ajouterEvenement(guildId, channelId, actorId, kind, details = null) {
+    db.sqlRun("INSERT INTO ticket_events (guild_id, channel_id, actor_id, kind, details, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [guildId, channelId, actorId, kind, details, Date.now()])
+}
+
+// Le formulaire (modal) d'un type : ses champs, ou sujet + détails s'il n'en a pas
+function construireFormulaire(interaction, type) {
+    const champs = champsDuType(interaction.guild.id, type?.id)
+    const ligne = input => new Discord.ActionRowBuilder().addComponents(input)
+    const modal = new Discord.ModalBuilder()
+        .setCustomId(`ticket-form:${type?.id ?? 0}`)
+        .setTitle((type ? t(interaction, "tickets.formulaire_titre_type", { type: type.nom }) : t(interaction, "tickets.formulaire_titre")).slice(0, 45))
+    if (champs.length === 0) {
+        return modal.addComponents(
+            ligne(new Discord.TextInputBuilder()
+                .setCustomId("sujet").setLabel(t(interaction, "tickets.formulaire_sujet")).setStyle(Discord.TextInputStyle.Short)
+                .setRequired(true).setMinLength(3).setMaxLength(100)),
+            ligne(new Discord.TextInputBuilder()
+                .setCustomId("details").setLabel(t(interaction, "tickets.formulaire_details")).setStyle(Discord.TextInputStyle.Paragraph)
+                .setRequired(false).setMaxLength(1000))
+        )
+    }
+    return modal.addComponents(...champs.map(c => ligne(new Discord.TextInputBuilder()
+        .setCustomId(`champ_${c.id}`).setLabel(c.label.slice(0, 45))
+        .setStyle(c.style === "long" ? Discord.TextInputStyle.Paragraph : Discord.TextInputStyle.Short)
+        .setRequired(Boolean(c.required)).setMaxLength(c.style === "long" ? 1000 : 200))))
+}
+
 // Formulaire (modal) : il doit être la première réponse à l'interaction, sans « defer » avant
 async function montrerFormulaire(interaction, type) {
     const erreur = verifierOuverture(interaction, type)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
-
-    const modal = new Discord.ModalBuilder()
-        .setCustomId(`ticket-form:${type?.id ?? 0}`)
-        .setTitle((type ? t(interaction, "tickets.formulaire_titre_type", { type: type.nom }) : t(interaction, "tickets.formulaire_titre")).slice(0, 45))
-        .addComponents(
-            new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("sujet").setLabel(t(interaction, "tickets.formulaire_sujet")).setStyle(Discord.TextInputStyle.Short)
-                .setRequired(true).setMinLength(3).setMaxLength(100)),
-            new Discord.ActionRowBuilder().addComponents(new Discord.TextInputBuilder()
-                .setCustomId("details").setLabel(t(interaction, "tickets.formulaire_details")).setStyle(Discord.TextInputStyle.Paragraph)
-                .setRequired(false).setMaxLength(1000))
-        )
-    await interaction.showModal(modal)
+    await interaction.showModal(construireFormulaire(interaction, type))
 }
 
 // Texte d'un membre affiché dans un embed : sans mise en forme, sans lien déguisé
@@ -178,9 +236,24 @@ async function onFormulaire(bot, interaction) {
     const erreur = verifierOuverture(interaction, type)
     if (erreur) return interaction.reply({ content: erreur, flags: EPHEMERAL })
 
-    const sujet = interaction.fields.getTextInputValue("sujet").trim()
-    const details = interaction.fields.getTextInputValue("details")?.trim() ?? ""
-    if (!sujet) return interaction.reply({ content: t(interaction, "tickets.sujet_vide"), flags: EPHEMERAL })
+    // Les champs ont pu changer depuis l'affichage du formulaire : on compare avec ce qui a été envoyé
+    const champs = champsDuType(interaction.guild.id, type?.id)
+    const envoyes = [...interaction.fields.fields.keys()].sort().join(",")
+    const attendus = (champs.length ? champs.map(c => `champ_${c.id}`) : ["details", "sujet"]).sort().join(",")
+    if (envoyes !== attendus) return interaction.reply({ content: t(interaction, "tk.fo_modifie"), flags: EPHEMERAL })
+
+    // Réponses à poster dans le salon : { nom, valeur }, jamais stockées en base
+    let reponses
+    if (champs.length) {
+        reponses = champs.map(c => ({ nom: c.label, valeur: interaction.fields.getTextInputValue(`champ_${c.id}`)?.trim() ?? "", requis: Boolean(c.required) }))
+        const vide = reponses.find(r => r.requis && !r.valeur)
+        if (vide) return interaction.reply({ content: t(interaction, "tk.fo_vide", { champ: vide.nom }), flags: EPHEMERAL })
+    } else {
+        const sujet = interaction.fields.getTextInputValue("sujet").trim()
+        const details = interaction.fields.getTextInputValue("details")?.trim() ?? ""
+        if (!sujet) return interaction.reply({ content: t(interaction, "tickets.sujet_vide"), flags: EPHEMERAL })
+        reponses = [{ nom: t(interaction.guild, "tickets.champ_sujet"), valeur: sujet }, { nom: t(interaction.guild, "tickets.champ_details"), valeur: details }]
+    }
 
     const { guild, user } = interaction
     const cle = `${guild.id}-${user.id}`
@@ -213,10 +286,11 @@ async function onFormulaire(bot, interaction) {
             .setTitle(type ? t(guild, "tickets.formulaire_titre_type", { type: type.nom }) : t(guild, "tickets.bienvenue_titre"))
             .setThumbnail(bot.user.displayAvatarURL())
             .setDescription(t(guild, "tickets.bienvenue", { membre: user }))
-            .addFields({ name: t(guild, "tickets.champ_sujet"), value: texteSur(sujet).slice(0, 1024) })
             .setTimestamp()
             .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
-        if (details) embed.addFields({ name: t(guild, "tickets.champ_details"), value: texteSur(details).slice(0, 1024) })
+        for (const { nom, valeur } of reponses) {
+            if (valeur) embed.addFields({ name: nom.slice(0, 256), value: texteSur(valeur).slice(0, 1024) })
+        }
 
         const boutons = new Discord.ActionRowBuilder().addComponents(
             new Discord.ButtonBuilder().setCustomId("claim").setLabel(t(guild, "tickets.bouton_prendre")).setStyle(Discord.ButtonStyle.Success).setEmoji("🙋"),
@@ -292,8 +366,7 @@ async function gererMembre(interaction, action, user) {
         if (channel.permissionsFor(member)?.has(Flags.ViewChannel)) return interaction.reply({ content: t(interaction, "tk.gm_voit_deja", { membre: user }), flags: EPHEMERAL })
         const ajoutes = channel.permissionOverwrites.cache.filter(o => o.type === Discord.OverwriteType.Member && o.id !== ownerId && o.id !== interaction.guild.members.me.id)
         if (ajoutes.size >= MAX_MEMBRES_AJOUTES) return interaction.reply({ content: t(interaction, "tk.gm_max", { max: MAX_MEMBRES_AJOUTES }), flags: EPHEMERAL })
-        await channel.permissionOverwrites.edit(user.id, Object.fromEntries(PERMS_TICKET.map(p => [new Discord.PermissionsBitField(p).toArray()[0], true])),
-            { reason: raison, type: Discord.OverwriteType.Member })
+        await channel.permissionOverwrites.edit(user.id, DROITS_TICKET, { reason: raison, type: Discord.OverwriteType.Member })
         await interaction.reply(t(interaction.guild, "tk.gm_ajoute", { membre: user, staff: interaction.user }))
     } else {
         // On ne retire pas un membre plus haut que soi (ex : un administrateur)
@@ -309,6 +382,81 @@ async function gererMembre(interaction, action, user) {
         await interaction.reply(t(interaction.guild, "tk.gm_retire", { membre: user, staff: interaction.user }))
     }
     await sendModLog(interaction, { action: "ticket", cible: user, details: `${action === "ajouter" ? "Ajouté au" : "Retiré du"} ticket ${channel}` })
+}
+
+// Type de destination d'un transfert : son nom (sans tenir compte de la casse) ou son numéro
+function trouverType(guildId, saisie) {
+    const texte = String(saisie ?? "").trim().toLowerCase()
+    if (!texte) return null
+    const types = db.listTicketTypes(guildId)
+    return types.find(ty => ty.nom.toLowerCase() === texte)
+        ?? (/^\d{1,9}$/.test(texte) ? types.find(ty => ty.id === Number(texte)) : null)
+        ?? null
+}
+
+// /ticket transferer : change le type du ticket, le déplace dans la catégorie du nouveau type et remplace le rôle staff.
+// L'auteur et les membres ajoutés gardent leur accès (on ne touche qu'à l'accès du rôle staff).
+async function transfererTicket(interaction, saisie) {
+    if (!interaction.inCachedGuild()) return
+    const { guild, channel } = interaction
+    const ownerId = ticketOwnerId(channel)
+    if (!ownerId) return refuser(interaction, t(interaction, "tk.gm_hors_ticket"))
+    if (!isStaff(interaction, channel)) return refuser(interaction, t(interaction, "tk.tr_staff"))
+    if (channel.name.startsWith("ferme-")) return refuser(interaction, t(interaction, "tk.ferme"))
+    if (!channel.permissionsFor(guild.members.me)?.has([Flags.ViewChannel, Flags.ManageChannels, Flags.ManageRoles])) {
+        return refuser(interaction, t(interaction, "tk.tr_perms"))
+    }
+
+    const nouveau = trouverType(guild.id, saisie)
+    if (!nouveau) return refuser(interaction, t(interaction, "tk.tr_type_inconnu"))
+    const ticket = db.getTicket(channel.id) ?? assurerTicket(channel, ownerId)
+    if (ticket.status !== "ouvert") return refuser(interaction, t(interaction, "tk.ferme"))
+    if (ticket.type_id === nouveau.id) return refuser(interaction, t(interaction, "tk.tr_meme_type"))
+
+    // Catégorie de destination : celle du type (elle doit être utilisable et avoir de la place)
+    const categorieType = nouveau.category_id ? guild.channels.cache.get(nouveau.category_id) : null
+    if (categorieType && !categorieUtilisable(categorieType)) return refuser(interaction, t(interaction, "tk.categorie_refus", { categorie: categorieType }))
+    const destination = ticketCategory(interaction, nouveau)
+    const deplacer = Boolean(destination && destination.id !== channel.parentId)
+    if (deplacer && destination.children.cache.size >= MAX_SALONS_CATEGORIE) return refuser(interaction, t(interaction, "tickets.categorie_pleine"))
+
+    const cle = `transfert-${channel.id}`
+    if (enCours.has(cle)) return refuser(interaction, t(interaction, "tk.tr_en_cours"))
+    enCours.add(cle)
+    try {
+        await interaction.deferReply()
+        const raison = `${interaction.user.tag} : /ticket transferer`
+        const ancienId = ticket.staff_role_id
+        const nouveauId = staffRoleId(guild, nouveau)
+
+        // setParent sans lockPermissions : sinon le salon reprendrait les permissions de la catégorie (l'auteur perdrait l'accès)
+        if (deplacer) await channel.setParent(destination.id, { lockPermissions: false, reason: raison })
+        // Le nouveau rôle d'abord : le salon n'est jamais sans staff pendant le changement
+        if (nouveauId && nouveauId !== ancienId) {
+            await channel.permissionOverwrites.edit(nouveauId, DROITS_TICKET, { reason: raison, type: Discord.OverwriteType.Role })
+        }
+        if (ancienId && ancienId !== nouveauId && ancienId !== guild.id
+            && channel.permissionOverwrites.cache.get(ancienId)?.type === Discord.OverwriteType.Role) {
+            await channel.permissionOverwrites.delete(ancienId, raison)
+        }
+
+        const ancienType = ticket.type_id ? db.getTicketType(guild.id, ticket.type_id) : null
+        const ancienNom = ancienType?.nom ?? t(guild, "tk.sta_sans_type")
+        db.transaction(() => {
+            db.sqlRun("UPDATE tickets SET type_id = ?, staff_role_id = ? WHERE channel_id = ?", [nouveau.id, nouveauId, channel.id])
+            ajouterEvenement(guild.id, channel.id, interaction.user.id, "transfert", `${ancienNom} -> ${nouveau.nom}`)
+        })
+
+        await interaction.editReply({
+            content: t(guild, nouveauId ? "tk.tr_ok" : "tk.tr_ok_sans_role", {
+                staff: interaction.user, ancien: Discord.escapeMarkdown(ancienNom), type: Discord.escapeMarkdown(nouveau.nom), role: `<@&${nouveauId}>`
+            }),
+            allowedMentions: { parse: [], roles: nouveauId ? [nouveauId] : [] }
+        })
+        await sendModLog(interaction, { action: "ticket", details: `Ticket ${channel} transféré : ${Discord.escapeMarkdown(ancienNom)} → ${Discord.escapeMarkdown(nouveau.nom)}` })
+    } finally {
+        enCours.delete(cle)
+    }
 }
 
 // L'auteur perd l'accès. type Member : l'ID seul ne suffit pas à discord.js si l'utilisateur n'est pas en cache
@@ -478,5 +626,6 @@ async function noterTicket(bot, interaction) {
 
 module.exports = {
     onBoutonTicket, onMenuType, onFormulaire, claimTicket, closeTicket, noterTicket, gererMembre, fermerPourAuteur,
-    retirerAccesAuteur, accesAuteurRetire, menuTypes, ticketOwnerId, roleValide, categorieUtilisable, isStaff, staffRoleId, verifierOuverture, texteSur
+    retirerAccesAuteur, accesAuteurRetire, menuTypes, ticketOwnerId, roleValide, categorieUtilisable, isStaff, staffRoleId, verifierOuverture, texteSur,
+    transfererTicket, trouverType, construireFormulaire, champsDuType, ajouterChamp, retirerChamp, definirDelai, ajouterEvenement, MAX_CHAMPS, SLA_MIN, SLA_MAX
 }
