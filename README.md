@@ -1,11 +1,12 @@
 # Bot-Discord
 
-Bot Discord de modération (ban, kick, mute, warn, clear) et de tickets, en slash commandes.
+Bot Discord de modération (ban, kick, mute, warn, clear), de tickets et d'animation (rôles à boutons, giveaways, sondages, annonces, bienvenue), en slash commandes.
 
 ## Installation
 
 1. Crée une application sur le [Discord Developer Portal](https://discord.com/developers/applications), ajoute-lui un bot et récupère son token (*Bot > Reset Token*).
-2. Invite le bot sur ton serveur avec les scopes `bot` et `applications.commands` et les permissions : Gérer les salons, Gérer les messages, Expulser, Bannir, Exclure temporairement des membres, Voir les salons, Envoyer des messages, Lire l'historique, **Joindre des fichiers**, **Intégrer des liens** (ces deux dernières sont nécessaires aux tickets).
+   **Obligatoire** : dans *Bot > Privileged Gateway Intents*, coche **Server Members Intent** (messages de bienvenue, giveaways). Sans lui, Discord refuse la connexion (code 4014) et le bot l'indique dans la console.
+2. Invite le bot sur ton serveur avec les scopes `bot` et `applications.commands` et les permissions : Gérer les salons, Gérer les messages, Gérer les rôles, Expulser, Bannir, Exclure temporairement des membres, Voir les salons, Envoyer des messages, Lire l'historique, **Joindre des fichiers**, **Intégrer des liens** (ces deux dernières sont nécessaires aux tickets).
    Le rôle du bot doit être placé **au-dessus** des rôles qu'il doit modérer.
 3. Copie `.env.example` en `.env` et remplis-le :
    ```
@@ -51,6 +52,14 @@ Règles :
 - Quand l'auteur ferme son ticket, il perd seulement l'accès : le salon est renommé `ferme-…` et le staff garde l'historique.
 - Quand le staff supprime un ticket, le bot demande une confirmation puis envoie un **transcript** (.txt et .html lisible, 1000 derniers messages, 7 Mo max ; dans le HTML, tout le texte des membres est échappé et la page ne charge rien d'extérieur, voir [l'aperçu](docs/apercu-transcript.png)) et une copie des **pièces jointes** (40 Mo max) dans le salon de logs (`/setlogs`) avant de supprimer. Si l'envoi échoue, le ticket n'est pas supprimé.
 - Pour que le transcript contienne le texte des messages, active **Message Content Intent** dans le Developer Portal (*Bot > Privileged Gateway Intents*). Sans lui, le transcript garde les auteurs, les dates et les pièces jointes, mais pas le texte.
+
+## Animation
+
+- **Rôles à boutons** : `/roles action:Créer texte:Notifications` poste un panneau, puis `/roles action:Ajouter panneau:<ID> role:@Annonces texte:"🔔 Annonces"`. Les membres cliquent pour prendre ou retirer le rôle (`unique:True` : un seul rôle du panneau à la fois). Par sécurité, un rôle avec une permission de modération ou d'administration (Bannir, Gérer les messages, Administrateur…) ne peut **jamais** être distribué ainsi, et c'est revérifié à chaque clic.
+- **Giveaways** : `/giveaway action:Lancer prix:Nitro duree:2d gagnants:1`. Tirage au sort équitable parmi les participants encore présents, même si le bot a redémarré entre-temps. `Relancer` refait un tirage sans les anciens gagnants. Seuls les gagnants sont mentionnés.
+- **Sondages** : `/sondage question:"Soirée jeux ?" choix:"Vendredi ; Samedi ; Dimanche" heures:48` (sondage natif de Discord).
+- **Annonces programmées** : `/annonce action:Programmer message:… quand:"25/12/2026 18:00"` (heure de Paris) ou `quand:2h`. Au moment de l'envoi, le bot revérifie que l'auteur a toujours le droit d'écrire dans le salon. Aucune mention n'y est active (pas de @everyone).
+- **Bienvenue / au revoir** : `/bienvenue action:Configurer type:Bienvenue salon:#accueil message:"Bienvenue {membre} sur {serveur} !"`. Variables : `{membre}`, `{serveur}`, `{nombre}`. Seul le nouveau membre est mentionné ; 10 messages par minute au maximum (anti-raid).
 
 ## Données et logs
 
@@ -118,4 +127,9 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
 | `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
 | `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
+| `/roles action …` | Gérer les rôles | Panneaux de rôles à boutons (10 panneaux, 25 rôles par panneau) |
+| `/giveaway action …` | Gérer le serveur | Lancer, terminer, relancer, annuler un giveaway (10 en cours max) |
+| `/sondage question choix` | Gérer les messages | Sondage natif (2 à 10 choix, 1 h à 32 jours) |
+| `/annonce action …` | Gérer les messages | Annonces programmées (20 en attente, 60 jours max) |
+| `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
 | `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |

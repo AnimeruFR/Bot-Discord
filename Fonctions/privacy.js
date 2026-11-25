@@ -54,6 +54,7 @@ function startPrivacySchedule(bot) {
             db.purgeTicketCooldowns(Date.now() - 10 * 60 * 1000) // délais de tickets expirés
             db.purgeOldCases(Date.now() - CONSERVATION_HISTORIQUE) // historique des sanctions de plus de 2 ans
             db.purgeOldTickets(Date.now() - 90 * JOUR) // suivi des tickets supprimés depuis plus de 90 jours
+            db.purgeOldGiveaways(Date.now() - 30 * JOUR) // giveaways terminés depuis plus de 30 jours (participants, gagnants)
             if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)
         } catch (err) {
             console.error("Erreur pendant la purge RGPD :", err.message)

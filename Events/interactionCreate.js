@@ -1,5 +1,7 @@
 const Discord = require('discord.js')
 const tickets = require('../Fonctions/tickets')
+const { onClicRole } = require('../Fonctions/rolesBoutons')
+const { onClicGiveaway } = require('../Fonctions/giveaways')
 
 module.exports = async (bot, interaction) => {
     try {
@@ -33,6 +35,8 @@ module.exports = async (bot, interaction) => {
             if (interaction.customId === "close") return await tickets.closeTicket(bot, interaction)
             if (interaction.customId === "claim") return await tickets.claimTicket(bot, interaction)
             if (interaction.customId.startsWith("note:")) return await tickets.noterTicket(bot, interaction)
+            if (interaction.customId.startsWith("role:")) return await onClicRole(bot, interaction)
+            if (interaction.customId.startsWith("giveaway:")) return await onClicGiveaway(bot, interaction)
         }
         if (interaction.isStringSelectMenu() && interaction.customId === "ticket-type") return await tickets.onMenuType(bot, interaction)
         if (interaction.isModalSubmit() && interaction.customId.startsWith("ticket-form:")) return await tickets.onFormulaire(bot, interaction)

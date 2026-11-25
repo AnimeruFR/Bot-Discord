@@ -92,7 +92,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
   - `/stats tickets`.
 - **Points de vigilance** : le transcript HTML est la seule partie à risque d'injection (échapper tout le texte, pas de script, pas d'image distante sans contrôle).
 
-### Lot G – Engagement (idées 15 à 17)
+### Lot G – Engagement (idées 15 à 17) ✅ fait
 - Rôles par boutons (en premier : pas d'intent privilégié), giveaways (tirage enregistré en base, qui survit au redémarrage), sondages, annonces programmées.
 - Bienvenue / au revoir **seulement si tu acceptes l'intent `GuildMembers`**, qui se coche dans le Developer Portal et que Discord justifie à la vérification.
 
