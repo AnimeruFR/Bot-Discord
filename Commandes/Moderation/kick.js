@@ -1,8 +1,10 @@
 const Discord = require('discord.js')
 const { formatReason, auditReason, checkHierarchy, fetchMember } = require('../../Fonctions/moderation')
 const { sendModLog } = require('../../Fonctions/logs')
+const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "kick",
@@ -21,9 +23,12 @@ module.exports = {
             name: "raison",
             description: "La raison du kick",
             required: true,
+            autocomplete: true,
             maxLength: 400
         }
     ],
+
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
 
     async run(bot, message, args) {
         // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord
@@ -34,11 +39,11 @@ module.exports = {
 
         // Rôles relus auprès de Discord : la hiérarchie est vérifiée sur des données à jour
         const member = await fetchMember(message.guild, user.id)
-        if (!member) return message.editReply(t(message, "mod.absent"))
+        if (!member) return refuser(message, t(message, "mod.absent"))
 
         const erreur = checkHierarchy(message, member, "kick")
-        if (erreur) return message.editReply(erreur)
-        if (!member.kickable) return message.editReply(t(message, "mod.kick.pas_kickable"))
+        if (erreur) return refuser(message, erreur)
+        if (!member.kickable) return refuser(message, t(message, "mod.kick.pas_kickable"))
 
         await user.send(t(message.guild, "mod.kick.mp", { serveur: message.guild.name, reason })).catch(() => {})
 

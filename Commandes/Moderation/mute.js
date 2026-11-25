@@ -4,6 +4,7 @@ const { DUREE_MAX_MUTE } = require('../../Fonctions/sanctions')
 const { muter } = require('../../Fonctions/actionsMod')
 const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "mute",
@@ -28,9 +29,12 @@ module.exports = {
             name: "raison",
             description: "La raison du mute",
             required: false,
+            autocomplete: true,
             maxLength: 400
         }
     ],
+
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
 
     async run(bot, message, args) {
         // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord

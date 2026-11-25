@@ -1,6 +1,8 @@
 const Discord = require('discord.js')
+const { refuser } = require('../../Fonctions/erreurs')
 const { parseDuree } = require('../../Fonctions/moderation')
 const { banAvecConfirmation, DUREE_MAX_TEMPBAN } = require('../../Fonctions/sanctions')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "tempban",
@@ -25,13 +27,16 @@ module.exports = {
             name: "raison",
             description: "La raison du bannissement",
             required: true,
+            autocomplete: true,
             maxLength: 400
         }
     ],
 
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
+
     async run(bot, message, args) {
         const { duree, erreur } = parseDuree(args.getString("duree"), { max: DUREE_MAX_TEMPBAN, cible: message })
-        if (erreur) return message.reply({ content: erreur, flags: Discord.MessageFlags.Ephemeral })
+        if (erreur) return refuser(message, erreur)
         await banAvecConfirmation(message, { user: args.getUser("membre"), raisonBrute: args.getString("raison"), duree })
     }
 }

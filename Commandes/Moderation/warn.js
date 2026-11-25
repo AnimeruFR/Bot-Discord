@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const { avertir } = require('../../Fonctions/actionsMod')
 const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
+const { autocompleterRaison } = require('../../Fonctions/raisons')
 
 module.exports = {
     name: "warn",
@@ -22,9 +23,12 @@ module.exports = {
             name: "raison",
             description: "La raison du warn",
             required: false,
+            autocomplete: true,
             maxLength: 400
         }
     ],
+
+    autocomplete: (bot, interaction) => autocompleterRaison(interaction),
 
     async run(bot, message, args) {
         // Réponse différée : relire le membre et agir peut dépasser les 3 s permises par Discord.

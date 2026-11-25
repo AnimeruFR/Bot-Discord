@@ -1,0 +1,47 @@
+{
+  "note": {
+    "description": "Private staff notes about a member",
+    "options": {
+      "action": "What to do?",
+      "membre": "The member concerned",
+      "texte": "The note text (to add)",
+      "numero": "The note number (to remove)"
+    },
+    "choix": {
+      "action": {
+        "ajouter": "Add a note",
+        "liste": "View notes",
+        "retirer": "Remove a note"
+      }
+    }
+  },
+  "raisons": {
+    "description": "Manage the sanction reasons suggested by autocomplete",
+    "options": {
+      "action": "What to do?",
+      "texte": "The reason (to add or remove)"
+    },
+    "choix": {
+      "action": {
+        "ajouter": "Add a reason",
+        "retirer": "Remove a reason",
+        "liste": "View reasons"
+      }
+    }
+  },
+  "case": {
+    "description": "View, correct or cancel a sanction",
+    "options": {
+      "action": "What to do?",
+      "numero": "The sanction number (shown by /historique)",
+      "texte": "The new reason (to change it)"
+    },
+    "choix": {
+      "action": {
+        "voir": "View the sanction",
+        "raison": "Change the reason",
+        "annuler": "Cancel the sanction"
+      }
+    }
+  }
+}
