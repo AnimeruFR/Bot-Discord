@@ -80,6 +80,22 @@ Pour cela, écrivez à [E-MAIL DE CONTACT]. Par exemple, un membre peut demander
 
 Si vous pensez que vos droits ne sont pas respectés, vous pouvez porter réclamation auprès de la CNIL : [https://www.cnil.fr](https://www.cnil.fr).
 
+### Accès et effacement par vous-même
+
+Sans m'écrire, chaque membre peut agir seul, **serveur par serveur**, avec la commande `/privacy moi` :
+
+- `exporter` : le bot vous envoie (message visible de vous seul) un fichier JSON de toutes les données qui vous concernent sur ce serveur ;
+- `effacer` : après confirmation par bouton, le bot applique le traitement ci-dessous. Un résumé chiffré (jamais le contenu) est écrit dans le salon de logs du serveur, avec votre identifiant.
+
+| Traitement | Données concernées | Détail |
+|---|---|---|
+| **Effacer** | Délai entre deux tickets, participations aux giveaways | La ligne est supprimée |
+| **Anonymiser** | Auteur et membre du staff d'un ticket, organisateur et gagnants d'un giveaway, auteur d'une annonce programmée, modérateur d'un avertissement ou d'une sanction | Votre identifiant est remplacé par `0`, le reste de la ligne est gardé car il sert à d'autres membres ou au staff |
+| **Conserver** | Avertissements et sanctions dont vous avez fait l'objet | **2 ans** au plus, intérêt légitime de modération (voir la durée de conservation) |
+| **Conserver** | Ban temporaire en cours | Jusqu'à la fin du ban, sinon il ne pourrait pas être levé |
+
+Les sauvegardes de la base tournent sur 7 jours : une donnée effacée ou anonymisée peut encore y figurer jusqu'à 7 jours, puis disparaît quand la sauvegarde est remplacée. Si un effacement doit être retardé (par exemple une opération en cours), le bot vous en donne la raison.
+
 Pour ce qui concerne le contenu des transcripts dans le salon de logs d'un serveur, adressez-vous d'abord aux administrateurs de ce serveur.
 
 ## 9. Résumé dans Discord
