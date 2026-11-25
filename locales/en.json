@@ -147,6 +147,8 @@
   "config.famille_config": "Configuration",
   "config.famille_jeux": "Games",
   "config.famille_economie": "Economy",
+  "config.famille_antiraid": "Anti-raid",
+  "config.famille_appels": "Sanction appeals",
   "config.logs_famille_ok": "\"{famille}\" logs will be sent to {salon}.",
   "config.logs_famille_general": "\"{famille}\" logs go back to the general channel.",
   "config.logs_famille_aucun": "\"{famille}\" logs are off (this family never uses the general channel).",

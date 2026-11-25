@@ -66,10 +66,22 @@ const requetes = {
         UNION SELECT guild_id FROM guild_modules UNION SELECT guild_id FROM guild_salons_jeux
         UNION SELECT guild_id FROM log_channels UNION SELECT guild_id FROM staff_notes UNION SELECT guild_id FROM mod_reasons
         UNION SELECT guild_id FROM case_edits UNION SELECT guild_id FROM ticket_macros UNION SELECT guild_id FROM account_filter
-        UNION SELECT guild_id FROM automod_config`),
+        UNION SELECT guild_id FROM automod_config
+        UNION SELECT guild_id FROM raid_config
+        UNION SELECT guild_id FROM raid_events
+        UNION SELECT guild_id FROM verification_config
+        UNION SELECT guild_id FROM nick_filter
+        UNION SELECT guild_id FROM appeals
+        UNION SELECT guild_id FROM quarantine_config
+        UNION SELECT guild_id FROM quarantines
+        UNION SELECT guild_id FROM config_audit
+        UNION SELECT guild_id FROM ticket_fields
+        UNION SELECT guild_id FROM ticket_events
+        UNION SELECT guild_id FROM phishing_whitelist`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
         "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux",
-        "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config"]
+        "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config",
+        "raid_config", "raid_events", "verification_config", "nick_filter", "appeals", "quarantine_config", "quarantines", "config_audit", "ticket_fields", "ticket_events", "phishing_whitelist"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets

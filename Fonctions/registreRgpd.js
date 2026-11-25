@@ -119,7 +119,44 @@ const REGISTRE = {
         colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "La réponse sert au staff du serveur, son auteur n'est plus identifié" } }
     },
     account_filter: { serveur: "guild_id", aucune: "Réglage du filtre des comptes récents (#3), aucune donnée de membre" },
-    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" }
+    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" },
+    // Phase 2
+    raid_config: { serveur: "guild_id", aucune: "Seuils anti-raid du serveur (#2), aucune donnée de membre" },
+    raid_events: {
+        serveur: "guild_id",
+        colonnes: { lifted_by: { traitement: "anonymiser", auteur: true, motif: "Le raid reste dans l'historique du serveur, celui qui l'a levé n'est plus identifié" } }
+    },
+    verification_config: { serveur: "guild_id", aucune: "Réglage de la vérification (#4), aucune donnée de membre" },
+    nick_filter: { serveur: "guild_id", aucune: "Mots interdits dans les pseudos (#25), aucune donnée de membre" },
+    // Appel (#11) : texte écrit par le membre. Il suit la sanction (même durée), le staff qui a tranché est anonymisé.
+    appeals: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Suivi de la sanction contestée (un appel par sanction)", duree: "2 ans" },
+            decided_by: { traitement: "anonymiser", auteur: true, motif: "La décision reste valable, le membre du staff n'est plus identifié" }
+        }
+    },
+    quarantine_config: { serveur: "guild_id", aucune: "Rôle de quarantaine du serveur (#14), aucune donnée de membre" },
+    // Quarantaine en cours : sans la ligne, les rôles du membre ne pourraient pas lui être rendus.
+    quarantines: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine" },
+            moderator_id: { traitement: "anonymiser", auteur: true, motif: "La quarantaine reste en place, le modérateur n'est plus identifié" }
+        }
+    },
+    // Journal de configuration (#15) : réglages du serveur, l'auteur du changement est un membre du staff.
+    config_audit: {
+        serveur: "guild_id",
+        colonnes: { moderator_id: { traitement: "anonymiser", auteur: true, motif: "Le changement reste dans le journal du serveur, son auteur n'est plus identifié" } }
+    },
+    ticket_fields: { serveur: "guild_id", aucune: "Champs des formulaires de tickets (#19), aucune donnée de membre" },
+    // Trace d'un ticket (#21) : transfert, alerte de délai… sans contenu de message.
+    ticket_events: {
+        serveur: "guild_id",
+        colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié" } }
+    },
+    phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" }
 }
 
 const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]
