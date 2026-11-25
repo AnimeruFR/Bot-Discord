@@ -33,13 +33,23 @@ Les commandes ne sont plus enregistrées à chaque démarrage. Relance `npm run 
 ## Tickets
 
 1. `/setticket categorie:<catégorie> staff:<rôle>` (optionnel, demande Gérer le serveur + Gérer les salons + Gérer les rôles) : choisit où créer les tickets et quel rôle les gère. On ne peut choisir qu'un rôle inférieur au sien. Sans configuration, les tickets vont dans la catégorie du panneau et le rôle staff est `TICKET_STAFF_ROLE_ID` du `.env`. `/setticket` seul affiche la configuration, `reinitialiser:True` la remet par défaut.
-2. `/ticket` poste dans le salon un panneau avec le bouton « Créer un ticket ».
+2. (Optionnel) `/tickettype action:Ajouter nom:Support description:… categorie:… staff:…` : jusqu'à 10 types de tickets, chacun avec sa catégorie et son rôle staff. Le panneau affiche alors un menu déroulant au lieu du bouton.
+3. `/ticket action:Poster le panneau ici` poste le panneau (il faut « Gérer les messages »). Repostez-le après avoir ajouté ou retiré un type.
+4. (Optionnel) `/setticket inactivite:3` : un ticket sans message d'un membre depuis 3 jours reçoit un avertissement, puis il est fermé 24 h après s'il n'y a pas de réponse.
+
+À l'ouverture, le membre remplit un **formulaire** (sujet + détails), affiché en tête du ticket avec deux boutons :
+- **Prendre en charge** (staff) : un seul membre du staff à la fois, un nouveau clic libère le ticket. Un membre avec « Gérer les salons » peut reprendre un ticket déjà pris.
+- **Fermer le ticket** : voir plus bas.
+
+Dans un ticket, le staff peut faire `/ticket action:Ajouter membre:@x` ou `action:Retirer` (10 membres ajoutés au maximum, l'auteur ne peut être ni ajouté ni retiré).
+
+Après la suppression, l'auteur reçoit en MP une demande de **note de 1 à 5** (valable 7 jours, une seule fois). `/stats` (Gérer le serveur) résume les 30 derniers jours : tickets ouverts, fermés, délai moyen de prise en charge, note moyenne, répartition par type, staff le plus actif.
 
 Règles :
 - **Un** ticket ouvert par membre, 10 min minimum entre deux, 50 tickets max par serveur.
-- Le salon n'est visible que par son auteur, le bot, le rôle staff et les administrateurs. Sans rôle staff, seuls les administrateurs (et les membres avec « Gérer les salons ») voient les tickets.
+- Le salon n'est visible que par son auteur, le bot, le rôle staff (celui du type, sinon celui de `/setticket`) et les administrateurs. Sans rôle staff, seuls les administrateurs (et les membres avec « Gérer les salons ») voient les tickets. Modifier un type ne change pas les tickets déjà ouverts.
 - Quand l'auteur ferme son ticket, il perd seulement l'accès : le salon est renommé `ferme-…` et le staff garde l'historique.
-- Quand le staff supprime un ticket, le bot demande une confirmation puis envoie un **transcript** (.txt, 1000 derniers messages, 7 Mo max) et une copie des **pièces jointes** (40 Mo max) dans le salon de logs (`/setlogs`) avant de supprimer. Si l'envoi échoue, le ticket n'est pas supprimé.
+- Quand le staff supprime un ticket, le bot demande une confirmation puis envoie un **transcript** (.txt et .html lisible, 1000 derniers messages, 7 Mo max ; dans le HTML, tout le texte des membres est échappé et la page ne charge rien d'extérieur, voir [l'aperçu](docs/apercu-transcript.png)) et une copie des **pièces jointes** (40 Mo max) dans le salon de logs (`/setlogs`) avant de supprimer. Si l'envoi échoue, le ticket n'est pas supprimé.
 - Pour que le transcript contienne le texte des messages, active **Message Content Intent** dans le Developer Portal (*Bot > Privileged Gateway Intents*). Sans lui, le transcript garde les auteurs, les dates et les pièces jointes, mais pas le texte.
 
 ## Données et logs
@@ -104,6 +114,8 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/unwarn numero` | Exclure temporairement | Retire un avertissement (pas les siens, ni ceux d'un supérieur) |
 | `/setlogs [salon]` | Gérer le serveur | Salon des logs de modération (sans salon : désactive) |
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
-| `/ticket` | Gérer les messages | Poste le panneau de création de tickets |
-| `/setticket [categorie] [staff] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie et rôle staff des tickets |
+| `/ticket action [membre]` | Panneau : Gérer les messages ; ajouter/retirer : staff du ticket | Poste le panneau, ajoute ou retire un membre d'un ticket |
+| `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
+| `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
+| `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
 | `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |

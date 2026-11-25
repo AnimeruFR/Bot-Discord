@@ -94,6 +94,38 @@ db.exec(`
         previous TEXT NOT NULL,
         PRIMARY KEY (guild_id, channel_id)
     );
+
+    -- Types de tickets (lot F) : catégorie et rôle staff propres à chaque type
+    CREATE TABLE IF NOT EXISTS ticket_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guild_id TEXT NOT NULL,
+        nom TEXT NOT NULL,
+        description TEXT,
+        category_id TEXT,
+        staff_role_id TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_types ON ticket_types (guild_id);
+
+    -- Suivi des tickets (lot F). Le contenu du formulaire n'est pas stocké : il reste dans le salon.
+    CREATE TABLE IF NOT EXISTS tickets (
+        channel_id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        owner_id TEXT NOT NULL,
+        type_id INTEGER,
+        -- Rôle staff posé sur le salon à sa création (un type modifié ensuite ne change pas l'accès réel)
+        staff_role_id TEXT,
+        created_at INTEGER NOT NULL,
+        -- Message d'avertissement d'inactivité (fermeture 24 h après s'il n'y a pas de réponse)
+        warn_message_id TEXT,
+        claimed_by TEXT,
+        claimed_at INTEGER,
+        status TEXT NOT NULL DEFAULT 'ouvert',
+        closed_at INTEGER,
+        warned_at INTEGER,
+        rating INTEGER,
+        rated_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_tickets_serveur ON tickets (guild_id, status);
 `)
 
 // Migration lot E : les warns d'avant le lot E apparaissent dans l'historique
@@ -107,6 +139,8 @@ db.exec("COMMIT")
 const colonnes = db.prepare("PRAGMA table_info(guild_config)").all().map(c => c.name)
 if (!colonnes.includes("ticket_category_id")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_category_id TEXT")
 if (!colonnes.includes("ticket_staff_role_id")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_staff_role_id TEXT")
+// Lot F : fermeture automatique des tickets inactifs (0 = désactivée)
+if (!colonnes.includes("ticket_inactivity_days")) db.exec("ALTER TABLE guild_config ADD COLUMN ticket_inactivity_days INTEGER NOT NULL DEFAULT 0")
 
 const requetes = {
     addWarn: db.prepare("INSERT INTO warns (guild_id, user_id, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?)"),
@@ -134,9 +168,41 @@ const requetes = {
     leftBefore: db.prepare("SELECT guild_id FROM guild_left WHERE left_at < ?"),
     guildsWithData: db.prepare(`SELECT guild_id FROM warns UNION SELECT guild_id FROM guild_config
         UNION SELECT guild_id FROM ticket_cooldowns UNION SELECT guild_id FROM cases UNION SELECT guild_id FROM tempbans
-        UNION SELECT guild_id FROM sanction_thresholds UNION SELECT guild_id FROM channel_locks`),
-    deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks"]
+        UNION SELECT guild_id FROM sanction_thresholds UNION SELECT guild_id FROM channel_locks
+        UNION SELECT guild_id FROM ticket_types UNION SELECT guild_id FROM tickets`),
+    deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
+        "ticket_types", "tickets"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
+
+    // Types de tickets
+    listTicketTypes: db.prepare("SELECT * FROM ticket_types WHERE guild_id = ? ORDER BY id"),
+    getTicketType: db.prepare("SELECT * FROM ticket_types WHERE guild_id = ? AND id = ?"),
+    addTicketType: db.prepare("INSERT INTO ticket_types (guild_id, nom, description, category_id, staff_role_id) VALUES (?, ?, ?, ?, ?)"),
+    updateTicketType: db.prepare(`UPDATE ticket_types SET nom = COALESCE(?, nom), description = COALESCE(?, description),
+        category_id = COALESCE(?, category_id), staff_role_id = COALESCE(?, staff_role_id) WHERE guild_id = ? AND id = ?`),
+    removeTicketType: db.prepare("DELETE FROM ticket_types WHERE guild_id = ? AND id = ?"),
+
+    // Tickets
+    addTicket: db.prepare(`INSERT OR IGNORE INTO tickets (channel_id, guild_id, owner_id, type_id, staff_role_id, created_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`),
+    getTicket: db.prepare("SELECT * FROM tickets WHERE channel_id = ?"),
+    openTicketsOf: db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND status = 'ouvert'"),
+    // claimed_at garde la date de la 1re prise en charge (pour les stats), même après une libération
+    claimTicket: db.prepare("UPDATE tickets SET claimed_by = ?, claimed_at = COALESCE(claimed_at, ?) WHERE channel_id = ? AND claimed_by IS NULL"),
+    takeOverTicket: db.prepare("UPDATE tickets SET claimed_by = ?, claimed_at = COALESCE(claimed_at, ?) WHERE channel_id = ?"),
+    unclaimTicket: db.prepare("UPDATE tickets SET claimed_by = NULL WHERE channel_id = ? AND claimed_by = ?"),
+    setTicketStatus: db.prepare("UPDATE tickets SET status = ?, closed_at = COALESCE(closed_at, ?) WHERE channel_id = ?"),
+    // À la suppression, closed_at prend la date de suppression (le délai de 7 jours pour noter part de là)
+    setTicketDeleted: db.prepare("UPDATE tickets SET status = 'supprime', closed_at = ? WHERE channel_id = ? AND status != 'supprime'"),
+    unfinishedTickets: db.prepare("SELECT * FROM tickets WHERE status != 'supprime'"),
+    setTicketWarned: db.prepare("UPDATE tickets SET warned_at = ?, warn_message_id = ? WHERE channel_id = ?"),
+    rateTicket: db.prepare("UPDATE tickets SET rating = ?, rated_at = ? WHERE channel_id = ? AND owner_id = ? AND rating IS NULL AND status = 'supprime'"),
+    purgeTickets: db.prepare("DELETE FROM tickets WHERE status = 'supprime' AND closed_at < ?"),
+    ticketsSince: db.prepare("SELECT * FROM tickets WHERE guild_id = ? AND created_at >= ?"),
+    getInactivity: db.prepare("SELECT ticket_inactivity_days FROM guild_config WHERE guild_id = ?"),
+    setInactivity: db.prepare(`INSERT INTO guild_config (guild_id, ticket_inactivity_days) VALUES (?, ?)
+        ON CONFLICT (guild_id) DO UPDATE SET ticket_inactivity_days = excluded.ticket_inactivity_days`),
+    guildsWithInactivity: db.prepare("SELECT guild_id, ticket_inactivity_days FROM guild_config WHERE ticket_inactivity_days > 0"),
 
     addCase: db.prepare(`INSERT INTO cases (guild_id, user_id, moderator_id, type, reason, duration_ms, auto, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
@@ -259,6 +325,40 @@ module.exports = {
     removeLock: (guildId, channelId) => requetes.removeLock.run(guildId, channelId).changes > 0,
 
     // Copie cohérente de la base, même pendant que le bot l'utilise
+    // Types de tickets (guild_id toujours dans le WHERE : jamais le type d'un autre serveur)
+    listTicketTypes: guildId => requetes.listTicketTypes.all(guildId),
+    getTicketType: (guildId, id) => requetes.getTicketType.get(guildId, id) ?? null,
+    addTicketType: (guildId, { nom, description = null, categoryId = null, staffRoleId = null }) =>
+        Number(requetes.addTicketType.run(guildId, nom, description, categoryId, staffRoleId).lastInsertRowid),
+    // Une valeur null garde la valeur actuelle
+    updateTicketType: (guildId, id, { nom = null, description = null, categoryId = null, staffRoleId = null }) =>
+        requetes.updateTicketType.run(nom, description, categoryId, staffRoleId, guildId, id).changes > 0,
+    removeTicketType: (guildId, id) => requetes.removeTicketType.run(guildId, id).changes > 0,
+
+    // Tickets
+    addTicket: (guildId, channelId, ownerId, typeId = null, { status = "ouvert", createdAt = Date.now(), staffRoleId = null } = {}) =>
+        requetes.addTicket.run(channelId, guildId, ownerId, typeId, staffRoleId, createdAt, status),
+    getTicket: channelId => requetes.getTicket.get(channelId) ?? null,
+    openTicketsOf: guildId => requetes.openTicketsOf.all(guildId),
+    // Renvoie false si quelqu'un l'a déjà pris (deux clics simultanés : un seul gagne)
+    claimTicket: (channelId, userId) => requetes.claimTicket.run(userId, Date.now(), channelId).changes > 0,
+    takeOverTicket: (channelId, userId) => requetes.takeOverTicket.run(userId, Date.now(), channelId),
+    unclaimTicket: (channelId, userId) => requetes.unclaimTicket.run(channelId, userId).changes > 0,
+    setTicketStatus: (channelId, status, date = Date.now()) => status === "supprime"
+        ? requetes.setTicketDeleted.run(date, channelId)
+        : requetes.setTicketStatus.run(status, status === "ouvert" ? null : date, channelId),
+    unfinishedTickets: () => requetes.unfinishedTickets.all(),
+    // date et messageId à null : avertissement annulé
+    setTicketWarned: (channelId, date, messageId = null) => requetes.setTicketWarned.run(date, messageId, channelId),
+    // Seul l'auteur d'un ticket supprimé peut le noter, une seule fois
+    rateTicket: (channelId, ownerId, note) => requetes.rateTicket.run(note, Date.now(), channelId, ownerId).changes > 0,
+    // Lignes des tickets supprimés : gardées 90 jours (stats sur 30 jours, notes pendant 7 jours)
+    purgeOldTickets: avant => requetes.purgeTickets.run(avant).changes,
+    ticketsSince: (guildId, date) => requetes.ticketsSince.all(guildId, date),
+    getTicketInactivity: guildId => requetes.getInactivity.get(guildId)?.ticket_inactivity_days ?? 0,
+    setTicketInactivity: (guildId, jours) => requetes.setInactivity.run(guildId, jours),
+    guildsWithTicketInactivity: () => requetes.guildsWithInactivity.all(),
+
     backupTo: destination => requetes.backup.run(destination),
     fichier,
 

@@ -1,17 +1,50 @@
 const Discord = require('discord.js')
+const db = require('../Fonctions/db')
+const { gererMembre, menuTypes } = require('../Fonctions/tickets')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
 module.exports = {
     name: "ticket",
-    description: "Poste le panneau de création de tickets dans ce salon",
-    permission: Discord.PermissionFlagsBits.ManageMessages,
+    description: "Tickets : poster le panneau, ajouter ou retirer un membre d'un ticket",
+    // Pas de permission par défaut : le staff des tickets n'a pas forcément « Gérer les messages ».
+    // Chaque action vérifie elle-même les droits (voir run).
+    permission: "Aucune",
     dm: false,
     category: "Modération",
-    options: [],
+    options: [
+        {
+            type: "string",
+            name: "action",
+            description: "Que faire ?",
+            required: true,
+            choices: [
+                { name: "Poster le panneau ici", value: "panneau" },
+                { name: "Ajouter un membre à ce ticket", value: "ajouter" },
+                { name: "Retirer un membre de ce ticket", value: "retirer" }
+            ]
+        }, {
+            type: "user",
+            name: "membre",
+            description: "Le membre à ajouter ou retirer",
+            required: false
+        }
+    ],
 
     async run(bot, message, args) {
+        const action = args.getString("action")
+
+        if (action !== "panneau") {
+            const user = args.getUser("membre")
+            if (!user) return message.reply({ content: "Précisez le membre (option `membre`).", flags: EPHEMERAL })
+            return gererMembre(message, action, user)
+        }
+
+        // Le panneau est visible de tous : réservé à ceux qui peuvent gérer les messages
+        if (!message.memberPermissions.has(Flags.ManageMessages)) {
+            return message.reply({ content: "Il faut la permission « Gérer les messages » pour poster le panneau.", flags: EPHEMERAL })
+        }
         const channel = message.channel
         if (channel?.type !== Discord.ChannelType.GuildText) {
             return message.reply({ content: "Le panneau doit être posté dans un salon textuel.", flags: EPHEMERAL })
@@ -20,21 +53,26 @@ module.exports = {
             return message.reply({ content: "Je ne peux pas écrire dans ce salon (il me faut Voir, Envoyer des messages et Intégrer des liens).", flags: EPHEMERAL })
         }
 
+        const types = db.listTicketTypes(message.guild.id)
         const embed = new Discord.EmbedBuilder()
             .setColor(bot.color)
             .setTitle("Besoin d'aide ?")
             .setThumbnail(bot.user.displayAvatarURL())
-            .setDescription("Clique sur le bouton ci-dessous pour ouvrir un ticket privé avec le staff.")
+            .setDescription(types.length
+                ? "Choisis le type de ta demande dans le menu ci-dessous pour ouvrir un ticket privé avec le staff."
+                : "Clique sur le bouton ci-dessous pour ouvrir un ticket privé avec le staff.")
             .setFooter({ text: bot.user.username, iconURL: bot.user.displayAvatarURL() })
 
-        const btn = new Discord.ActionRowBuilder().addComponents(new Discord.ButtonBuilder()
-            .setCustomId("ticket")
-            .setLabel("Créer un ticket")
-            .setStyle(Discord.ButtonStyle.Primary)
-            .setEmoji("🎫"))
+        const composant = types.length
+            ? menuTypes(types)
+            : new Discord.ActionRowBuilder().addComponents(new Discord.ButtonBuilder()
+                .setCustomId("ticket")
+                .setLabel("Créer un ticket")
+                .setStyle(Discord.ButtonStyle.Primary)
+                .setEmoji("🎫"))
 
         // Message simple (pas une réponse à la commande) : le panneau ne montre pas qui l'a posté
-        await channel.send({ embeds: [embed], components: [btn] })
+        await channel.send({ embeds: [embed], components: [composant] })
         await message.reply({ content: "Panneau de tickets posté.", flags: EPHEMERAL })
     }
 }

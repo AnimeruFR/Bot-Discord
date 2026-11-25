@@ -24,6 +24,15 @@ async function messageContentActive(client) {
     return contenuDisponible
 }
 
+// Texte d'un embed (titre, description, champs) : le formulaire d'ouverture d'un ticket n'existe que là
+function texteEmbed(embed) {
+    const lignes = []
+    if (embed.title) lignes.push(`[${embed.title}]`)
+    if (embed.description) lignes.push(embed.description)
+    for (const champ of embed.fields ?? []) lignes.push(`${champ.name} : ${champ.value}`)
+    return lignes.length ? lignes : ["[embed sans texte]"]
+}
+
 function date(timestamp) {
     return new Date(timestamp).toISOString().replace("T", " ").slice(0, 16) + " UTC"
 }
@@ -50,7 +59,7 @@ async function buildTranscript(channel, { fermePar, auteurId }) {
     const blocs = messages.map(message => {
         const lignes = [`[${date(message.createdTimestamp)}] ${message.author.tag} (${message.author.id}) : ${message.content ? message.content.replace(/\n/g, "\n    ") : ""}`]
         for (const fichier of message.attachments.values()) lignes.push(`    [pièce jointe] ${fichier.name}`)
-        if (message.embeds.length) lignes.push(`    [${message.embeds.length} embed(s)]`)
+        for (const embed of message.embeds) lignes.push(...texteEmbed(embed).map(l => `    | ${l.replace(/\n/g, "\n    | ")}`))
         return lignes.join("\n")
     })
     let octets = 0
@@ -74,8 +83,58 @@ async function buildTranscript(channel, { fermePar, auteurId }) {
     entete.push("=".repeat(60), "")
 
     const pieces = messages.flatMap(message => [...message.attachments.values()])
+    const gardes = messages.slice(messages.length - garde)
 
-    return { texte: entete.concat(blocs.slice(blocs.length - garde)).join("\n"), nombre: garde, pieces }
+    // Version HTML (plus lisible) : seulement si elle tient aussi sous la limite d'envoi
+    let html = buildHtml(channel, gardes, { fermePar, auteurId, tronque, contenu })
+    if (Buffer.byteLength(html, "utf8") > MAX_OCTETS_TRANSCRIPT) html = null
+
+    return { texte: entete.concat(blocs.slice(blocs.length - garde)).join("\n"), html, nombre: garde, pieces }
+}
+
+// Tout ce qui vient de Discord (pseudos, messages, noms de fichiers) passe par ici : aucun HTML brut
+// d'un membre ne peut arriver dans la page (pas de balise, pas d'attribut, pas de script).
+// Les caractères invisibles d'inversion de sens (U+202E…) et de contrôle sont retirés : ils servent à maquiller un texte.
+function echapper(texte) {
+    return String(texte ?? "")
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‎‏‪-‮⁦-⁩]/g, "")
+        .replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])
+}
+
+// Page autonome : aucune ressource externe (ni image, ni police, ni script). La politique de sécurité
+// (CSP) interdit en plus tout chargement et tout script, même si un échappement venait à manquer.
+function buildHtml(channel, messages, { fermePar, auteurId, tronque, contenu }) {
+    const lignes = messages.map(message => {
+        const pieces = [...message.attachments.values()].map(f => `<li>📎 ${echapper(f.name)}</li>`).join("")
+        const embeds = message.embeds.map(e => `<li class="embed">${texteEmbed(e).map(echapper).join("<br>")}</li>`).join("")
+        const auteur = message.author.id === auteurId ? " auteur" : ""
+        return `<article class="msg${auteur}"><header><b>${echapper(message.author.tag)}</b> <small>${echapper(message.author.id)} · ${echapper(date(message.createdTimestamp))}</small></header>`
+            + `<p>${echapper(message.content)}</p>${pieces || embeds ? `<ul>${pieces}${embeds}</ul>` : ""}</article>`
+    })
+    const avertissements = [
+        tronque ? "<p class=\"alerte\">Transcript tronqué : seuls les messages les plus récents sont gardés.</p>" : "",
+        contenu ? "" : "<p class=\"alerte\">Le Message Content Intent n'est pas activé : le texte des messages des membres est vide.</p>"
+    ].join("")
+    return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src 'none'; script-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Ticket #${echapper(channel.name)}</title>
+<style>
+body{font-family:Segoe UI,Arial,sans-serif;background:#313338;color:#dbdee1;max-width:900px;margin:24px auto;padding:0 16px}
+h1{font-size:20px;color:#fff}dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;background:#2b2d31;padding:12px;border-radius:8px}
+dt{color:#949ba4}.msg{background:#2b2d31;border-left:3px solid #4e5058;border-radius:6px;padding:8px 12px;margin:8px 0}
+.msg.auteur{border-left-color:#5865f2}.msg small{color:#949ba4}.msg p{white-space:pre-wrap;word-wrap:break-word;margin:4px 0}
+.msg ul{margin:4px 0;padding-left:18px;color:#b5bac1}.embed{list-style:none;margin-left:-18px;border-left:3px solid #5865f2;background:#232428;padding:6px 10px;border-radius:4px;white-space:pre-wrap}.alerte{background:#4a3c1d;padding:8px;border-radius:6px}
+</style></head><body>
+<h1>Transcript du ticket #${echapper(channel.name)}</h1>
+<dl><dt>Auteur</dt><dd>${echapper(auteurId)}</dd><dt>Créé le</dt><dd>${echapper(date(channel.createdTimestamp))}</dd>
+<dt>Supprimé le</dt><dd>${echapper(date(Date.now()))} par ${echapper(fermePar.tag)} (${echapper(fermePar.id)})</dd>
+<dt>Messages</dt><dd>${messages.length}</dd></dl>
+${avertissements}
+${lignes.join("\n")}
+</body></html>`
 }
 
 // Télécharge un fichier du CDN de Discord. Renvoie null s'il n'existe plus (404/403).
@@ -133,4 +192,4 @@ async function sendAttachments(logs, pieces, nomTicket) {
     return ignorees
 }
 
-module.exports = { buildTranscript, sendAttachments, messageContentActive, MAX_OCTETS_TRANSCRIPT }
+module.exports = { buildTranscript, sendAttachments, messageContentActive, echapper, MAX_OCTETS_TRANSCRIPT }

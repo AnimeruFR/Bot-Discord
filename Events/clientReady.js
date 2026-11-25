@@ -2,6 +2,7 @@ const { startPrivacySchedule } = require('../Fonctions/privacy')
 const { startBackupSchedule } = require('../Fonctions/backup')
 const { startHeartbeat } = require('../Fonctions/heartbeat')
 const { startTempbanSchedule } = require('../Fonctions/tempbans')
+const { startTicketInactivitySchedule } = require('../Fonctions/ticketsInactifs')
 
 let demarre = false
 
@@ -15,4 +16,5 @@ module.exports = async bot => {
     startBackupSchedule()
     startHeartbeat(bot)
     startTempbanSchedule(bot)
+    startTicketInactivitySchedule(bot)
 }

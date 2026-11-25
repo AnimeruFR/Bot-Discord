@@ -26,6 +26,13 @@ module.exports = {
             description: "Le rôle qui voit et gère les tickets",
             required: false
         }, {
+            type: "integer",
+            name: "inactivite",
+            description: "Fermer les tickets sans message depuis N jours (0 = jamais)",
+            required: false,
+            minValue: 0,
+            maxValue: 30
+        }, {
             type: "boolean",
             name: "reinitialiser",
             description: "Revenir aux valeurs par défaut (catégorie du panneau, rôle du .env)",
@@ -36,6 +43,17 @@ module.exports = {
     async run(bot, message, args) {
         const categorie = args.getChannel("categorie")
         const role = args.getRole("staff")
+        const inactivite = args.getInteger("inactivite")
+
+        if (inactivite !== null) {
+            if (categorie || role || args.getBoolean("reinitialiser")) return message.reply({ content: "Utilise `inactivite` seul.", flags: EPHEMERAL })
+            db.setTicketInactivity(message.guild.id, inactivite)
+            const texte = inactivite
+                ? `Les tickets sans message depuis ${inactivite} jour(s) recevront un avertissement, puis seront fermés 24 h après s'il n'y a pas de réponse (le staff les supprime ensuite, avec transcript).`
+                : "Fermeture automatique des tickets inactifs désactivée."
+            await message.reply({ content: texte, flags: EPHEMERAL })
+            return sendModLog(message, { action: "config", details: inactivite ? `Tickets fermés après ${inactivite} jour(s) d'inactivité` : "Fermeture des tickets inactifs désactivée" })
+        }
 
         if (args.getBoolean("reinitialiser")) {
             if (categorie || role) return message.reply({ content: "Utilise `reinitialiser` seul, sans catégorie ni rôle.", flags: EPHEMERAL })
@@ -46,7 +64,9 @@ module.exports = {
         if (!categorie && !role) {
             const { categoryId, staffRoleId } = db.getTicketConfig(message.guild.id)
             return message.reply({
-                content: `Configuration actuelle – Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`,
+                content: `Configuration actuelle – Catégorie : ${categoryId ? `<#${categoryId}>` : "celle du panneau"} – Rôle staff : ${staffRoleId ? `<@&${staffRoleId}>` : "celui du .env"}`
+                    + ` – Fermeture après inactivité : ${db.getTicketInactivity(message.guild.id) ? `${db.getTicketInactivity(message.guild.id)} jour(s)` : "jamais"}`
+                    + "\nTypes de tickets : `/tickettype action:Voir`",
                 flags: EPHEMERAL
             })
         }

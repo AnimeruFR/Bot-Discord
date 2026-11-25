@@ -79,7 +79,7 @@ Un bot ne rapporte qu'à partir de quelques centaines de serveurs : le référen
   - `/automod` qui crée des règles AutoMod natives.
 - **Points de vigilance** : la hiérarchie des rôles est revérifiée dans chaque commande ; les seuils ne doivent pas déclencher deux fois la même sanction ; si Discord refuse le déban (membre déjà débanni), on n'insiste pas.
 
-### Lot F – Tickets pro (idées 11 à 14)
+### Lot F – Tickets pro (idées 11 à 14) ✅ fait
 - **But** : rendre les tickets assez bons pour servir d'argument premium.
 - **Tâches** :
   - types de tickets configurables (menu déroulant, catégorie et rôle staff par type) ;
