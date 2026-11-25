@@ -132,6 +132,8 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 ### Sauvegardes
 - Automatiques toutes les `BACKUP_INTERVAL_HOURS` heures (24 par défaut en prod) dans `backups/`, en gardant les `BACKUP_KEEP` dernières (7). Chaque sauvegarde est vérifiée avant d'être gardée. Au démarrage, une sauvegarde n'est faite que si la dernière est trop ancienne (un bot qui redémarre en boucle n'écrase donc pas les bonnes sauvegardes).
 - Manuelle avec Docker : `docker compose exec bot node scripts/backup.js`. Sans Docker : `npm run backup -- --env=prod`. N'utilise pas `sudo npm run backup` sur une installation Docker : les fichiers créés appartiendraient à root et le bot ne pourrait plus ouvrir sa base.
+- **Migrations du schéma** : la base porte un numéro de version (`PRAGMA user_version`) et le bot applique tout seul les fichiers de `migrations/` au démarrage. Avant de migrer une base déjà remplie, il en fait une copie `backups/avant-migration-v<version>-<date>.db` (jamais supprimée par la rotation).
+- `npm run migrate -- --etat` affiche la version et les migrations en attente ; `npm run migrate` les applique ; `npm run migrate -- --annuler N --confirmer` revient à la version N (avec Docker : `docker compose exec bot node scripts/migrate.js --etat`).
 - **Copie régulièrement `backups/` hors du serveur** (ton PC, un stockage en ligne) : une sauvegarde sur la même machine ne protège pas d'une panne de disque.
 - Restauration : arrête le bot, remplace `data/bot.db` par la sauvegarde choisie, supprime `data/bot.db-wal` et `data/bot.db-shm` s'ils existent, relance.
 
