@@ -143,11 +143,12 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 
 ## Commandes
 
+Les commandes sont rangées par module dans `Commandes/` : le dossier décide du module.
+
+### 🛡️ Modération (staff uniquement) – `Commandes/Moderation/`
+
 | Commande | Permission requise | Rôle |
 |---|---|---|
-| `/help [commande]` | aucune | Liste des commandes |
-| `/ping` | aucune | Latence du bot |
-| `/quoi` | aucune | Répond « Feur » |
 | `/ban`, `/unban` | Bannir des membres | Bannir (avec confirmation par bouton) / débannir |
 | `/tempban membre duree raison` | Bannir des membres | Ban temporaire (1 min à 365 j), déban automatique même après un redémarrage |
 | `/historique membre` | Exclure temporairement | Toutes les sanctions d'un membre (warns, mutes, kicks, bans, débans) |
@@ -166,11 +167,26 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
 | `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
 | `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
+
+### 🎉 Communauté – `Commandes/Communaute/<Sous-module>/`
+
+Animation (`Communaute/Animation/`) :
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/quoi` | aucune | Répond « Feur » |
 | `/roles action …` | Gérer les rôles | Panneaux de rôles à boutons (10 panneaux, 25 rôles par panneau) |
 | `/giveaway action …` | Gérer le serveur | Lancer, terminer, relancer, annuler un giveaway (10 en cours max) |
 | `/sondage question choix` | Gérer les messages | Sondage natif (2 à 10 choix, 1 h à 32 jours) |
 | `/annonce action …` | Gérer les messages | Annonces programmées (20 en attente, 60 jours max) |
 | `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
+
+### ⚙️ Général – `Commandes/General/`
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/help [commande]` | aucune | Liste des commandes |
+| `/ping` | aucune | Latence du bot |
 | `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs, tickets, panneau |
 | `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
 | `/premium` | aucune | Statut premium du serveur, fonctions premium, bouton d'achat |

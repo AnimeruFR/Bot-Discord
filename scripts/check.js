@@ -15,6 +15,17 @@ loadCommands(bot, { silencieux: true })
 for (const command of bot.commands.values()) buildSlashCommand(command).toJSON()
 console.log(`OK : ${bot.commands.size} commandes valides`)
 
+// 1 bis. Chaque commande appartient à un module connu (loader par module, idée #86)
+const parModule = {}
+for (const c of bot.commands.values()) {
+    assert.ok(["moderation", "communaute", "general"].includes(c.module), `module de ${c.name}`)
+    assert.ok(c.module !== "communaute" || /^[a-z]+$/.test(c.sousModule ?? ""), `sous-module de ${c.name}`)
+    parModule[c.module] = (parModule[c.module] ?? 0) + 1
+}
+assert.ok(parModule.moderation && parModule.communaute && parModule.general, "les trois modules ont des commandes")
+assert.strictEqual(loadCommands.listerCommandes().length, bot.commands.size, "un fichier = une commande")
+console.log(`OK : commandes par module ${JSON.stringify(parModule)}`)
+
 // 2. Hiérarchie des rôles
 const role = position => ({ comparePositionTo: other => position - other.position, position })
 const fakeInteraction = (userId, position) => ({
@@ -572,7 +583,7 @@ function testsLotI() {
     assert.throws(() => lienInvitation("abc&redirect_uri=https://piege.example"), /invalide/, "ID d'application vérifié")
     assert.strictEqual(lienValide("https://discord.gg/abc"), "https://discord.gg/abc")
     for (const faux of ["http://exemple.com", "javascript:alert(1)", "", null, "pas un lien", `https://exemple.com/${"a".repeat(600)}`]) assert.strictEqual(lienValide(faux), null, `lien ${String(faux).slice(0, 30)} refusé`)
-    const { dureeCourte } = require('../Commandes/about')
+    const { dureeCourte } = require('../Commandes/General/about')
     assert.strictEqual(dureeCourte(3 * 86400000 + 4 * 3600000), "3 j 4 h")
     assert.strictEqual(dureeCourte(90 * 60000), "1 h 30 min")
     console.log("OK : invitation (permissions minimales, liens sûrs)")
@@ -870,7 +881,7 @@ async function testsLotG() {
     console.log("OK : bienvenue / au revoir (mentions, anti-raid)")
 
     // Sondages
-    const { lireChoix } = require('../Commandes/sondage')
+    const { lireChoix } = require('../Commandes/Communaute/Animation/sondage')
     assert.deepStrictEqual(lireChoix(" Oui ; Non ;; oui ; Oui ").choix, ["Oui", "Non", "oui"], "vides et doublons retirés")
     assert.ok(lireChoix("Seul").erreur)
     assert.ok(lireChoix(Array.from({ length: 11 }, (_, i) => `c${i}`).join(";")).erreur, "11 choix refusés")
@@ -993,7 +1004,7 @@ async function testsLotF() {
     console.log("OK : tickets (types, prise en charge, notes, staff du ticket)")
 
     // Stats
-    const { calculerStats } = require('../Commandes/stats')
+    const { calculerStats } = require('../Commandes/Moderation/stats')
     const s = calculerStats([
         { status: "ouvert", type_id: 1, created_at: 0, claimed_at: 60000, claimed_by: "a", rating: null },
         { status: "supprime", type_id: 1, created_at: 0, claimed_at: 180000, claimed_by: "a", rating: 4 },
