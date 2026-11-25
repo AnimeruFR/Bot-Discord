@@ -58,9 +58,10 @@ const requetes = {
         UNION SELECT guild_id FROM ticket_cooldowns UNION SELECT guild_id FROM cases UNION SELECT guild_id FROM tempbans
         UNION SELECT guild_id FROM sanction_thresholds UNION SELECT guild_id FROM channel_locks
         UNION SELECT guild_id FROM ticket_types UNION SELECT guild_id FROM tickets UNION SELECT guild_id FROM role_panels
-        UNION SELECT guild_id FROM giveaways UNION SELECT guild_id FROM announcements`),
+        UNION SELECT guild_id FROM giveaways UNION SELECT guild_id FROM announcements
+        UNION SELECT guild_id FROM guild_modules UNION SELECT guild_id FROM guild_salons_jeux`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
-        "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements"]
+        "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -147,6 +148,13 @@ const requetes = {
     setGoodbye: db.prepare(`INSERT INTO guild_config (guild_id, goodbye_channel_id, goodbye_message) VALUES (?, ?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET goodbye_channel_id = excluded.goodbye_channel_id, goodbye_message = excluded.goodbye_message`),
 
+    // Modules activables (idée #87)
+    listModules: db.prepare("SELECT module, actif FROM guild_modules WHERE guild_id = ?"),
+    setModule: db.prepare(`INSERT INTO guild_modules (guild_id, module, actif) VALUES (?, ?, ?)
+        ON CONFLICT (guild_id, module) DO UPDATE SET actif = excluded.actif`),
+    listSalonsJeux: db.prepare("SELECT channel_id FROM guild_salons_jeux WHERE guild_id = ? ORDER BY channel_id"),
+    clearSalonsJeux: db.prepare("DELETE FROM guild_salons_jeux WHERE guild_id = ?"),
+    addSalonJeux: db.prepare("INSERT OR IGNORE INTO guild_salons_jeux (guild_id, channel_id) VALUES (?, ?)"),
     getStaffRole: db.prepare("SELECT staff_role_id FROM guild_config WHERE guild_id = ?"),
     setStaffRole: db.prepare(`INSERT INTO guild_config (guild_id, staff_role_id) VALUES (?, ?)
         ON CONFLICT (guild_id) DO UPDATE SET staff_role_id = excluded.staff_role_id`),
@@ -216,6 +224,18 @@ module.exports = {
 
     getLogChannel: guildId => requetes.getLogChannel.get(guildId)?.log_channel_id ?? null,
     setLogChannel: (guildId, channelId) => requetes.setLogChannel.run(guildId, channelId),
+
+    // Modules désactivés du serveur : { "communaute.jeux": false, … } (absent = actif)
+    getModules: guildId => Object.fromEntries(requetes.listModules.all(guildId).map(l => [l.module, l.actif === 1])),
+    setModule: (guildId, module, actif) => requetes.setModule.run(guildId, module, actif ? 1 : 0),
+    // Salons où les jeux sont autorisés (liste vide = partout). Remplacés d'un bloc.
+    getSalonsJeux: guildId => requetes.listSalonsJeux.all(guildId).map(l => l.channel_id),
+    setSalonsJeux(guildId, salons) {
+        module.exports.transaction(() => {
+            requetes.clearSalonsJeux.run(guildId)
+            for (const id of salons) requetes.addSalonJeux.run(guildId, id)
+        })
+    },
 
     // Rôle staff du serveur (null = aucun) : voir Fonctions/staff.js
     getStaffRole: guildId => requetes.getStaffRole.get(guildId)?.staff_role_id ?? null,

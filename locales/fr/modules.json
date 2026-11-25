@@ -1,0 +1,16 @@
+{
+  "modules.desactive": "Cette fonction est désactivée sur ce serveur (un administrateur peut la réactiver avec /config).",
+  "modules.coupe": "Cette fonction est temporairement indisponible. Réessaie plus tard.",
+  "modules.salons_jeux": "Les jeux se jouent seulement dans : {salons}.",
+  "modules.nom_moderation": "🛡️ Modération",
+  "modules.nom_communaute": "🎉 Communauté",
+  "modules.nom_general": "⚙️ Général",
+  "modules.nom_sous": "Communauté › {sous}",
+  "modules.sous_animation": "Animation",
+  "modules.sous_jeux": "Jeux",
+  "modules.sous_economie": "Économie",
+  "modules.sous_niveaux": "Niveaux",
+  "modules.sous_collection": "Collection",
+  "modules.sous_aventure": "Aventure",
+  "modules.sous_casino": "Casino"
+}

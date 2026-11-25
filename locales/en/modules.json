@@ -1,0 +1,16 @@
+{
+  "modules.desactive": "This feature is disabled on this server (an administrator can turn it back on with /config).",
+  "modules.coupe": "This feature is temporarily unavailable. Please try again later.",
+  "modules.salons_jeux": "Games can only be played in: {salons}.",
+  "modules.nom_moderation": "🛡️ Moderation",
+  "modules.nom_communaute": "🎉 Community",
+  "modules.nom_general": "⚙️ General",
+  "modules.nom_sous": "Community › {sous}",
+  "modules.sous_animation": "Events",
+  "modules.sous_jeux": "Games",
+  "modules.sous_economie": "Economy",
+  "modules.sous_niveaux": "Levels",
+  "modules.sous_collection": "Collection",
+  "modules.sous_aventure": "Adventure",
+  "modules.sous_casino": "Casino"
+}

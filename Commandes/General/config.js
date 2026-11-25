@@ -10,7 +10,8 @@ const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DUREE_SESSION = 5 * 60 * 1000
 const { INACTIVITES, LANGUES } = require('../../Fonctions/constantes')
-const SECTIONS = ["resume", "general", "staff", "logs", "tickets", "panneau"]
+const { modulesConnus } = require('../../Fonctions/modules')
+const SECTIONS = ["resume", "general", "modules", "staff", "logs", "tickets", "panneau"]
 
 // Une seule fenêtre /config par membre et par serveur : ouvrir la 2e ferme la 1re (pas d'état périmé)
 const sessions = new Map()
@@ -34,6 +35,24 @@ function vue(i, section) {
         lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-langue")
             .addOptions(LANGUES.map(l => ({ label: t(L, `config.langue_${l}`), value: l, default: l === app.langue })))))
         lignes.push(row(bouton("cfg-couleur", t(L, "config.bouton_couleur"), Discord.ButtonStyle.Primary), bouton("cfg-couleur-defaut", t(L, "config.bouton_couleur_defaut"))))
+    } else if (section === "modules") {
+        const reglages = db.getModules(guild.id)
+        const connus = modulesConnus(i.client.commands?.values() ?? [])
+        const salons = db.getSalonsJeux(guild.id)
+        embed.setDescription([
+            t(L, "config.modules_etat", { liste: connus.map(m => `${reglages[m] === false ? "❌" : "✅"} ${nomModule(L, m)}`).join("\n") }),
+            t(L, "config.modules_salons", { salons: salons.length ? salons.map(id => `<#${id}>`).join(", ") : t(L, "config.modules_partout") }),
+            "", `-# ${t(L, "config.modules_note")}`
+        ].join("\n"))
+        lignes.push(row(new Discord.StringSelectMenuBuilder().setCustomId("cfg-modules").setPlaceholder(t(L, "config.choisir_modules"))
+            .setMinValues(0).setMaxValues(connus.length)
+            .addOptions(connus.map(m => ({ label: nomModule(L, m).slice(0, 100), value: m, default: reglages[m] !== false })))))
+        const choix = new Discord.ChannelSelectMenuBuilder().setCustomId("cfg-salons-jeux").setPlaceholder(t(L, "config.choisir_salons_jeux"))
+            .setChannelTypes(Discord.ChannelType.GuildText).setMinValues(1).setMaxValues(25)
+        const presents = salons.filter(id => guild.channels.cache.has(id))
+        if (presents.length) choix.setDefaultChannels(...presents)
+        lignes.push(row(choix))
+        if (salons.length) lignes.push(row(bouton("cfg-salons-jeux-tous", t(L, "config.bouton_jeux_partout"))))
     } else if (section === "staff") {
         const actuel = db.getStaffRole(guild.id)
         embed.setDescription([
@@ -85,6 +104,12 @@ function vue(i, section) {
         }))
     }
     return { embeds: [embed], components: lignes }
+}
+
+// Nom affiché d'un module ("communaute.animation" -> "Communauté › Animation")
+function nomModule(L, cle) {
+    const [module, sous] = cle.split(".")
+    return sous ? t(L, "modules.nom_sous", { sous: t(L, `modules.sous_${sous}`) }) : t(L, `modules.nom_${module}`)
 }
 
 // Formulaire (modal) ouvert depuis un bouton, attendu sur place (pas de route globale : personne d'autre ne peut le soumettre)
@@ -196,6 +221,31 @@ module.exports = {
                     db.setCouleur(guild.id, null)
                     await afficher(i, t(i, "config.enregistre"))
                     return sendModLog(i, { action: "config", details: "Couleur des embeds : par défaut" })
+
+                case "cfg-modules":
+                case "cfg-salons-jeux":
+                case "cfg-salons-jeux-tous": {
+                    // « Admin uniquement » : couper un module change ce que tout le serveur peut faire
+                    if (i.user.id !== guild.ownerId && !i.memberPermissions.has(Flags.Administrator)) {
+                        return i.reply({ content: t(i, "config.modules_permission"), flags: EPHEMERAL })
+                    }
+                    let details
+                    if (i.customId === "cfg-modules") {
+                        const connus = modulesConnus(i.client.commands?.values() ?? [])
+                        const actifs = new Set(i.values.filter(v => connus.includes(v)))
+                        const avant = db.getModules(guild.id)
+                        const changes = connus.filter(m => (avant[m] !== false) !== actifs.has(m))
+                        if (!changes.length) return afficher(i)
+                        db.transaction(() => { for (const m of changes) db.setModule(guild.id, m, actifs.has(m)) })
+                        details = `Modules : ${changes.map(m => `${m} ${actifs.has(m) ? "activé" : "désactivé"}`).join(", ")}`
+                    } else {
+                        const salons = i.customId === "cfg-salons-jeux" ? i.values.filter(id => guild.channels.cache.get(id)?.type === Discord.ChannelType.GuildText) : []
+                        db.setSalonsJeux(guild.id, salons)
+                        details = `Salons de jeux : ${salons.length ? salons.map(id => `<#${id}>`).join(", ") : "tous"}`
+                    }
+                    await afficher(i, t(i, "config.enregistre"))
+                    return sendModLog(i, { action: "config", details })
+                }
 
                 case "cfg-role-staff":
                 case "cfg-role-staff-off": {

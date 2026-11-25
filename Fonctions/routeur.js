@@ -1,4 +1,5 @@
 const { verifierAcces } = require('./staff')
+const { motifIndisponible } = require('./modules')
 
 // Routeur des composants persistants (idée #89) : boutons, menus déroulants et formulaires (modals).
 // Chaque commande déclare les siens dans `composants`, le loader les enregistre ici :
@@ -39,7 +40,7 @@ function creerRouteur() {
     function enregistrerCommande(command) {
         for (const c of command.composants ?? []) {
             enregistrer({
-                module: command.module, permission: command.permission, roleStaffSuffit: command.roleStaffSuffit,
+                module: command.module, sousModule: command.sousModule, permission: command.permission, roleStaffSuffit: command.roleStaffSuffit,
                 acces: command.acces, name: command.name, source: command.name, ...c
             })
         }
@@ -50,10 +51,16 @@ function creerRouteur() {
         && (r.id !== undefined ? interaction.customId === r.id : interaction.customId.startsWith(r.prefixe)))
 
     // Traite le composant. Renvoie false s'il n'est pas enregistré (laissé à un collecteur ou ignoré).
-    async function router(bot, interaction, refuser) {
+    // refuser(interaction) : droits insuffisants ; indisponible(interaction, motif) : module désactivé ou coupé
+    async function router(bot, interaction, refuser, indisponible = refuser) {
         if (!interaction.isButton() && !interaction.isAnySelectMenu() && !interaction.isModalSubmit()) return false
         const route = trouver(interaction)
         if (!route) return false
+        const motif = motifIndisponible(interaction.guildId, route)
+        if (motif) {
+            await indisponible(interaction, motif)
+            return true
+        }
         if (!route.public && !await verifierAcces(interaction, route)) {
             await refuser(interaction)
             return true
