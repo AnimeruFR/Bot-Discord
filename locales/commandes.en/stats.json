@@ -17,7 +17,9 @@
         "tempban": "Temporary ban",
         "unban": "Unban",
         "automod": "AutoMod block",
-        "config": "Configuration"
+        "config": "Configuration",
+        "quarantaine": "Quarantine",
+        "fin_quarantaine": "Quarantine lifted"
       },
       "periode": {
         "24h": "24 hours",
