@@ -51,5 +51,44 @@
 4. Compléter les espaces réservés de `docs/conditions.md` et `docs/confidentialite.md` avant de les publier.
 5. (Optionnel) `gh auth login --web` pour que Claude gère les PR directement.
 
+## Plan v2 : bot tout-en-un (25/11/2026)
+- Branche `docs/plan-ameliorations` (non commitée) : `docs/PLAN-AMELIORATIONS.md` (100 idées notées, classement, phases 0 à 6, backlog), `docs/ECONOMIE.md` (sources, puits, gains par jour, anti-inflation, courbe d'XP), section 4 de `ROADMAP.md`.
+- Critique du plan (sonnet) : 3 bloquants corrigés (signalement rangé dans `General/` + garde staff sur les boutons, plus aucun bonus d'XP premium, mises seulement via le module Casino), plafonds de transfert toutes voies, registre RGPD effacer/anonymiser/conserver, dépendances et limites Discord corrigées.
+- Décisions du plan : modules `Commandes/Moderation/`, `Commandes/Communaute/<Sous-module>/`, `Commandes/General/` ; monnaie par serveur, sans valeur réelle ; tirages de cartes seulement en monnaie gagnée ou gratuits ; premium jamais en monnaie ni en tirage, +10 % d'XP max ; pas de banque à intérêts ; casino, RPG complet, bataille navale et confessions en backlog.
+- **État : en attente de validation par Animeru. Aucun code écrit.**
+
+## Phase 0 – Fondations (25/11/2026)
+
+Branche d'intégration locale `phase-0/fondations` (non poussée), qui empile une branche par idée : `docs/plan-ameliorations` → `feat/86-loader-modules` → `feat/91-erreurs` → `feat/90-cooldowns` → (fusion `feat/88-migrations`) → `feat/1-garde-staff` → (fusion `feat/92-tests-node`) → `feat/89-routeur` → `feat/87-config-modules` → `feat/95-help-modules` → (fusion `feat/93-rgpd-membre`).
+
+| Idée | État | Résumé |
+|---|---|---|
+| #86 Loader par module | ✅ | `Commandes/Moderation/` (21), `Communaute/Animation/` (6), `General/` (7) ; champs `module`/`sousModule` |
+| #88 Migrations | ✅ | `migrations/NNN-*.js`, `PRAGMA user_version`, sauvegarde `avant-migration-…`, `npm run migrate` (001 schéma, 002 rôle staff, 003 modules) |
+| #92 Tests node:test | ✅ | `tests/*.test.js`, `scripts/check.js` supprimé (333 assertions portées), `npm run couverture` |
+| #91 Erreurs | ✅ | `Fonctions/erreurs.js` : `ErreurUtilisateur`, numéro d'incident |
+| #90 Cooldowns | ✅ | champ `cooldown` (secondes) dans une commande |
+| #1 Garde staff | ✅ | `Fonctions/staff.js` ; rôle staff (`/config`) pour warn/warns/unwarn/historique seulement ; `/ticket` passe à « Gérer les messages » par défaut |
+| #89 Routeur | ✅ | `composants` déclarés par les commandes, garde staff sauf `public: true` |
+| #87 /config modules | ✅ | Modération, Tickets, Communauté et sous-modules désactivables (Général jamais), salons de jeux ; admin uniquement |
+| #96 Interrupteurs | ✅ | `DESACTIVER=communaute.jeux,commande:quiz` |
+| #95 /help | ✅ | groupé par module, staff masqué, autocomplétion filtrée |
+| #93 RGPD membre | ✅ | `/privacy moi exporter|effacer`, registre `Fonctions/registreRgpd.js` + test garde-fou |
+
+Décisions de la phase 0 :
+- Le rôle staff ne donne jamais un pouvoir propre au bot (ban, kick, mute, clear, lock…) : seulement les commandes qui déclarent `roleStaffSuffit`.
+- Une commande de modération sans permission bigint, ou utilisable en MP, empêche le bot de démarrer.
+- Les tickets forment un module à part (Tickets) : désactiver la Modération ne bloque plus les tickets des membres.
+- Les menus contextuels (prévus dans #86) sont reportés à #22, première idée qui en a besoin.
+- Cooldowns en mémoire seulement : les délais longs avec une valeur (daily) seront stockés par l'économie (#36).
+- #87 et #96 sont dans le même commit (même fichier `Fonctions/modules.js`).
+- Le champ `category` des commandes n'est plus lu par `/help` (remplacé par le module).
+
+### Tribunal de fin de jalon 0 — **jalon validé** (corrections appliquées)
+Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haiku). Défense (sonnet), jury (opus). 0 CVE (`npm audit` + OSV).
+- ✅ Corrigé : S1 export RGPD sans données de tiers · S2 warn refusé s'il déclenche une sanction que l'auteur n'a pas le droit d'appliquer · S3 sauvegardes avant-migration purgées à 30 j · S4 warns purgés à 2 ans · S5 `/unwarn` sur un membre parti exige « Exclure temporairement » · S6 le dashboard ne migre pas (`DATABASE_NO_MIGRATE`), PID dans le .tmp · S7 `/privacy moi effacer` 1 fois/h, délai de ticket conservé · A1 garde commune (`Fonctions/garde.js`) pour commandes ET composants (module, droits, salons de jeux, délai) · A2 `moduleActif`/`estCoupeCle` pour événements et tâches · A3 `/help` = exactement ce que le membre peut utiliser · A5 module **Tickets** séparé (`Commandes/Tickets/`) · A8 délai libéré si la commande échoue, serveur/membre dans le log d'incident · P1-P4, P6, P7 nettoyage · P5 vouvoiement partout · P8 commentaire clarifié.
+- 🕓 Reporté : S3 bis rejouer les effacements RGPD après une restauration (phase 3) · S8 purge des délais sur minuteur avant les jeux en boutons (phase 3) · A4 rôle staff et permissions par défaut des commandes (phase 1) · A6 dériver purge serveur et liste des guildes du registre RGPD + vérificateurs d'effacement enregistrés (phase 3) · pagination de `/help` (phase 3) · réponses de `/warn` encore publiques sur certaines erreurs (phase 1).
+- ❌ Rejeté : A7 cache des modules (gain non mesuré) · P8 remarques de style.
+
 ## Prochaine étape
-Lots A à J fusionnés dans `main`. Lot K (tableau de bord) codé sur `lot-k/dashboard`, tribunal passé, commité (à pousser puis PR). Toute la roadmap est alors couverte ; restent les points reportés ci-dessus et, côté Animeru, la mise en ligne (intent, token, pages légales, vérification, reverse proxy).
+Phase 0 codée, tribunal passé, tout commité en local sur `phase-0/fondations` (rien de poussé). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID` puis `npm run dev`), puis, sur accord d'Animeru, pousser et ouvrir la PR. Ensuite : phase 1 (quick wins).

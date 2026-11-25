@@ -46,6 +46,8 @@ services:
     environment:
       DATABASE_PATH: /app/data/bot.db
       DASHBOARD_PORT: "3000"
+      # Le bot migre la base (avec sauvegarde) : le dashboard attend jusqu'à 60 s qu'elle soit à jour
+      DATABASE_NO_MIGRATE: "1"
       # Le site est derrière un reverse proxy : l'IP du visiteur est lue dans X-Forwarded-For
       DASHBOARD_TRUST_PROXY: "1"
     ports:

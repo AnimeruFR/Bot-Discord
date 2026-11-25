@@ -1,16 +1,18 @@
 const Discord = require('discord.js')
-const tickets = require('../Fonctions/tickets')
-const { t } = require('../Fonctions/i18n')
-const { onClicRole } = require('../Fonctions/rolesBoutons')
-const { onClicGiveaway } = require('../Fonctions/giveaways')
+const { traiterErreur } = require('../Fonctions/erreurs')
+const { liberer } = require('../Fonctions/cooldowns')
+const { controler, commandesVisibles } = require('../Fonctions/garde')
+
+const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
 module.exports = async (bot, interaction) => {
     try {
         if (interaction.isAutocomplete()) {
-            const entry = interaction.options.getFocused().toLowerCase()
-            const choices = bot.commands
+            // Autocomplétion de /help : seulement les commandes que ce membre peut utiliser (staff masqué, modules désactivés)
+            const entry = String(interaction.options.getFocused()).toLowerCase()
+            const choices = (await commandesVisibles(bot, interaction))
                 .filter(cmd => cmd.name.includes(entry))
-                .first(25)
+                .slice(0, 25)
                 .map(cmd => ({ name: cmd.name, value: cmd.name }))
             return await interaction.respond(choices)
         }
@@ -20,36 +22,25 @@ module.exports = async (bot, interaction) => {
             const command = bot.commands.get(interaction.commandName)
             if (!command) return
 
-            // Les permissions par défaut d'une slash commande peuvent être modifiées par un admin du serveur
-            // (Paramètres > Intégrations) : on revérifie donc la permission réelle du membre à chaque appel
-            if (typeof command.permission === "bigint" && interaction.inGuild() && !interaction.memberPermissions?.has(command.permission)) {
-                return await interaction.reply({ content: t(interaction, "commun.permission"), flags: Discord.MessageFlags.Ephemeral })
+            // Module, droits (revérifiés à chaque appel : un admin peut ouvrir une commande à d'autres dans
+            // Paramètres > Intégrations), salons de jeux et délai : même garde que les composants (Fonctions/garde.js)
+            const refus = await controler(interaction, command)
+            if (refus) return await interaction.reply({ content: refus, flags: EPHEMERAL })
+
+            try {
+                return await command.run(bot, interaction, interaction.options)
+            } catch (err) {
+                // La commande a échoué : le membre peut réessayer sans attendre son délai
+                liberer(command.name, interaction.guildId, interaction.user.id)
+                throw err
             }
-
-            return await command.run(bot, interaction, interaction.options)
         }
 
-        // Composants persistants (panneaux et salons de tickets). Les boutons de confirmation, eux,
-        // sont attendus directement par la commande qui les a posés (awaitMessageComponent).
-        if (interaction.isButton()) {
-            if (interaction.customId === "ticket") return await tickets.onBoutonTicket(bot, interaction)
-            if (interaction.customId === "close") return await tickets.closeTicket(bot, interaction)
-            if (interaction.customId === "claim") return await tickets.claimTicket(bot, interaction)
-            if (interaction.customId.startsWith("note:")) return await tickets.noterTicket(bot, interaction)
-            if (interaction.customId.startsWith("role:")) return await onClicRole(bot, interaction)
-            if (interaction.customId.startsWith("giveaway:")) return await onClicGiveaway(bot, interaction)
-        }
-        if (interaction.isStringSelectMenu() && interaction.customId === "ticket-type") return await tickets.onMenuType(bot, interaction)
-        if (interaction.isModalSubmit() && interaction.customId.startsWith("ticket-form:")) return await tickets.onFormulaire(bot, interaction)
+        // Boutons, menus et formulaires persistants : déclarés par les commandes (`composants`), routés par préfixe (#89),
+        // avec la même garde. Les boutons de confirmation, eux, sont attendus par la commande qui les a posés.
+        await bot.routeur.router(bot, interaction)
     } catch (err) {
-        console.error(`Erreur sur l'interaction ${interaction.commandName ?? interaction.customId ?? interaction.type} :`, err)
-        if (!interaction.isRepliable()) return
-
-        // Sans traduction possible (base indisponible…), message en français
-        let texte = "Une erreur est survenue, l'action n'a pas pu être effectuée."
-        try { texte = t(interaction, "commun.erreur") } catch { /* repli ci-dessus */ }
-        const reponse = { content: texte, flags: Discord.MessageFlags.Ephemeral }
-        if (interaction.replied || interaction.deferred) await interaction.followUp(reponse).catch(() => {})
-        else await interaction.reply(reponse).catch(() => {})
+        // Erreur attendue (ErreurUtilisateur) : message clair ; sinon numéro d'incident montré au membre et écrit dans les logs
+        await traiterErreur(interaction, err)
     }
 }

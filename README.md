@@ -67,7 +67,8 @@ Règles :
 
 ## Configuration et langues
 
-- **`/config`** (Gérer le serveur) ouvre une fenêtre privée avec des menus : langue, couleur des embeds, salon de logs, tickets (catégorie, rôle staff, fermeture des inactifs), texte du panneau de tickets, et un résumé du reste. Elle applique exactement les mêmes règles que les commandes (`/setlogs`, `/setticket`) : par exemple, changer la config des tickets demande toujours Gérer le serveur + les salons + les rôles. Une seule fenêtre par membre, fermée au bout de 5 minutes.
+- **`/config`** (Gérer le serveur) ouvre une fenêtre privée avec des menus : langue, couleur des embeds, **modules** (activer ou désactiver la Modération, la Communauté et chacun de ses sous-modules, limiter les jeux à certains salons ; administrateur uniquement), **rôle staff** (ses membres peuvent utiliser `/warn`, `/warns`, `/unwarn` et `/historique` ; à choisir avec « Gérer le serveur » + « Exclure temporairement »), salon de logs, tickets (catégorie, rôle staff, fermeture des inactifs), texte du panneau de tickets, et un résumé du reste. Elle applique exactement les mêmes règles que les commandes (`/setlogs`, `/setticket`) : par exemple, changer la config des tickets demande toujours Gérer le serveur + les salons + les rôles. Une seule fenêtre par membre, fermée au bout de 5 minutes.
+- **Interrupteur d'urgence** : `DESACTIVER=communaute.jeux,commande:quiz` dans le `.env` coupe ces fonctions sur tous les serveurs au prochain redémarrage (en cas de bug grave), sans redéployer.
 - **Langues** : le bot parle français ou anglais. Par défaut, il répond dans la langue du client Discord de chaque membre (les messages publics suivent la langue du serveur) ; `/config` permet d'imposer une langue. Les descriptions des commandes sont traduites en anglais (fichier `locales/commandes.en.json`), les messages dans `locales/fr.json` et `locales/en.json`.
   Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
 - **Apparence** : couleur des embeds (`#RRGGBB`) et titre/texte du panneau de tickets, à appliquer en repostant le panneau avec `/ticket`.
@@ -78,7 +79,7 @@ Un site pour configurer le bot sans commande : langue, couleur, salon de logs, t
 
 1. Developer Portal > *OAuth2* : copie le **Client Secret** dans `DISCORD_CLIENT_SECRET`, et ajoute `${DASHBOARD_URL}/callback` dans *Redirects* (ex. `http://localhost:3000/callback` en dev).
 2. Renseigne `DASHBOARD_URL` (origine exacte, sans `/` final) et lance `npm run dashboard:dev`, puis ouvre l'URL.
-3. En prod (Docker) : `docker compose up -d` lance aussi le service `dashboard`, qui n'écoute que sur `127.0.0.1:3000`. Mets un reverse proxy HTTPS devant, par exemple avec Caddy :
+3. En prod (Docker) : `docker compose up -d` lance aussi le service `dashboard` (`DATABASE_NO_MIGRATE=1` : il attend que le bot ait migré la base), qui n'écoute que sur `127.0.0.1:3000`. Mets un reverse proxy HTTPS devant, par exemple avec Caddy :
    ```
    bot.exemple.fr {
        reverse_proxy 127.0.0.1:3000
@@ -132,22 +133,26 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 ### Sauvegardes
 - Automatiques toutes les `BACKUP_INTERVAL_HOURS` heures (24 par défaut en prod) dans `backups/`, en gardant les `BACKUP_KEEP` dernières (7). Chaque sauvegarde est vérifiée avant d'être gardée. Au démarrage, une sauvegarde n'est faite que si la dernière est trop ancienne (un bot qui redémarre en boucle n'écrase donc pas les bonnes sauvegardes).
 - Manuelle avec Docker : `docker compose exec bot node scripts/backup.js`. Sans Docker : `npm run backup -- --env=prod`. N'utilise pas `sudo npm run backup` sur une installation Docker : les fichiers créés appartiendraient à root et le bot ne pourrait plus ouvrir sa base.
+- **Migrations du schéma** : la base porte un numéro de version (`PRAGMA user_version`) et le bot applique tout seul les fichiers de `migrations/` au démarrage. Avant de migrer une base déjà remplie, il en fait une copie `backups/avant-migration-v<version>-<date>.db` (jamais supprimée par la rotation).
+- `npm run migrate -- --etat` affiche la version et les migrations en attente ; `npm run migrate` les applique ; `npm run migrate -- --annuler N --confirmer` revient à la version N (avec Docker : `docker compose exec bot node scripts/migrate.js --etat`).
 - **Copie régulièrement `backups/` hors du serveur** (ton PC, un stockage en ligne) : une sauvegarde sur la même machine ne protège pas d'une panne de disque.
 - Restauration : arrête le bot, remplace `data/bot.db` par la sauvegarde choisie, supprime `data/bot.db-wal` et `data/bot.db-shm` s'ils existent, relance.
 
 ## Vérification
 
-- `npm test` lance le lint (ESLint) puis `npm run check`, qui vérifie sans se connecter à Discord que toutes les commandes se chargent, que leurs définitions sont valides et que les règles de sécurité tiennent.
+- `npm test` lance le lint (ESLint) puis `npm run check`, qui exécute les tests `node:test` du dossier `tests/` (un fichier par domaine) sans se connecter à Discord : toutes les commandes se chargent, leurs définitions sont valides et les règles de sécurité tiennent.
+- `npm run couverture` lance les mêmes tests avec le rapport de couverture de code.
 - La CI GitHub Actions lance les mêmes vérifications et `npm audit` à chaque push sur `main` et à chaque pull request, puis construit l'image Docker et vérifie qu'elle tourne sans root et sans aucun secret. Elle ne demande aucun secret.
 - Dependabot propose chaque semaine les mises à jour des dépendances.
 
 ## Commandes
 
+Les commandes sont rangées par module dans `Commandes/` : le dossier décide du module.
+
+### 🛡️ Modération (staff uniquement) – `Commandes/Moderation/`
+
 | Commande | Permission requise | Rôle |
 |---|---|---|
-| `/help [commande]` | aucune | Liste des commandes |
-| `/ping` | aucune | Latence du bot |
-| `/quoi` | aucune | Répond « Feur » |
 | `/ban`, `/unban` | Bannir des membres | Bannir (avec confirmation par bouton) / débannir |
 | `/tempban membre duree raison` | Bannir des membres | Ban temporaire (1 min à 365 j), déban automatique même après un redémarrage |
 | `/historique membre` | Exclure temporairement | Toutes les sanctions d'un membre (warns, mutes, kicks, bans, débans) |
@@ -162,17 +167,37 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 | `/unwarn numero` | Exclure temporairement | Retire un avertissement (pas les siens, ni ceux d'un supérieur) |
 | `/setlogs [salon]` | Gérer le serveur | Salon des logs de modération (sans salon : désactive) |
 | `/clear` | Gérer les messages | Supprimer 1 à 100 messages |
+
+### 🎫 Tickets (staff ; les boutons des tickets restent ouverts aux membres) – `Commandes/Tickets/`
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
 | `/ticket action [membre]` | Panneau : Gérer les messages ; ajouter/retirer : staff du ticket | Poste le panneau, ajoute ou retire un membre d'un ticket |
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
 | `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
 | `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
+
+### 🎉 Communauté – `Commandes/Communaute/<Sous-module>/`
+
+Animation (`Communaute/Animation/`) :
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/quoi` | aucune | Répond « Feur » |
 | `/roles action …` | Gérer les rôles | Panneaux de rôles à boutons (10 panneaux, 25 rôles par panneau) |
 | `/giveaway action …` | Gérer le serveur | Lancer, terminer, relancer, annuler un giveaway (10 en cours max) |
 | `/sondage question choix` | Gérer les messages | Sondage natif (2 à 10 choix, 1 h à 32 jours) |
 | `/annonce action …` | Gérer les messages | Annonces programmées (20 en attente, 60 jours max) |
 | `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
+
+### ⚙️ Général – `Commandes/General/`
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/help [commande]` | aucune | Liste des commandes |
+| `/ping` | aucune | Latence du bot |
 | `/config` | Gérer le serveur | Configuration interactive : langue, couleur, logs, tickets, panneau |
 | `/invite` | aucune | Lien d'invitation (permissions minimales) et serveur de support |
 | `/premium` | aucune | Statut premium du serveur, fonctions premium, bouton d'achat |
 | `/about` | aucune | Serveurs, version, durée en ligne, liens (support, confidentialité, conditions) |
-| `/privacy [supprimer]` | aucune (suppression : administrateur) | Données conservées, effacement immédiat des données du serveur |
+| `/privacy [supprimer] [moi]` | aucune (suppression : administrateur) | Données conservées, export ou effacement de vos données (`moi`), effacement immédiat des données du serveur |

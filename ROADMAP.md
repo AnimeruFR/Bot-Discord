@@ -1,6 +1,8 @@
 # Roadmap du Bot-Discord
 
-*Rédigée le 24/11/2026, après les lots Sécurité, A, B et C (PR #1).*
+*Rédigée le 24/11/2026, après les lots Sécurité, A, B et C (PR #1). Mise à jour le 25/11/2026.*
+
+> **Les lots D à K ci-dessous sont terminés et fusionnés.** La suite (bot « tout-en-un » : module Modération réservé au staff + module Communauté avec économie, niveaux, jeux, collection, événements et premium non pay-to-win) est décrite dans **[docs/PLAN-AMELIORATIONS.md](docs/PLAN-AMELIORATIONS.md)** (100 idées notées, phases 0 à 6) et **[docs/ECONOMIE.md](docs/ECONOMIE.md)** (équilibrage). Voir la section 4 plus bas.
 
 Ce document sert de point de départ pour une **nouvelle conversation**. Il contient :
 1. la liste des améliorations et des ajouts, notés sur l'utilité et le potentiel de revenu ;
@@ -189,3 +191,20 @@ Les offres gratuites changent souvent : **vérifie toujours la page de tarifs of
 - [How to Host a Discord Bot 24/7 for Free (discordcraft)](https://discordcraft.com/blog/how-to-host-a-discord-bot-247-for-free-replit-railway-vps)
 - [Discord – Enabling Monetization (documentation officielle)](https://docs.discord.com/developers/monetization/enabling-monetization)
 - [Discord – Premium Apps : exigences de support pour la monétisation](https://support-dev.discord.com/hc/en-us/articles/23810643331735)
+
+---
+
+## 4. Suite : bot tout-en-un (plan du 25/11/2026)
+
+Détail, notes et critères d'acceptation : [docs/PLAN-AMELIORATIONS.md](docs/PLAN-AMELIORATIONS.md). Équilibrage : [docs/ECONOMIE.md](docs/ECONOMIE.md). **En attente de validation.**
+
+| Phase | Contenu | Idées | Effort estimé |
+|---|---|---|---|
+| 0 – Fondations | Commandes rangées par module, garde staff, `/config modules`, migrations versionnées, routeur de composants, cooldowns, erreurs, tests `node:test`, RGPD par membre, `/help` filtré, interrupteurs d'urgence | 1, 86–93, 95, 96 | ≈ 10,5 j |
+| 1 – Quick wins | Notes staff, raisons prédéfinies, signalement de message, menus contextuels, logs séparés, AutoMod amélioré, `/setup` | 3, 6–8, 10, 12, 20, 22–24, 94 | ≈ 10 j |
+| 2 – Modération avancée | Anti-raid, vérification, anti-phishing, dossier membre, appels, quarantaine, statistiques et rapport hebdo, tickets (SLA, formulaires, transfert) | 2, 4, 5, 9, 11, 13–19, 21, 25 | ≈ 21,5 j |
+| 3 – Cœur ludique | Économie, daily, métiers, boutique, inventaire, anti-triche, XP, carte de rang, paliers, succès, quêtes, profil, premiers jeux | 26–30, 32, 33, 35, 36, 38–41, 43–52, 55, 72, 76–78 | ≈ 34,5 j |
+| 4 – Multijoueur et phares | Loup-garou, Imposteur du mot, boss coopératif, cartes à collectionner + set du serveur, objectif communautaire, tournois, échanges | 31, 37, 53, 56–62, 64, 67, 73, 74 | ≈ 41,5 j |
+| 5 – Monétisation | Premium utilisateur, premium serveur Communauté, cosmétiques (SKU Discord uniquement), parrainage, votes | 80–84 | ≈ 8 j |
+| 6 – Événements et scale | Saisons, événements saisonniers, marché, familiers, classement inter-serveurs, dashboard Communauté, observabilité, sauvegardes externes, sharding | 34, 42, 63, 69, 75, 85, 97–100 | ≈ 28 j |
+| Backlog | Bataille navale, RPG (classes, donjons, craft), casino, confessions | 54, 65, 66, 68, 70, 71, 79 | — |

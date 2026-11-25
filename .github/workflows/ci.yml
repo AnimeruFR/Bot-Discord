@@ -32,6 +32,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run check
+      - run: npm run couverture
+        if: matrix.node == 24
       - run: npm audit --omit=dev --audit-level=high
 
   # Construit l'image Docker de prod et vérifie qu'elle est saine (sans token : le bot n'est pas lancé)
@@ -63,7 +65,7 @@ jobs:
           docker run --rm -e DATABASE_PATH=:memory: --entrypoint node bot-discord:ci --disable-warning=ExperimentalWarning -e "
             const D = require('discord.js'); const bot = { commands: new D.Collection() }
             require('./Loader/loadCommands')(bot, { silencieux: true })
-            const attendu = require('fs').readdirSync('Commandes').filter(f => f.endsWith('.js')).length
+            const attendu = require('./Loader/loadCommands').listerCommandes().length
             if (bot.commands.size !== attendu) throw new Error(bot.commands.size + ' commandes sur ' + attendu)
             console.log(bot.commands.size + ' commandes chargées')"
       - name: Le bot refuse de démarrer sans token

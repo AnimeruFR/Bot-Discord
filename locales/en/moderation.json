@@ -66,6 +66,8 @@
   "mod.warn.pas_prevenu": "\n(The member could not be notified by DM.)",
   "mod.warn.seuil": "Threshold of {total} warnings reached for {user}. {auto}",
   "mod.unwarn.introuvable": "No warn #{id} on this server.",
+  "mod.warn.seuil_interdit": "This warning would trigger the following automatic sanction: {sanction}. You are not allowed to apply it, so the warning was not recorded. Ask a moderator.",
+  "mod.unwarn.membre_absent": "This member is no longer on the server: the staff role is not enough, you need the \"Timeout Members\" permission to remove their warning.",
   "mod.unwarn.propre": "You can't remove your own warnings!",
   "mod.unwarn.deja": "Warn #{id} has already been removed.",
   "mod.unwarn.reponse": "{moderateur} removed warn #{id} from {user} for the reason: ***{reason}***",

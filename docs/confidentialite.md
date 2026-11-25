@@ -34,7 +34,7 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Annonces programmées | ID du serveur, du salon et de l'auteur, texte de l'annonce, date d'envoi | Publier l'annonce à la date prévue. Effacé dès l'envoi (ou l'annulation) |
 | Apparence et langue | Langue choisie, couleur des embeds, titre et texte du panneau de tickets | Faire fonctionner le bot |
 | Panneaux de rôles, bienvenue | ID des messages, salons et rôles, titres et textes écrits par les administrateurs | Faire fonctionner le bot |
-| Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ |
+| Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ. Non effacé par `/privacy moi effacer` (sinon il permettrait de contourner la limite) |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |
 
 Le bot ne collecte rien d'autre.
@@ -61,7 +61,7 @@ Je ne vends rien, je ne fais pas de publicité et je ne partage pas vos données
 
 ## 7. Durée de conservation
 
-- Tant que le bot est sur un serveur, ses données sont conservées, sauf l'historique des sanctions, effacé automatiquement au bout de **2 ans**.
+- Tant que le bot est sur un serveur, ses données sont conservées, sauf l'historique des sanctions et les avertissements, effacés automatiquement au bout de **2 ans**.
 - Quand le bot quitte un serveur (expulsé ou retiré), toutes les données de ce serveur sont **supprimées automatiquement 30 jours plus tard**. Ce délai permet de réinviter le bot par erreur sans rien perdre.
 - Un administrateur peut tout supprimer **tout de suite** avec la commande `/privacy supprimer:True` (une confirmation par bouton est demandée).
 - Sauvegardes : une copie de la base est faite chaque jour et seules les plus récentes sont gardées (7 par défaut), les plus anciennes étant remplacées. Une donnée effacée disparaît donc aussi des sauvegardes, en général sous 7 jours. Ce délai peut être un peu plus long si le bot est arrêté ou si une sauvegarde échoue, ainsi que pour les éventuelles copies de sauvegarde conservées hors du serveur. Ces copies sont soumises aux mêmes règles et protégées de la même façon.
@@ -79,6 +79,25 @@ Vous pouvez demander :
 Pour cela, écrivez à [E-MAIL DE CONTACT]. Par exemple, un membre peut demander l'effacement de ses avertissements. Je réponds sous 30 jours. Merci d'indiquer votre identifiant Discord et le serveur concerné.
 
 Si vous pensez que vos droits ne sont pas respectés, vous pouvez porter réclamation auprès de la CNIL : [https://www.cnil.fr](https://www.cnil.fr).
+
+### Accès et effacement par vous-même
+
+Sans m'écrire, chaque membre peut agir seul, **serveur par serveur**, avec la commande `/privacy moi` :
+
+- `exporter` : le bot vous envoie (message visible de vous seul) un fichier JSON de toutes les données qui vous concernent sur ce serveur ;
+- `effacer` : après confirmation par bouton, le bot applique le traitement ci-dessous. Un résumé chiffré (jamais le contenu) est écrit dans le salon de logs du serveur, avec votre identifiant.
+
+| Traitement | Données concernées | Détail |
+|---|---|---|
+| **Effacer** | Participations aux giveaways | La ligne est supprimée |
+| **Anonymiser** | Auteur et membre du staff d'un ticket, organisateur et gagnants d'un giveaway, auteur d'une annonce programmée, modérateur d'un avertissement ou d'une sanction | Votre identifiant est remplacé par `0`, le reste de la ligne est gardé car il sert à d'autres membres ou au staff |
+| **Conserver** | Avertissements et sanctions dont vous avez fait l'objet | **2 ans** au plus, intérêt légitime de modération (voir la durée de conservation) |
+| **Conserver** | Délai entre deux tickets | **10 minutes** au plus (anti-spam) |
+| **Conserver** | Ban temporaire en cours | Jusqu'à la fin du ban, sinon il ne pourrait pas être levé |
+
+Avant une mise à jour du schéma de la base, le bot fait une copie de sécurité (`avant-migration-*.db`) : elle est supprimée automatiquement au bout de **30 jours** (vérifié au démarrage puis chaque jour). L'export `/privacy moi exporter` ne contient, pour les lignes où vous apparaissez seulement comme auteur d'une action (modérateur, organisateur, membre du staff), que l'identifiant de la ligne, ses dates et votre rôle. `/privacy moi effacer` est limité à une fois par heure.
+
+Les sauvegardes de la base tournent sur 7 jours : une donnée effacée ou anonymisée peut encore y figurer jusqu'à 7 jours, puis disparaît quand la sauvegarde est remplacée. Si un effacement doit être retardé (par exemple une opération en cours), le bot vous en donne la raison.
 
 Pour ce qui concerne le contenu des transcripts dans le salon de logs d'un serveur, adressez-vous d'abord aux administrateurs de ce serveur.
 

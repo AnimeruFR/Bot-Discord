@@ -66,6 +66,8 @@
   "mod.warn.pas_prevenu": "\n(Le membre n'a pas pu être prévenu en MP.)",
   "mod.warn.seuil": "Seuil de {total} avertissements atteint pour {user}. {auto}",
   "mod.unwarn.introuvable": "Aucun warn n°{id} sur ce serveur.",
+  "mod.warn.seuil_interdit": "Ce warn déclencherait la sanction automatique suivante : {sanction}. Vous n'avez pas le droit de l'appliquer, le warn n'a donc pas été enregistré. Demandez à un modérateur.",
+  "mod.unwarn.membre_absent": "Ce membre n'est plus sur le serveur : le rôle staff ne suffit pas, il faut la permission « Exclure temporairement » pour retirer son warn.",
   "mod.unwarn.propre": "Vous ne pouvez pas retirer vos propres avertissements !",
   "mod.unwarn.deja": "Le warn n°{id} a déjà été retiré.",
   "mod.unwarn.reponse": "{moderateur} a retiré le warn n°{id} de {user} pour la raison : ***{reason}***",
