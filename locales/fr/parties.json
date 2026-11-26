@@ -1,0 +1,9 @@
+{
+  "partie.terminee": "Cette partie est terminée.",
+  "partie.pas_joueur": "Tu ne participes pas à cette partie.",
+  "partie.pas_ton_tour": "Ce n'est pas ton tour.",
+  "partie.deja_en_partie": "Tu as déjà une partie en cours : termine-la ou abandonne-la d'abord.",
+  "partie.adversaire_deja_en_partie": "<@{user}> a déjà une partie en cours.",
+  "partie.expiree": "⌛ Partie expirée : plus personne n'a joué à temps.",
+  "partie.abandon": "<@{user}> abandonne la partie."
+}

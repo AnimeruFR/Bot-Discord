@@ -1,0 +1,9 @@
+{
+  "partie.terminee": "This game is over.",
+  "partie.pas_joueur": "You are not part of this game.",
+  "partie.pas_ton_tour": "It's not your turn.",
+  "partie.deja_en_partie": "You already have a game in progress: finish it or give up first.",
+  "partie.adversaire_deja_en_partie": "<@{user}> already has a game in progress.",
+  "partie.expiree": "⌛ Game expired: nobody played in time.",
+  "partie.abandon": "<@{user}> gave up the game."
+}
