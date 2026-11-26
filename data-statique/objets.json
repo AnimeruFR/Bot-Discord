@@ -1,0 +1,29 @@
+{
+    "version": 1,
+    "objets": [
+        {
+            "id": "boost_xp",
+            "nom": { "fr": "Boost d'XP", "en": "XP boost" },
+            "description": {
+                "fr": "+25 % d'XP pendant 1 heure. Non cumulable : impossible d'en utiliser un tant que le précédent court.",
+                "en": "+25% XP for 1 hour. Not stackable: you can't use one while the previous one is running."
+            },
+            "type": "consommable",
+            "prix": 500,
+            "vendable": true,
+            "effet": { "type": "boost_xp", "duree_s": 3600, "multiplicateur": 1.25 }
+        },
+        {
+            "id": "ticket_tirage",
+            "nom": { "fr": "Ticket de tirage", "en": "Draw ticket" },
+            "description": {
+                "fr": "Donnera un tirage de carte. Réservé à une prochaine mise à jour : pas encore utilisable.",
+                "en": "Will give one card draw. Reserved for a future update: not usable yet."
+            },
+            "type": "consommable",
+            "prix": 150,
+            "vendable": false,
+            "effet": { "type": "ticket_tirage" }
+        }
+    ]
+}
