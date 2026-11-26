@@ -13,5 +13,6 @@
   "modules.sous_collection": "Collection",
   "modules.sous_aventure": "Adventure",
   "modules.sous_casino": "Casino",
-  "modules.nom_tickets": "🎫 Tickets"
+  "modules.nom_tickets": "🎫 Tickets",
+  "modules.sous_social": "Social"
 }

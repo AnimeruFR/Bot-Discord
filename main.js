@@ -8,6 +8,8 @@ console.log(`Environnement : ${loadEnv().nom} (${loadEnv().fichier})`)
 const db = require('./Fonctions/db')
 const loadCommands = require('./Loader/loadCommands')
 const loadEvents = require('./Loader/loadEvents')
+const { configurerRecompenses } = require('./Fonctions/parties')
+const { crediter } = require('./Fonctions/economie')
 
 const bot = new Discord.Client({
     // Guilds pour les serveurs et salons, GuildModeration pour savoir quand un membre est débanni.
@@ -27,6 +29,15 @@ bot.color = "#FF0000"
 
 loadCommands(bot)
 loadEvents(bot)
+
+// Communauté : les récompenses des parties passent par l'économie (gains actifs, plafond du jour) ;
+// les succès et les quêtes s'abonnent au bus d'événements en se chargeant
+configurerRecompenses(async (guild, userId, montant, { source }) => {
+    const member = await guild.members?.fetch(userId).catch(() => null)
+    if (member) crediter(member, montant, { source, actif: true })
+})
+require('./Fonctions/succes')
+require('./Fonctions/quetes')
 
 bot.on('error', err => console.error("Erreur du client Discord :", err))
 
