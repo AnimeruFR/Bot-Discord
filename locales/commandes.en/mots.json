@@ -1,0 +1,30 @@
+{
+  "mot": {
+    "description": "Word of the Day: guess today's 5-letter word in 6 tries",
+    "options": {
+      "action": "What to do?"
+    },
+    "choix": {
+      "action": {
+        "jouer": "Play today's word",
+        "serie": "See my streak"
+      }
+    }
+  },
+  "pendu": {
+    "description": "Hangman: find the hidden word before the drawing is complete",
+    "options": {
+      "action": "What to do?",
+      "mode": "Who can play (solo by default)"
+    },
+    "choix": {
+      "action": {
+        "lancer": "Start a game"
+      },
+      "mode": {
+        "solo": "Solo: only me",
+        "ouvert": "Open: the whole channel"
+      }
+    }
+  }
+}
