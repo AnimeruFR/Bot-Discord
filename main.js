@@ -36,7 +36,7 @@ configurerRecompenses(async (guild, userId, montant, { source }) => {
     const member = await guild.members?.fetch(userId).catch(() => null)
     if (member) crediter(member, montant, { source, actif: true })
 })
-require('./Fonctions/succes')
+require('./Fonctions/succes').configurerClient(bot)
 require('./Fonctions/quetes')
 
 bot.on('error', err => console.error("Erreur du client Discord :", err))

@@ -1,0 +1,20 @@
+{
+  "succes": {
+    "description": "See the achievements earned and the ones left to earn",
+    "options": {
+      "membre": "The member to look at (you by default)"
+    }
+  },
+  "quetes": {
+    "description": "Your daily and weekly quests: see progress, claim rewards",
+    "options": {
+      "action": "What to do?"
+    },
+    "choix": {
+      "action": {
+        "voir": "See my quests",
+        "reclamer": "Claim the rewards"
+      }
+    }
+  }
+}
