@@ -77,11 +77,35 @@ const requetes = {
         UNION SELECT guild_id FROM config_audit
         UNION SELECT guild_id FROM ticket_fields
         UNION SELECT guild_id FROM ticket_events
-        UNION SELECT guild_id FROM phishing_whitelist UNION SELECT guild_id FROM verification_attempts`),
+        UNION SELECT guild_id FROM phishing_whitelist UNION SELECT guild_id FROM verification_attempts
+        UNION SELECT guild_id FROM eco_config
+        UNION SELECT guild_id FROM eco_comptes
+        UNION SELECT guild_id FROM eco_journal
+        UNION SELECT guild_id FROM eco_compteurs
+        UNION SELECT guild_id FROM eco_metiers
+        UNION SELECT guild_id FROM inventaire
+        UNION SELECT guild_id FROM shop_items
+        UNION SELECT guild_id FROM shop_roles_temp
+        UNION SELECT guild_id FROM xp
+        UNION SELECT guild_id FROM xp_config
+        UNION SELECT guild_id FROM xp_bonus
+        UNION SELECT guild_id FROM xp_paliers
+        UNION SELECT guild_id FROM succes
+        UNION SELECT guild_id FROM quetes
+        UNION SELECT guild_id FROM stats_joueur
+        UNION SELECT guild_id FROM profils
+        UNION SELECT guild_id FROM reputation
+        UNION SELECT guild_id FROM rep_donnees
+        UNION SELECT guild_id FROM anniversaires
+        UNION SELECT guild_id FROM anniv_config
+        UNION SELECT guild_id FROM parties
+        UNION SELECT guild_id FROM jeux_quotidiens
+        UNION SELECT guild_id FROM drops_config`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
         "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux",
         "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config",
-        "raid_config", "raid_events", "verification_config", "nick_filter", "appeals", "quarantine_config", "quarantines", "config_audit", "ticket_fields", "ticket_events", "phishing_whitelist", "verification_attempts"]
+        "raid_config", "raid_events", "verification_config", "nick_filter", "appeals", "quarantine_config", "quarantines", "config_audit", "ticket_fields", "ticket_events", "phishing_whitelist", "verification_attempts",
+        "eco_config", "eco_comptes", "eco_journal", "eco_compteurs", "eco_metiers", "inventaire", "shop_items", "shop_roles_temp", "xp", "xp_config", "xp_bonus", "xp_paliers", "succes", "quetes", "stats_joueur", "profils", "reputation", "rep_donnees", "anniversaires", "anniv_config", "parties", "jeux_quotidiens", "drops_config"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -205,6 +229,12 @@ const requetes = {
     purgeConfigAudit: db.prepare("DELETE FROM config_audit WHERE created_at < ?"),
     purgeRaidEvents: db.prepare("DELETE FROM raid_events WHERE ended_at IS NOT NULL AND ended_at < ?"),
     purgeVerificationAttempts: db.prepare("DELETE FROM verification_attempts WHERE updated_at < ?"),
+    // Phase 3 : compteurs du jour (anti-contournement des plafonds), réputations données, quêtes et parties terminées
+    purgeEcoCompteurs: db.prepare("DELETE FROM eco_compteurs WHERE day < ?"),
+    purgeRepDonnees: db.prepare("DELETE FROM rep_donnees WHERE day < ?"),
+    purgeQuetes: db.prepare("DELETE FROM quetes WHERE claimed = 1 AND period < ? OR period < ?"),
+    purgeParties: db.prepare("DELETE FROM parties WHERE status != 'en_cours' AND updated_at < ?"),
+    purgeJeuxQuotidiens: db.prepare("DELETE FROM jeux_quotidiens WHERE day < ?"),
     purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
     reporterTempban: db.prepare("UPDATE tempbans SET retry_at = ? WHERE guild_id = ? AND user_id = ?"),
 
@@ -381,6 +411,15 @@ module.exports = {
     // Durées de la phase 2 (voir le registre RGPD) : journal de config 2 ans, raids levés 1 an,
     // essais de vérification 1 jour. Les quarantaines ne sont jamais purgées : une ligne = une quarantaine active
     // (la levée la supprime, un membre parti la retrouve s'il revient)
+    // Durées de la phase 3 (voir le registre RGPD). jourMin : date AAAA-MM-JJ la plus ancienne gardée pour les compteurs
+    // du jour (2 jours) ; jourQuetes et jourJeux : 30 jours ; parties terminées : 30 jours
+    purgePhase3({ jourCompteurs, jourAncien, depuis30Jours }) {
+        requetes.purgeEcoCompteurs.run(jourCompteurs)
+        requetes.purgeRepDonnees.run(jourCompteurs)
+        requetes.purgeQuetes.run(jourAncien, jourAncien)
+        requetes.purgeParties.run(depuis30Jours)
+        requetes.purgeJeuxQuotidiens.run(jourAncien)
+    },
     purgePhase2({ deuxAns, unAn, unJour }) {
         requetes.purgeConfigAudit.run(deuxAns)
         requetes.purgeRaidEvents.run(unAn)

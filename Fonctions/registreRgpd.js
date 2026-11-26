@@ -161,6 +161,46 @@ const REGISTRE = {
         colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié ; effacée avec le suivi du ticket (90 jours après sa suppression)" } }
     },
     phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" },
+    // Phase 3 : données de jeu d'un membre. Elles n'ont de valeur que pour lui : effacées à sa demande.
+    eco_config: { serveur: "guild_id", aucune: "Réglages de l'économie du serveur, aucune donnée de membre" },
+    eco_comptes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Portefeuille de jeu (monnaie sans valeur réelle)" } } },
+    eco_journal: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "effacer", motif: "Historique de votre portefeuille de jeu" },
+            other_id: { traitement: "anonymiser", motif: "La transaction reste dans le journal de l'autre membre, vous n'y êtes plus identifié" }
+        }
+    },
+    // Compteurs du jour : sans eux, effacer ses données remettrait les plafonds à zéro (gains, transferts).
+    eco_compteurs: { serveur: "guild_id", colonnes: { user_id: { traitement: "conserver", motif: "Plafonds quotidiens de l'économie (un effacement permettrait de les contourner)", duree: "2 jours" } } },
+    eco_metiers: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Métier et niveau de jeu" } } },
+    inventaire: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Objets de jeu" } } },
+    shop_items: { serveur: "guild_id", aucune: "Articles de la boutique du serveur, aucune donnée de membre" },
+    // Rôle temporaire acheté : sans la ligne, le rôle ne serait jamais retiré.
+    shop_roles_temp: { serveur: "guild_id", colonnes: { user_id: { traitement: "conserver", motif: "Nécessaire pour retirer le rôle temporaire à l'échéance", duree: "jusqu'à l'échéance du rôle" } } },
+    xp: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Expérience et niveau" } } },
+    xp_config: { serveur: "guild_id", aucune: "Réglages de l'XP du serveur, aucune donnée de membre" },
+    xp_bonus: { serveur: "guild_id", aucune: "Bonus d'XP par salon ou rôle, aucune donnée de membre" },
+    xp_paliers: { serveur: "guild_id", aucune: "Rôles par niveau, aucune donnée de membre" },
+    succes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Succès obtenus" } } },
+    quetes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Quêtes en cours" } } },
+    stats_joueur: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Statistiques de jeu" } } },
+    profils: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Profil (bio, thème)" } } },
+    reputation: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Points de réputation reçus" } } },
+    // Réputation donnée : garder qui a donné aujourd'hui empêche d'en redonner en effaçant ses données.
+    rep_donnees: {
+        serveur: "guild_id",
+        colonnes: {
+            giver_id: { traitement: "conserver", motif: "Limite d'une réputation par jour (un effacement permettrait de la contourner)", duree: "2 jours" },
+            receiver_id: { traitement: "anonymiser", motif: "La limite de celui qui a donné reste valable, vous n'êtes plus identifié" }
+        }
+    },
+    anniversaires: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Jour et mois d'anniversaire" } } },
+    anniv_config: { serveur: "guild_id", aucune: "Salon et rôle d'anniversaire du serveur, aucune donnée de membre" },
+    // Partie : elle concerne les autres joueurs ; votre place est gardée sous forme anonyme. Effacée 30 jours après la fin.
+    parties: { serveur: "guild_id", colonnes: { players: { traitement: "anonymiser", liste: true, motif: "La partie concerne d'autres joueurs, votre place reste anonyme (effacée 30 jours après la fin)" } } },
+    jeux_quotidiens: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Parties des jeux du jour" } } },
+    drops_config: { serveur: "guild_id", aucune: "Salons des drops du serveur, aucune donnée de membre" },
     // Essais de vérification (#4) : sans eux, un membre pourrait réessayer sans fin ; effacés après 1 jour.
     verification_attempts: {
         serveur: "guild_id",
