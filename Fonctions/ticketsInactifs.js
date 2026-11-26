@@ -1,11 +1,13 @@
 const db = require('./db')
-const { t } = require('./i18n')
+const { t, langueDe } = require('./i18n')
 const { sendModLog } = require('./logs')
-const { ticketOwnerId, fermerPourAuteur, retirerAccesAuteur, accesAuteurRetire } = require('./tickets')
+const { formatDuree } = require('./moderation')
+const { ticketOwnerId, fermerPourAuteur, retirerAccesAuteur, accesAuteurRetire, roleValide, staffRoleId, ajouterEvenement } = require('./tickets')
 
 const HEURE = 60 * 60 * 1000
 const JOUR = 24 * HEURE
 const DELAI_APRES_AVERTISSEMENT = JOUR
+const MINUTE = 60 * 1000
 
 // Date du dernier message d'un humain dans le salon (les messages du bot ne comptent pas :
 // sinon l'avertissement lui-même relancerait le compteur). Sans message humain récent : date de création.
@@ -83,21 +85,70 @@ async function traiterInactifs(bot, maintenant = Date.now()) {
     return bilan
 }
 
-function startTicketInactivitySchedule(bot) {
-    let enCours = false
-    const tourner = async () => {
-        if (enCours) return
-        enCours = true
+const MAX_SLA_PAR_PASSAGE = 10
+
+// Délai cible (SLA) : alerte, une seule fois, les tickets ouverts jamais pris en charge dont l'âge dépasse le délai de leur type.
+// Renvoie le nombre d'alertes envoyées (pour les tests).
+async function traiterSla(bot, maintenant = Date.now()) {
+    let alertes = 0
+    const parServeur = new Map()
+    const retards = db.sqlAll(`SELECT tk.channel_id, tk.guild_id, tk.staff_role_id, ty.nom AS type_nom, ty.sla_minutes
+        FROM tickets tk JOIN ticket_types ty ON ty.guild_id = tk.guild_id AND ty.id = tk.type_id
+        WHERE tk.status = 'ouvert' AND tk.claimed_by IS NULL AND tk.claimed_at IS NULL AND tk.sla_alerted_at IS NULL
+        AND ty.sla_minutes IS NOT NULL AND tk.created_at + ty.sla_minutes * 60000 <= ?
+        ORDER BY tk.created_at`, [maintenant])
+
+    for (const ticket of retards) {
         try {
-            await traiterInactifs(bot)
+            // Au plus MAX_SLA_PAR_PASSAGE alertes par serveur : les autres tickets sont repris au passage suivant
+            if ((parServeur.get(ticket.guild_id) ?? 0) >= MAX_SLA_PAR_PASSAGE) continue
+            const guild = bot.guilds.cache.get(ticket.guild_id)
+            if (!guild?.available) continue
+            const channel = guild.channels.cache.get(ticket.channel_id)
+            if (!channel || !ticketOwnerId(channel) || channel.name.startsWith("ferme-")) continue
+
+            // Écrit avant l'envoi : si le bot plante entre les deux, l'alerte ne sera pas répétée
+            if (db.sqlRun("UPDATE tickets SET sla_alerted_at = ? WHERE channel_id = ? AND sla_alerted_at IS NULL", [maintenant, ticket.channel_id]) === 0) continue
+            parServeur.set(ticket.guild_id, (parServeur.get(ticket.guild_id) ?? 0) + 1)
+            ajouterEvenement(ticket.guild_id, ticket.channel_id, bot.user.id, "sla_alerte", `${ticket.type_nom} : ${ticket.sla_minutes} min`)
+
+            // Rôle staff figé sur le ticket, sinon le rôle de /setticket ou du .env : lui seul peut être mentionné
+            const role = roleValide(guild, ticket.staff_role_id)?.id ?? staffRoleId(guild)
+            const delai = formatDuree(ticket.sla_minutes * MINUTE, langueDe(guild))
+            await channel.send({
+                content: t(guild, role ? "tk.sla_alerte" : "tk.sla_alerte_sans_role", { role: `<@&${role}>`, delai }),
+                allowedMentions: { parse: [], roles: role ? [role] : [] }
+            })
+            alertes++
         } catch (err) {
-            console.error("Erreur pendant la vérification des tickets :", err.message)
-        } finally {
-            enCours = false
+            console.error(`Délai cible du ticket ${ticket.channel_id} :`, err.message)
         }
     }
-    tourner()
-    return setInterval(tourner, HEURE).unref()
+    return alertes
 }
 
-module.exports = { traiterInactifs, reconcilier, startTicketInactivitySchedule, derniereActivite, DELAI_APRES_AVERTISSEMENT }
+// Deux passages : les tickets inactifs toutes les heures, les délais cibles (à partir de 5 minutes) toutes les 5 minutes
+function startTicketInactivitySchedule(bot) {
+    const garde = (nom, fonction) => {
+        let enCours = false
+        return async () => {
+            if (enCours) return
+            enCours = true
+            try {
+                await fonction(bot)
+            } catch (err) {
+                console.error(`Erreur pendant la vérification des tickets (${nom}) :`, err.message)
+            } finally {
+                enCours = false
+            }
+        }
+    }
+    const inactifs = garde("inactivité", traiterInactifs)
+    const sla = garde("délai cible", traiterSla)
+    inactifs()
+    sla()
+    setInterval(sla, 5 * MINUTE).unref()
+    return setInterval(inactifs, HEURE).unref()
+}
+
+module.exports = { traiterInactifs, traiterSla, reconcilier, startTicketInactivitySchedule, derniereActivite, DELAI_APRES_AVERTISSEMENT }

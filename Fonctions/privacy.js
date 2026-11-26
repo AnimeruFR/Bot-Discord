@@ -58,6 +58,7 @@ function startPrivacySchedule(bot) {
             purgerSauvegardesMigration() // copies avant-migration-*.db de plus de 30 jours (elles contiennent la base entière)
             db.purgeOldTickets(Date.now() - 90 * JOUR) // suivi des tickets supprimés depuis plus de 90 jours
             db.purgeOldGiveaways(Date.now() - 30 * JOUR) // giveaways terminés depuis plus de 30 jours (participants, gagnants)
+            db.purgePhase2({ deuxAns: Date.now() - CONSERVATION_HISTORIQUE, unAn: Date.now() - 365 * JOUR, unJour: Date.now() - JOUR })
             if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)
         } catch (err) {
             console.error("Erreur pendant la purge RGPD :", err.message)

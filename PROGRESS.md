@@ -128,5 +128,40 @@ Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haik
 - ❌ Rejeté : S7 extrait AutoMod (justifie la sanction, durée déclarée) · A1 logs de jeux (familles prêtes, jeux en phase 3) · A2 /setup limité aux 5 étapes du plan · P4 préfixes i18n (cosmétique) · P5 logs en français (convention).
 - Risque connu : un membre avec « Gérer le serveur » peut modifier dans Discord une règle créée par le bot (son créateur ne change pas) ; la règle reste alors comptée pour `dossiers` (cache de 5 min).
 
+## Phase 2 – Modération avancée (26/11/2026)
+
+Phase 1 fusionnée (PR #15). Branche d'intégration `phase-2/moderation-avancee` (part de `main`). Branches par groupe d'idées : `feat/15-16-17-stats`, `feat/2-13-anti-raid`, `feat/9-11-dossier-appels`, `feat/18-19-21-tickets`, `feat/5-14-phishing-quarantaine`, `feat/4-25-verification-pseudos`.
+
+| Idée | État | Résumé |
+|---|---|---|
+| Contrats communs | ✅ | migrations 010-018, familles de logs antiraid et appels, journal de config alimenté par sendModLog, arrivée d'un membre en étapes isolées, hiérarchie commune (`estAuDessus`, `peutDonnerRole`) |
+| #2 Anti-raid | ✅ | `/raid` : seuils par serveur, un seul mode raid, niveau de vérification relevé et invitations suspendues (pas sans salon d'alerte : MP au propriétaire), bouton de levée, levée automatique après 60 min |
+| #4 Vérification | ✅ | `/verification` : défi d'emoji à 8 boutons lié au membre, erreurs et blocage en base, suspendue seulement si un raid a verrouillé le serveur |
+| #5 Anti-phishing | ✅ | `/phishing` : règle AutoMod du bot, liste `data-statique/domaines-phishing.txt` (à relire et compléter par PR), liste blanche |
+| #9 Dossier unifié | ✅ | `/dossier` (et `/historique`) en pages ; jamais le sien ; notes masquées pour une cible plus haut placée ou partie |
+| #11 Appels | ✅ | bouton « Faire appel » dans les MP de sanction, un appel par sanction (30 jours), décision par l'auteur ou Gérer le serveur |
+| #13 Ban en masse | ✅ | `/massban` : 200 max, aperçu + confirmation, hiérarchie, une case par ban réussi |
+| #14 Quarantaine | ✅ | `/quarantaine` : rôles sauvegardés avant retrait, reprise après crash, réappliquée si le membre revient |
+| #15 #16 #17 | ✅ | `/journal`, `/modstats` (90/365 j premium), rapport du lundi 9 h |
+| #18 #19 #21 | ✅ | délai cible des tickets, 5 champs de formulaire par type, `/ticket transferer` |
+| #25 Filtre de pseudos | ✅ | `/pseudos` : hoist, zalgo, mots interdits ; jamais un membre du staff ni au-dessus de qui a activé le filtre |
+
+Décisions de la phase 2 :
+- Une étape d'arrivée qui échoue ne bloque jamais les suivantes (anti-raid → filtre → pseudo → quarantaine → vérification → bienvenue).
+- Appels et signalements : familles de logs sans repli (jamais dans le salon général).
+- Le journal de config (#15) est écrit par `sendModLog(action config)`, une seule fois par changement.
+- Node épinglé en 22.23.5 (Docker et `engines`) pour les correctifs de sécurité, dont le SQLite embarqué.
+- Commits faits avant la critique de fin de lot (écart à la règle), corrections dans des commits séparés.
+- Incident : un agent a chargé le code sans base de test et a migré `data/bot.db` de la v9 à la v17 (ce que le bot aurait fait au démarrage). Sauvegarde : `backups/avant-migration-v9-20261126-082645.db`. Les briefs interdisent désormais tout `require` hors tests.
+
+Critique de fin de lot (sonnet) : corrigé — quarantaine contournée par la vérification et les rôles à boutons ; rôles ajoutés pendant une quarantaine ; échec de vérification sans réponse ; appel accepté sans annulation ; levée de raid marquée avant la restauration ; verrouillage qui retardait l'arrivée ; repli du massban ; rafale d'alertes SLA. Reporté : appel orphelin après un crash entre écriture et envoi ; défi de vérification lisible par un script (documenté).
+
+### Tribunal de fin de jalon 2 — 1er procès : **jalon à reprendre** ; 2e procès : **jalon validé** (corrections appliquées)
+Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haiku). Défense (sonnet), jury (opus). 2e procès sur le diff correctif seulement (sécurité opus, conception et propreté sonnet). `npm audit` : 0 ; Node 22.20 en retard → épinglé 22.23.5.
+- ✅ Corrigé (1er procès) : S1 pseudos sans pouvoir prêté · S2 plafond de renommage · S3 purges RGPD · S4/A4 vérification persistée · S5 refuser un appel = même contrôle qu'accepter · S6 rôle de quarantaine · S7 notes d'un membre parti · S8 ancien pseudo jamais loggé · CVE Node · A1 reprise de quarantaine · A2 pas de verrouillage sans alerte + levée auto · A3 test < 5 s (horloge simulée) · A6 permission de /massban · A8 case par ban · P1 SQL des tickets · P2 helpers de hiérarchie · P8 exports.
+- ✅ Corrigé (2e procès) : N1 quarantaines actives jamais purgées · N2 plus de boucle de renommage · N5/C1 vérification suspendue seulement si le raid a verrouillé · C2 raid expiré ignoré · N3 surcharge de salon refusée · S3 durées déclarées + docs/confidentialite.md · S1 auteur du filtre mémorisé · C4 hiérarchie du massban · C6 tests manquants.
+- 🕓 Reporté : A5 vue d'ensemble des modules dans /config et /setup (phase 3) · A6 bis verrou par serveur de /massban · A8 bis message « appel refusé = définitif » et débit · P3 découpage de Fonctions/tickets.js · S8 bis fetch du massban et plafond global de MP · S4 bis défi plus robuste · N4 durée de raid réglable et alerte si le salon disparaît · tests des purges · image Docker par digest et engines strict · C4 chaînes en dur (raid, pseudos) · C5 messages de vérification plus précis.
+- ❌ Rejeté : A7 (modules distincts) · P4, P6, P7 (style) · P5 (massban déjà testé) · P2 bis (16 comparaisons locales de sens différents) · P8 bis (exports pour les tests).
+
 ## Prochaine étape
-Phase 1 codée et commitée en local sur `phase-1/quick-wins` (rien de poussé), tribunal de fin de jalon passé (jalon validé, corrections appliquées). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID` pour enregistrer les menus contextuels, puis `npm run dev`), puis, sur accord d'Animeru, pousser et ouvrir la PR de la phase 1 (après fusion de la PR #14). Ensuite : phase 2 (modération avancée).
+Phase 2 codée, deux procès passés (jalon validé), commitée en local sur `phase-2/moderation-avancee` (rien de poussé). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID`, puis `npm run dev`) ; faire relire `data-statique/domaines-phishing.txt` ; sur accord d'Animeru, pousser et ouvrir la PR. Ensuite : phase 3 (cœur ludique), qui demande de trancher les 3 questions en attente (casino, intent GuildMessages pour l'XP, carte de rang en image ou en embed).

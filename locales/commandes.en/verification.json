@@ -1,0 +1,33 @@
+{
+  "verification": {
+    "description": "Verify new members with a button challenge",
+    "options": {
+      "action": "What to do?",
+      "role": "The role given to verified members (to choose the role)",
+      "salon": "The channel of the panel"
+    },
+    "choix": {
+      "action": {
+        "config": "Choose the verified members' role",
+        "panneau": "Post the verification panel",
+        "desactiver": "Disable verification"
+      }
+    }
+  },
+  "pseudos": {
+    "description": "Nickname filter: leading symbols, zalgo text and banned words",
+    "options": {
+      "action": "What to do?",
+      "mot": "The banned word (to add or remove)"
+    },
+    "choix": {
+      "action": {
+        "activer": "Enable the filter",
+        "desactiver": "Disable the filter",
+        "ajouter": "Add a banned word",
+        "retirer": "Remove a banned word",
+        "liste": "View banned words"
+      }
+    }
+  }
+}

@@ -10,7 +10,7 @@ const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
 module.exports = {
     name: "ticket",
-    description: "Tickets : poster le panneau, ajouter ou retirer un membre d'un ticket",
+    description: "Tickets : poster le panneau, ajouter ou retirer un membre, transférer un ticket",
     // Visible par défaut pour « Gérer les messages » (commande staff). Le staff des tickets qui n'a pas ce droit
     // y a quand même accès (acces ci-dessous) ; un admin peut lui afficher la commande dans Paramètres > Intégrations.
     // Chaque action revérifie ensuite ses propres droits (voir run).
@@ -37,18 +37,28 @@ module.exports = {
             choices: [
                 { name: "Poster le panneau ici", value: "panneau" },
                 { name: "Ajouter un membre à ce ticket", value: "ajouter" },
-                { name: "Retirer un membre de ce ticket", value: "retirer" }
+                { name: "Retirer un membre de ce ticket", value: "retirer" },
+                { name: "Transférer ce ticket vers un autre type", value: "transferer" }
             ]
         }, {
             type: "user",
             name: "membre",
             description: "Le membre à ajouter ou retirer",
             required: false
+        }, {
+            type: "string",
+            name: "type",
+            description: "Type de destination (pour transférer)",
+            required: false,
+            autocomplete: true,
+            maxLength: 50
         }
     ],
 
     async run(bot, message, args) {
         const action = args.getString("action")
+
+        if (action === "transferer") return tickets.transfererTicket(message, args.getString("type"))
 
         if (action !== "panneau") {
             const user = args.getUser("membre")
@@ -90,5 +100,15 @@ module.exports = {
         // Message simple (pas une réponse à la commande) : le panneau ne montre pas qui l'a posté
         await channel.send({ embeds: [embed], components: [composant] })
         await message.reply({ content: t(message, "tk.tk_panneau_ok"), flags: EPHEMERAL })
+    },
+
+    // Types proposés pour /ticket transferer (le nom du type est la valeur choisie)
+    async autocomplete(bot, interaction) {
+        const saisie = String(interaction.options.getFocused() ?? "").toLowerCase()
+        const types = interaction.guildId ? db.listTicketTypes(interaction.guildId) : []
+        await interaction.respond(types
+            .filter(ty => ty.nom.toLowerCase().includes(saisie))
+            .slice(0, 25)
+            .map(ty => ({ name: ty.nom.slice(0, 100), value: ty.nom.slice(0, 100) })))
     }
 }

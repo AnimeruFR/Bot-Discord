@@ -119,7 +119,53 @@ const REGISTRE = {
         colonnes: { author_id: { traitement: "anonymiser", auteur: true, motif: "La réponse sert au staff du serveur, son auteur n'est plus identifié" } }
     },
     account_filter: { serveur: "guild_id", aucune: "Réglage du filtre des comptes récents (#3), aucune donnée de membre" },
-    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" }
+    automod_config: { serveur: "guild_id", aucune: "Réglage AutoMod du serveur (#7), aucune donnée de membre" },
+    // Phase 2
+    raid_config: { serveur: "guild_id", aucune: "Seuils anti-raid du serveur (#2), aucune donnée de membre" },
+    raid_events: {
+        serveur: "guild_id",
+        colonnes: { lifted_by: { traitement: "anonymiser", auteur: true, motif: "Le raid reste dans l'historique du serveur, celui qui l'a levé n'est plus identifié ; raid effacé 1 an après sa levée" } }
+    },
+    verification_config: { serveur: "guild_id", aucune: "Réglage de la vérification (#4), aucune donnée de membre" },
+    // Filtre de pseudos (#25) : configured_by limite le pouvoir du bot à celui de qui l'a activé (tribunal S1).
+    nick_filter: {
+        serveur: "guild_id",
+        colonnes: { configured_by: { traitement: "anonymiser", auteur: true, motif: "Le filtre reste actif, son auteur n'est plus identifié (le bot ne renomme alors plus personne)" } }
+    },
+    // Appel (#11) : texte écrit par le membre. Il suit la sanction (même durée), le staff qui a tranché est anonymisé.
+    appeals: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Suivi de la sanction contestée (un appel par sanction)", duree: "2 ans" },
+            decided_by: { traitement: "anonymiser", auteur: true, motif: "La décision reste valable, le membre du staff n'est plus identifié" }
+        }
+    },
+    quarantine_config: { serveur: "guild_id", aucune: "Rôle de quarantaine du serveur (#14), aucune donnée de membre" },
+    // Quarantaine en cours : sans la ligne, les rôles du membre ne pourraient pas lui être rendus.
+    quarantines: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine (un membre parti la retrouve s'il revient)" },
+            moderator_id: { traitement: "anonymiser", auteur: true, motif: "La quarantaine reste en place, le modérateur n'est plus identifié" }
+        }
+    },
+    // Journal de configuration (#15) : réglages du serveur, l'auteur du changement est un membre du staff.
+    config_audit: {
+        serveur: "guild_id",
+        colonnes: { moderator_id: { traitement: "anonymiser", auteur: true, motif: "Le changement reste dans le journal du serveur, son auteur n'est plus identifié ; ligne effacée après 2 ans" } }
+    },
+    ticket_fields: { serveur: "guild_id", aucune: "Champs des formulaires de tickets (#19), aucune donnée de membre" },
+    // Trace d'un ticket (#21) : transfert, alerte de délai… sans contenu de message.
+    ticket_events: {
+        serveur: "guild_id",
+        colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié ; effacée avec le suivi du ticket (90 jours après sa suppression)" } }
+    },
+    phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" },
+    // Essais de vérification (#4) : sans eux, un membre pourrait réessayer sans fin ; effacés après 1 jour.
+    verification_attempts: {
+        serveur: "guild_id",
+        colonnes: { user_id: { traitement: "conserver", motif: "Limite d'essais de la vérification (un effacement permettrait de la contourner)", duree: "1 jour" } }
+    }
 }
 
 const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]

@@ -10,7 +10,7 @@ const { formatReason, formatDuree, checkHierarchy, fetchMember } = require('./mo
 const ANNULABLES = ["warn", "mute", "kick", "ban", "tempban"]
 
 // Tous les types de sanction connus (noms traduits : mod.type.<type>), source unique pour /historique, /case et le menu « Dossier »
-const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban", "automod"]
+const TYPES = ["warn", "unwarn", "mute", "unmute", "kick", "ban", "tempban", "unban", "automod", "quarantaine", "fin_quarantaine"]
 const nomType = (interaction, type) => TYPES.includes(type) ? t(interaction, `mod.type.${type}`) : type
 
 // Une ligne d'historique : raison coupée à 200 caractères (10 lignes tiennent dans un embed),
@@ -42,6 +42,16 @@ async function verifierDroitSurCible(interaction, { auteurId, userId, cleAutre }
 
 function lireCase(guildId, id) {
     return db.sqlAll("SELECT * FROM cases WHERE guild_id = ? AND id = ?", [guildId, id])[0] ?? null
+}
+
+// Numéro de la sanction (ligne d'historique) créée par un warn, null si elle n'existe pas
+function caseDuWarn(guildId, warnId) {
+    return db.sqlAll("SELECT id FROM cases WHERE guild_id = ? AND warn_id = ?", [guildId, warnId])[0]?.id ?? null
+}
+
+// Retire une sanction écrite d'avance dont l'action a échoué (ban ou kick refusé par Discord après l'écriture)
+function retirerCase(guildId, id) {
+    return db.sqlRun("DELETE FROM cases WHERE guild_id = ? AND id = ?", [guildId, id]) > 0
 }
 
 // Modifications d'une sanction, les plus récentes d'abord
@@ -87,4 +97,4 @@ function annulerCase(guildId, id, editeurId) {
     })
 }
 
-module.exports = { ANNULABLES, TYPES, nomType, ligneSanction, cibleDe, verifierDroitSurCible, lireCase, listerModifs, muteActif, warnEncore, modifierRaison, annulerCase }
+module.exports = { ANNULABLES, TYPES, nomType, ligneSanction, cibleDe, verifierDroitSurCible, lireCase, caseDuWarn, retirerCase, listerModifs, muteActif, warnEncore, modifierRaison, annulerCase }

@@ -4,6 +4,7 @@ const { startHeartbeat } = require('../Fonctions/heartbeat')
 const { startTempbanSchedule } = require('../Fonctions/tempbans')
 const { startTicketInactivitySchedule } = require('../Fonctions/ticketsInactifs')
 const { startProgrammesSchedule } = require('../Fonctions/programmes')
+const { startRapportHebdoSchedule } = require('../Fonctions/rapportHebdo')
 
 let demarre = false
 
@@ -19,4 +20,5 @@ module.exports = async bot => {
     startTempbanSchedule(bot)
     startTicketInactivitySchedule(bot)
     startProgrammesSchedule(bot)
+    startRapportHebdoSchedule(bot)
 }

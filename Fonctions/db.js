@@ -66,10 +66,22 @@ const requetes = {
         UNION SELECT guild_id FROM guild_modules UNION SELECT guild_id FROM guild_salons_jeux
         UNION SELECT guild_id FROM log_channels UNION SELECT guild_id FROM staff_notes UNION SELECT guild_id FROM mod_reasons
         UNION SELECT guild_id FROM case_edits UNION SELECT guild_id FROM ticket_macros UNION SELECT guild_id FROM account_filter
-        UNION SELECT guild_id FROM automod_config`),
+        UNION SELECT guild_id FROM automod_config
+        UNION SELECT guild_id FROM raid_config
+        UNION SELECT guild_id FROM raid_events
+        UNION SELECT guild_id FROM verification_config
+        UNION SELECT guild_id FROM nick_filter
+        UNION SELECT guild_id FROM appeals
+        UNION SELECT guild_id FROM quarantine_config
+        UNION SELECT guild_id FROM quarantines
+        UNION SELECT guild_id FROM config_audit
+        UNION SELECT guild_id FROM ticket_fields
+        UNION SELECT guild_id FROM ticket_events
+        UNION SELECT guild_id FROM phishing_whitelist UNION SELECT guild_id FROM verification_attempts`),
     deleteParServeur: ["warns", "guild_config", "ticket_cooldowns", "cases", "tempbans", "sanction_thresholds", "channel_locks",
         "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux",
-        "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config"]
+        "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config",
+        "raid_config", "raid_events", "verification_config", "nick_filter", "appeals", "quarantine_config", "quarantines", "config_audit", "ticket_fields", "ticket_events", "phishing_whitelist", "verification_attempts"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -187,6 +199,12 @@ const requetes = {
     purgeCases: db.prepare("DELETE FROM cases WHERE created_at < ?"),
     purgeCaseEdits: db.prepare("DELETE FROM case_edits WHERE created_at < ? OR case_id NOT IN (SELECT id FROM cases)"),
     purgeStaffNotes: db.prepare("DELETE FROM staff_notes WHERE created_at < ?"),
+    // Phase 2 (tribunal S3) : les appels suivent leur sanction, la trace d'un ticket suit le ticket
+    purgeAppeals: db.prepare("DELETE FROM appeals WHERE created_at < ? OR case_id NOT IN (SELECT id FROM cases WHERE cases.guild_id = appeals.guild_id)"),
+    purgeTicketEvents: db.prepare("DELETE FROM ticket_events WHERE channel_id NOT IN (SELECT channel_id FROM tickets)"),
+    purgeConfigAudit: db.prepare("DELETE FROM config_audit WHERE created_at < ?"),
+    purgeRaidEvents: db.prepare("DELETE FROM raid_events WHERE ended_at IS NOT NULL AND ended_at < ?"),
+    purgeVerificationAttempts: db.prepare("DELETE FROM verification_attempts WHERE updated_at < ?"),
     purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
     reporterTempban: db.prepare("UPDATE tempbans SET retry_at = ? WHERE guild_id = ? AND user_id = ?"),
 
@@ -302,6 +320,7 @@ module.exports = {
         const total = requetes.purgeCases.run(avant).changes
         requetes.purgeStaffNotes.run(avant)
         requetes.purgeCaseEdits.run(avant)
+        requetes.purgeAppeals.run(avant)
         return total
     },
     purgeOldWarns: avant => requetes.purgeWarns.run(avant).changes,
@@ -354,7 +373,19 @@ module.exports = {
     // Seul l'auteur d'un ticket supprimé peut le noter, une seule fois
     rateTicket: (channelId, ownerId, note) => requetes.rateTicket.run(note, Date.now(), channelId, ownerId).changes > 0,
     // Lignes des tickets supprimés : gardées 90 jours (stats sur 30 jours, notes pendant 7 jours)
-    purgeOldTickets: avant => requetes.purgeTickets.run(avant).changes,
+    purgeOldTickets(avant) {
+        const total = requetes.purgeTickets.run(avant).changes
+        requetes.purgeTicketEvents.run()
+        return total
+    },
+    // Durées de la phase 2 (voir le registre RGPD) : journal de config 2 ans, raids levés 1 an,
+    // essais de vérification 1 jour. Les quarantaines ne sont jamais purgées : une ligne = une quarantaine active
+    // (la levée la supprime, un membre parti la retrouve s'il revient)
+    purgePhase2({ deuxAns, unAn, unJour }) {
+        requetes.purgeConfigAudit.run(deuxAns)
+        requetes.purgeRaidEvents.run(unAn)
+        requetes.purgeVerificationAttempts.run(unJour)
+    },
     ticketsSince: (guildId, date) => requetes.ticketsSince.all(guildId, date),
     getTicketInactivity: guildId => requetes.getInactivity.get(guildId)?.ticket_inactivity_days ?? 0,
     setTicketInactivity: (guildId, jours) => requetes.setInactivity.run(guildId, jours),

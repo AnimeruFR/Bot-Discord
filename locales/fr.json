@@ -147,6 +147,8 @@
   "config.famille_config": "Configuration",
   "config.famille_jeux": "Jeux",
   "config.famille_economie": "Économie",
+  "config.famille_antiraid": "Anti-raid",
+  "config.famille_appels": "Appels de sanction",
   "config.logs_famille_ok": "Les logs « {famille} » seront envoyés dans {salon}.",
   "config.logs_famille_general": "Les logs « {famille} » repartent dans le salon général.",
   "config.logs_famille_aucun": "Les logs « {famille} » sont désactivés (cette famille n'utilise jamais le salon général).",

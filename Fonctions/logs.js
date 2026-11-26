@@ -8,21 +8,23 @@ const COULEURS = {
     ban: 0xE74C3C, unban: 0x2ECC71, kick: 0xE67E22, mute: 0xF1C40F, unmute: 0x2ECC71,
     warn: 0xF39C12, unwarn: 0x3498DB, clear: 0x95A5A6, ticket: 0x9B59B6, tempban: 0xC0392B,
     lock: 0x7F8C8D, unlock: 0x2ECC71, slowmode: 0x95A5A6, automod: 0x34495E, config: 0x3498DB,
-    roles: 0x5865F2, giveaway: 0xF1C40F, annonce: 0x1ABC9C, sondage: 0x1ABC9C
+    roles: 0x5865F2, giveaway: 0xF1C40F, annonce: 0x1ABC9C, sondage: 0x1ABC9C,
+    quarantaine: 0x8E44AD, fin_quarantaine: 0x2ECC71, raid: 0xC0392B, appel: 0x3498DB
 }
 
 // Salons de logs séparés (idée #24) : chaque famille peut avoir son salon (/setlogs famille:…).
 // Sans salon pour sa famille, un log va dans le salon général, SAUF les familles « sans repli » :
 // le spam des jeux et de l'économie ne doit jamais noyer les alertes de modération. Les signalements en font partie :
 // l'identité du signaleur ne doit jamais atterrir dans un salon plus large que celui choisi pour eux.
-const FAMILLES = ["sanctions", "automod", "tickets", "membres", "signalements", "animation", "config", "jeux", "economie"]
-const SANS_REPLI = ["jeux", "economie", "signalements"]
+const FAMILLES = ["sanctions", "automod", "tickets", "membres", "signalements", "animation", "config", "antiraid", "appels", "jeux", "economie"]
+// Appels : texte écrit par un membre sanctionné, comme les signalements jamais dans un salon général peut-être public
+const SANS_REPLI = ["jeux", "economie", "signalements", "appels"]
 
 // Famille d'une action de sendModLog (action inconnue : sanctions)
 const FAMILLE_ACTION = {
     automod: "automod", ticket: "tickets", config: "config",
     roles: "animation", giveaway: "animation", annonce: "animation", sondage: "animation",
-    filtre: "membres", signalement: "signalements"
+    filtre: "membres", signalement: "signalements", raid: "antiraid", appel: "appels", verification: "membres", pseudo: "membres"
 }
 const familleDe = action => FAMILLE_ACTION[action] ?? "sanctions"
 
@@ -50,8 +52,25 @@ function getLogChannel(guild, famille = "sanctions") {
     return channel
 }
 
+// Journal des changements de configuration (#15, table config_audit). Un même changement est souvent loggé deux fois
+// (dans l'ancien puis dans le nouveau salon) : on ne le garde qu'une fois.
+const derniereConfig = new Map() // serveur -> "moderateur|details"
+function noterConfig(guildId, moderatorId, details) {
+    const cle = `${moderatorId}|${details}`
+    if (derniereConfig.get(guildId) === cle) return
+    derniereConfig.set(guildId, cle)
+    if (derniereConfig.size > 1000) derniereConfig.delete(derniereConfig.keys().next().value)
+    try {
+        db.sqlRun("INSERT INTO config_audit (guild_id, moderator_id, details, created_at) VALUES (?, ?, ?, ?)", [guildId, moderatorId, details.slice(0, 1000), Date.now()])
+    } catch (err) {
+        console.error("Impossible d'écrire le journal de configuration :", err.message)
+    }
+}
+
 // Envoie une entrée dans le salon de logs. Ne lève jamais d'erreur : un log raté ne doit pas faire échouer l'action.
 async function sendModLog(interaction, { action, cible, raison, details, famille = familleDe(action) }) {
+    // Journal consultable (#15) : chaque changement de configuration est gardé, même sans salon de logs
+    if (action === "config" && details) noterConfig(interaction.guild.id, interaction.user.id, String(details))
     try {
         const channel = getLogChannel(interaction.guild, famille)
         if (!channel) return

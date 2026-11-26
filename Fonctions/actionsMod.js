@@ -3,6 +3,8 @@ const { t, langueDe } = require('./i18n')
 const { formatReason, checkHierarchy, fetchMember, auditReason, formatDuree } = require('./moderation')
 const { appliquerSeuil, sanctionInterdite } = require('./sanctions')
 const { sendModLog } = require('./logs')
+const { caseDuWarn } = require('./cases')
+const { mpSanction } = require('./appels')
 
 // Actions de modération partagées entre les slash commandes, les menus contextuels et les signalements.
 
@@ -29,7 +31,9 @@ async function avertir(interaction, user, raisonSaisie) {
     const id = db.addWarn(interaction.guild.id, user.id, interaction.user.id, raisonBrute)
     const total = db.countWarns(interaction.guild.id, user.id)
 
-    const prevenu = await user.send(t(interaction.guild, "mod.warn.mp", { serveur: interaction.guild.name, reason }))
+    // Le MP part après l'écriture du warn : son bouton « Faire appel » a besoin du numéro de la sanction
+    const numeroCase = caseDuWarn(interaction.guild.id, id)
+    const prevenu = await mpSanction(user, interaction.guild, t(interaction.guild, "mod.warn.mp", { serveur: interaction.guild.name, reason }), numeroCase)
         .then(() => true)
         .catch(() => false)
 
@@ -54,7 +58,7 @@ async function muter(interaction, user, duree, raisonSaisie) {
     await member.timeout(duree, auditReason(interaction, raisonSaisie))
     const numero = db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "mute", reason: raisonSaisie, durationMs: duree })
     await sendModLog(interaction, { action: "mute", cible: user, raison: raisonSaisie, details: `Durée : ${formatDuree(duree)}` })
-    await user.send(t(interaction.guild, "mod.mute.mp", { serveur: interaction.guild.name, temps: formatDuree(duree, langueDe(interaction.guild)), reason })).catch(() => {})
+    await mpSanction(user, interaction.guild, t(interaction.guild, "mod.mute.mp", { serveur: interaction.guild.name, temps: formatDuree(duree, langueDe(interaction.guild)), reason }), numero).catch(() => {})
     return { numero, temps: formatDuree(duree, langueDe(interaction)), reason }
 }
 

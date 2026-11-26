@@ -1,0 +1,19 @@
+{
+  "dossier": {
+    "description": "A member's full file: sanctions, staff notes, tickets and appeals",
+    "options": {
+      "membre": "The member whose file you want"
+    }
+  },
+  "appel": {
+    "description": "List the pending sanction appeals",
+    "options": {
+      "action": "What to do?"
+    },
+    "choix": {
+      "action": {
+        "liste": "View pending appeals"
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "phishing": {
+    "description": "Anti-phishing: blocks known scam links with an AutoMod rule",
+    "options": {
+      "action": "What to do?",
+      "domaine": "Domain to allow or stop allowing (e.g. example.com)"
+    },
+    "choix": {
+      "action": {
+        "activer": "Enable or update the rule",
+        "desactiver": "Disable (deletes the rule)",
+        "autoriser": "Allow a domain",
+        "retirer": "Stop allowing a domain",
+        "liste": "See the status and allowed domains"
+      }
+    }
+  },
+  "quarantaine": {
+    "description": "Isolate a member (roles are saved, then given back when lifted)",
+    "options": {
+      "action": "What to do?",
+      "membre": "The member concerned (put, lift)",
+      "raison": "The reason for the quarantine",
+      "role": "The isolated role (config): no dangerous permission"
+    },
+    "choix": {
+      "action": {
+        "mettre": "Put a member in quarantine",
+        "lever": "Lift a member's quarantine",
+        "config": "Choose the isolated role",
+        "liste": "See the members in quarantine"
+      }
+    }
+  }
+}

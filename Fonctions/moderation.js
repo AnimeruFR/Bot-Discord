@@ -37,6 +37,26 @@ function checkHierarchy(interaction, target, action) {
     return null
 }
 
+// Hiérarchie commune (tribunal de la phase 2, P2) : à utiliser partout où un membre ou le bot agit sur un autre
+// membre ou donne un rôle, pour que le bot n'ait jamais plus de pouvoir que celui qui agit ou configure.
+
+// acteur (membre, ou guild.members.me pour le bot) est-il strictement au-dessus de cible (membre) ?
+// Le propriétaire est au-dessus de tous ; personne n'est au-dessus du propriétaire.
+function estAuDessus(acteur, cible) {
+    const guild = acteur.guild
+    if (cible.id === guild.ownerId) return false
+    if (acteur.id === guild.ownerId) return true
+    return acteur.roles.highest.comparePositionTo(cible.roles.highest) > 0
+}
+
+// acteur peut-il donner ce rôle ? « Gérer les rôles » et un rôle strictement plus haut (le propriétaire : toujours).
+// Jamais @everyone ni un rôle géré par une intégration.
+function peutDonnerRole(acteur, role) {
+    if (!role || role.managed || role.id === role.guild.id) return false
+    if (acteur.id === role.guild.ownerId) return true
+    return Boolean(acteur.permissions?.has(Discord.PermissionFlagsBits.ManageRoles)) && role.comparePositionTo(acteur.roles.highest) < 0
+}
+
 // Relit le membre auprès de Discord (force : le cache peut avoir des rôles périmés). null s'il n'est pas sur le serveur.
 // Toute autre erreur (réseau, limite de débit) est relancée : la prendre pour « membre absent »
 // ferait sauter la vérification de hiérarchie.
@@ -78,4 +98,4 @@ function formatDuree(duree, langue = "fr") {
     return parties.join(LIAISON[langue]) || MOINS_D_UNE[langue]
 }
 
-module.exports = { formatReason, auditReason, checkHierarchy, fetchMember, parseDuree, formatDuree }
+module.exports = { formatReason, auditReason, checkHierarchy, estAuDessus, peutDonnerRole, fetchMember, parseDuree, formatDuree }

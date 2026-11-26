@@ -3,6 +3,8 @@ const db = require('./db')
 const { formatReason, auditReason, checkHierarchy, fetchMember, formatDuree } = require('./moderation')
 const { sendModLog } = require('./logs')
 const { t, langueDe } = require('./i18n')
+const { retirerCase } = require('./cases')
+const { mpSanction } = require('./appels')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const DELAI_CONFIRMATION = 30 * 1000
@@ -49,12 +51,17 @@ async function verifierBan(interaction, user, duree) {
 }
 
 // Bannit sans confirmation (définitif si duree est null). Renvoie le numéro de la sanction.
+// La sanction est écrite avant le MP (son bouton « Faire appel » a besoin du numéro) et retirée si le ban échoue.
 async function bannir(guild, user, { moderateur, raisonBrute, duree = null, auto = false, member = null }) {
     const reason = formatReason(raisonBrute)
+    const numero = db.addCase(guild.id, {
+        userId: user.id, moderatorId: moderateur.id, type: duree ? "tempban" : "ban",
+        reason: raisonBrute, durationMs: duree, auto
+    })
     // Le MP doit partir avant le ban, sinon le bot ne partage plus de serveur avec lui
     if (member) {
         const pendant = duree ? t(guild, "mod.ban.mp_pendant", { duree: formatDuree(duree, langueDe(guild)) }) : ""
-        await user.send(t(guild, "mod.ban.mp", { serveur: guild.name, pendant, reason })).catch(() => {})
+        await mpSanction(user, guild, t(guild, "mod.ban.mp", { serveur: guild.name, pendant, reason }), numero).catch(() => {})
     }
 
     const audit = auditReason({ user: moderateur }, raisonBrute)
@@ -65,15 +72,13 @@ async function bannir(guild, user, { moderateur, raisonBrute, duree = null, auto
         await guild.bans.create(user.id, { reason: duree ? `${marqueurTempban(fin)} ${audit}`.slice(0, 500) : audit })
     } catch (err) {
         if (duree) db.removeTempban(guild.id, user.id)
+        retirerCase(guild.id, numero)
         throw err
     }
     // Un ban définitif remplace un éventuel ban temporaire
     if (!duree) db.removeTempban(guild.id, user.id)
 
-    return db.addCase(guild.id, {
-        userId: user.id, moderatorId: moderateur.id, type: duree ? "tempban" : "ban",
-        reason: raisonBrute, durationMs: duree, auto
-    })
+    return numero
 }
 
 // /ban et /tempban : confirmation par bouton, puis revérification complète avant d'agir
@@ -176,13 +181,19 @@ async function appliquerSeuil(interaction, user, total) {
             // On ne raccourcit jamais un mute déjà en cours
             if ((member.communicationDisabledUntilTimestamp ?? 0) >= Date.now() + duree) return echec(t(interaction, "mod.auto.deja_mute"))
             await member.timeout(duree, audit)
-            db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "mute", reason: raisonBrute, durationMs: duree, auto: true })
-            await user.send(t(interaction.guild, "mod.auto.mp_mute", { serveur: interaction.guild.name, duree: formatDuree(duree, langueDe(interaction.guild)), raison: raisonMp })).catch(() => {})
+            const numero = db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "mute", reason: raisonBrute, durationMs: duree, auto: true })
+            await mpSanction(user, interaction.guild, t(interaction.guild, "mod.auto.mp_mute", { serveur: interaction.guild.name, duree: formatDuree(duree, langueDe(interaction.guild)), raison: raisonMp }), numero).catch(() => {})
         } else if (action === "kick") {
             if (!member.kickable) return echec(t(interaction, "mod.auto.pas_kickable"))
-            await user.send(t(interaction.guild, "mod.auto.mp_kick", { serveur: interaction.guild.name, raison: raisonMp })).catch(() => {})
-            await member.kick(audit)
-            db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "kick", reason: raisonBrute, auto: true })
+            // Sanction écrite avant le MP (numéro du bouton d'appel), retirée si le kick échoue
+            const numero = db.addCase(interaction.guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "kick", reason: raisonBrute, auto: true })
+            await mpSanction(user, interaction.guild, t(interaction.guild, "mod.auto.mp_kick", { serveur: interaction.guild.name, raison: raisonMp }), numero).catch(() => {})
+            try {
+                await member.kick(audit)
+            } catch (err) {
+                retirerCase(interaction.guild.id, numero)
+                throw err
+            }
         } else {
             if (!member.bannable) return echec(t(interaction, "mod.auto.pas_bannable"))
             await bannir(interaction.guild, user, { moderateur: interaction.user, raisonBrute, duree: action === "tempban" ? duree : null, auto: true, member })

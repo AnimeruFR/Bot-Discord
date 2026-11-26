@@ -5,6 +5,8 @@ const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
 const db = require('../../Fonctions/db')
 const { autocompleterRaison } = require('../../Fonctions/raisons')
+const { retirerCase } = require('../../Fonctions/cases')
+const { mpSanction } = require('../../Fonctions/appels')
 
 module.exports = {
     name: "kick",
@@ -45,10 +47,16 @@ module.exports = {
         if (erreur) return refuser(message, erreur)
         if (!member.kickable) return refuser(message, t(message, "mod.kick.pas_kickable"))
 
-        await user.send(t(message.guild, "mod.kick.mp", { serveur: message.guild.name, reason })).catch(() => {})
-
-        await member.kick(auditReason(message, raisonBrute))
+        // Sanction écrite avant le MP (le bouton « Faire appel » a besoin du numéro), retirée si le kick échoue
         const numero = db.addCase(message.guild.id, { userId: user.id, moderatorId: message.user.id, type: "kick", reason: raisonBrute })
+        await mpSanction(user, message.guild, t(message.guild, "mod.kick.mp", { serveur: message.guild.name, reason }), numero).catch(() => {})
+
+        try {
+            await member.kick(auditReason(message, raisonBrute))
+        } catch (err) {
+            retirerCase(message.guild.id, numero)
+            throw err
+        }
         await message.editReply(t(message, "mod.kick.reponse", { moderateur: message.user, user, reason, numero }))
         await sendModLog(message, { action: "kick", cible: user, raison: raisonBrute })
     }

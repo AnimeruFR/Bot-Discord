@@ -3,18 +3,82 @@ const db = require('../../Fonctions/db')
 const { exigerPremium } = require('../../Fonctions/premium')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t } = require('../../Fonctions/i18n')
-const { roleValide, categorieUtilisable } = require('../../Fonctions/tickets')
+const { roleValide, categorieUtilisable, champsDuType, ajouterChamp, retirerChamp, retirerChampsDuType, definirDelai, MAX_CHAMPS, SLA_MIN, SLA_MAX } = require('../../Fonctions/tickets')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const P = Discord.PermissionFlagsBits
 const MAX_TYPES = 10
 
 function decrire(type, cible) {
+    const champs = champsDuType(type.guild_id, type.id).length
     return `**${type.id}. ${Discord.escapeMarkdown(type.nom)}**${type.description ? ` – ${Discord.escapeMarkdown(type.description)}` : ""}\n`
         + t(cible, "tk.ty_decrire", {
             categorie: type.category_id ? `<#${type.category_id}>` : t(cible, "config.par_defaut"),
             staff: type.staff_role_id ? `<@&${type.staff_role_id}>` : t(cible, "config.par_defaut")
         })
+        + (type.sla_minutes ? `\n${t(cible, "tk.ty_decrire_delai", { minutes: type.sla_minutes })}` : "")
+        + (champs ? `\n${t(cible, "tk.ty_decrire_champs", { nombre: champs })}` : "")
+}
+
+// Un champ du formulaire, pour la liste : « 1. Libellé (court, obligatoire) »
+function decrireChamp(champ, rang, cible) {
+    const style = t(cible, champ.style === "long" ? "tk.ch_style_long" : "tk.ch_style_court")
+    return `${rang}. ${Discord.escapeMarkdown(champ.label)} (${style}, ${t(cible, champ.required ? "tk.ch_requis" : "tk.ch_facultatif")})`
+}
+
+// Champs du formulaire et délai cible d'un type. Ajouter un champ ou régler le délai est premium, comme modifier un type ;
+// lister, retirer un champ et retirer le délai restent gratuits, comme retirer un type.
+async function gererFormulaireEtDelai(message, args, action) {
+    const guild = message.guild
+    const numero = args.getInteger("numero")
+    const type = numero ? db.getTicketType(guild.id, numero) : null
+    if (!type) return message.reply({ content: t(message, "tk.ty_inconnu"), flags: EPHEMERAL })
+    const nomType = Discord.escapeMarkdown(type.nom)
+
+    if (action === "champs") {
+        const champs = champsDuType(guild.id, type.id)
+        return message.reply({
+            content: champs.length
+                ? t(message, "tk.ch_liste", { type: nomType, champs: champs.map((c, i) => decrireChamp(c, i + 1, message)).join("\n") })
+                : t(message, "tk.ch_aucun", { type: nomType }),
+            flags: EPHEMERAL
+        })
+    }
+
+    if (action === "champ_retirer") {
+        const rang = args.getInteger("champ")
+        if (!rang) return message.reply({ content: t(message, "tk.ch_numero"), flags: EPHEMERAL })
+        const champ = retirerChamp(guild.id, type.id, rang)
+        if (!champ) return message.reply({ content: t(message, "tk.ch_inconnu"), flags: EPHEMERAL })
+        await message.reply({ content: t(message, "tk.ch_retire", { champ: Discord.escapeMarkdown(champ.label), type: nomType }), flags: EPHEMERAL })
+        return sendModLog(message, { action: "config", details: `Champ de formulaire retiré (${type.nom}) : ${champ.label}` })
+    }
+
+    if (action === "champ_ajouter") {
+        const libelle = args.getString("libelle")?.trim()
+        if (!libelle) return message.reply({ content: t(message, "tk.ch_libelle_requis"), flags: EPHEMERAL })
+        if (libelle.length > 45) return message.reply({ content: t(message, "tk.ch_libelle_long"), flags: EPHEMERAL })
+        if (!await exigerPremium(message, "types")) return
+        const champ = { label: libelle, style: args.getString("style") ?? "court", required: args.getBoolean("requis") ?? true }
+        if (!ajouterChamp(guild.id, type.id, champ)) return message.reply({ content: t(message, "tk.ch_max", { max: MAX_CHAMPS }), flags: EPHEMERAL })
+        await message.reply({ content: t(message, "tk.ch_ajoute", { champ: Discord.escapeMarkdown(libelle), type: nomType }), flags: EPHEMERAL })
+        return sendModLog(message, { action: "config", details: `Champ de formulaire ajouté (${type.nom}) : ${libelle}` })
+    }
+
+    // delai : sans `minutes`, le délai est retiré
+    const minutes = args.getInteger("minutes")
+    if (minutes === null) {
+        definirDelai(guild.id, type.id, null)
+        await message.reply({ content: t(message, "tk.dl_retire", { type: nomType }), flags: EPHEMERAL })
+        return sendModLog(message, { action: "config", details: `Délai cible retiré : ${type.nom}` })
+    }
+    if (!Number.isInteger(minutes) || minutes < SLA_MIN || minutes > SLA_MAX) {
+        return message.reply({ content: t(message, "tk.dl_limites", { min: SLA_MIN, max: SLA_MAX }), flags: EPHEMERAL })
+    }
+    if (!await exigerPremium(message, "types")) return
+    definirDelai(guild.id, type.id, minutes)
+    await message.reply({ content: t(message, "tk.dl_regle", { type: nomType, minutes }), flags: EPHEMERAL })
+    return sendModLog(message, { action: "config", details: `Délai cible du type ${type.nom} : ${minutes} min` })
 }
 
 module.exports = {
@@ -34,7 +98,11 @@ module.exports = {
                 { name: "Voir les types", value: "liste" },
                 { name: "Ajouter un type", value: "ajouter" },
                 { name: "Modifier un type", value: "modifier" },
-                { name: "Retirer un type", value: "retirer" }
+                { name: "Retirer un type", value: "retirer" },
+                { name: "Régler le délai cible d'un type", value: "delai" },
+                { name: "Voir les champs du formulaire", value: "champs" },
+                { name: "Ajouter un champ au formulaire", value: "champ_ajouter" },
+                { name: "Retirer un champ du formulaire", value: "champ_retirer" }
             ]
         }, {
             type: "integer",
@@ -65,6 +133,40 @@ module.exports = {
             name: "staff",
             description: "Rôle qui voit et gère les tickets de ce type",
             required: false
+        }, {
+            type: "integer",
+            name: "minutes",
+            description: "Délai cible de prise en charge, en minutes (vide : le retirer)",
+            required: false,
+            minValue: SLA_MIN,
+            maxValue: SLA_MAX
+        }, {
+            type: "string",
+            name: "libelle",
+            description: "Libellé du champ à ajouter (45 caractères au plus)",
+            required: false,
+            maxLength: 45
+        }, {
+            type: "string",
+            name: "style",
+            description: "Taille de la réponse du champ (court par défaut)",
+            required: false,
+            choices: [
+                { name: "Court (une ligne)", value: "court" },
+                { name: "Long (plusieurs lignes)", value: "long" }
+            ]
+        }, {
+            type: "boolean",
+            name: "requis",
+            description: "Le champ est-il obligatoire ? (oui par défaut)",
+            required: false
+        }, {
+            type: "integer",
+            name: "champ",
+            description: "Numéro du champ à retirer (voir la liste des champs)",
+            required: false,
+            minValue: 1,
+            maxValue: MAX_CHAMPS
         }
     ],
 
@@ -91,9 +193,12 @@ module.exports = {
             const type = numero ? db.getTicketType(guild.id, numero) : null
             if (!type) return message.reply({ content: t(message, "tk.ty_inconnu"), flags: EPHEMERAL })
             db.removeTicketType(guild.id, numero)
+            retirerChampsDuType(guild.id, numero)
             await message.reply({ content: t(message, "tk.ty_retire", { nom: Discord.escapeMarkdown(type.nom) }), flags: EPHEMERAL })
             return sendModLog(message, { action: "config", details: `Type de ticket retiré : ${type.nom}` })
         }
+
+        if (["champs", "champ_ajouter", "champ_retirer", "delai"].includes(action)) return gererFormulaireEtDelai(message, args, action)
 
         // Mêmes contrôles que /setticket
         if (categorie && !categorieUtilisable(categorie)) {

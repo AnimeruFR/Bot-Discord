@@ -23,7 +23,7 @@
     "dashboard:dev": "node --disable-warning=ExperimentalWarning dashboard/index.js --env=dev"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.23.5"
   },
   "author": "Animeru",
   "license": "ISC",

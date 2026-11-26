@@ -1,0 +1,28 @@
+{
+  "raid": {
+    "description": "Anti-raid: automatic lockdown when many members join at once",
+    "options": {
+      "action": "What to do?",
+      "arrivees": "Number of joins that triggers raid mode (config)",
+      "secondes": "Length of the counting window, in seconds (config)",
+      "alerte_seule": "Alert the staff without locking the server (config)"
+    },
+    "choix": {
+      "action": {
+        "config": "Set the threshold",
+        "statut": "View the status",
+        "lever": "Lift raid mode",
+        "desactiver": "Disable anti-raid"
+      }
+    }
+  },
+  "massban": {
+    "description": "Ban many members at once (IDs or recent joins), after confirmation",
+    "options": {
+      "ids": "User IDs to ban, separated by spaces or commas (200 max)",
+      "depuis_minutes": "Also ban members who joined in the last N minutes",
+      "raison": "The reason for the bans"
+    },
+    "choix": {}
+  }
+}
