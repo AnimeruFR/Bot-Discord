@@ -1,0 +1,26 @@
+{
+  "daily": {
+    "description": "Claim your daily reward"
+  },
+  "travail": {
+    "description": "Work to earn currency, view or change your job",
+    "options": {
+      "action": "What to do?",
+      "metier": "The job to pick (for \"Choose or change job\")"
+    },
+    "choix": {
+      "action": {
+        "travailler": "Work",
+        "metier": "View my job",
+        "choisir": "Choose or change job"
+      },
+      "metier": {
+        "forgeron": "Blacksmith",
+        "cartographe": "Cartographer",
+        "herboriste": "Herbalist",
+        "horloger": "Clockmaker",
+        "archiviste": "Archivist"
+      }
+    }
+  }
+}
