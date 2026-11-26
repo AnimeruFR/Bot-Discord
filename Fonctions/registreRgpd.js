@@ -124,10 +124,14 @@ const REGISTRE = {
     raid_config: { serveur: "guild_id", aucune: "Seuils anti-raid du serveur (#2), aucune donnée de membre" },
     raid_events: {
         serveur: "guild_id",
-        colonnes: { lifted_by: { traitement: "anonymiser", auteur: true, motif: "Le raid reste dans l'historique du serveur, celui qui l'a levé n'est plus identifié" } }
+        colonnes: { lifted_by: { traitement: "anonymiser", auteur: true, motif: "Le raid reste dans l'historique du serveur, celui qui l'a levé n'est plus identifié ; raid effacé 1 an après sa levée" } }
     },
     verification_config: { serveur: "guild_id", aucune: "Réglage de la vérification (#4), aucune donnée de membre" },
-    nick_filter: { serveur: "guild_id", aucune: "Mots interdits dans les pseudos (#25), aucune donnée de membre" },
+    // Filtre de pseudos (#25) : configured_by limite le pouvoir du bot à celui de qui l'a activé (tribunal S1).
+    nick_filter: {
+        serveur: "guild_id",
+        colonnes: { configured_by: { traitement: "anonymiser", auteur: true, motif: "Le filtre reste actif, son auteur n'est plus identifié (le bot ne renomme alors plus personne)" } }
+    },
     // Appel (#11) : texte écrit par le membre. Il suit la sanction (même durée), le staff qui a tranché est anonymisé.
     appeals: {
         serveur: "guild_id",
@@ -141,20 +145,20 @@ const REGISTRE = {
     quarantines: {
         serveur: "guild_id",
         colonnes: {
-            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine, 1 an au plus" },
+            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine (un membre parti la retrouve s'il revient)" },
             moderator_id: { traitement: "anonymiser", auteur: true, motif: "La quarantaine reste en place, le modérateur n'est plus identifié" }
         }
     },
     // Journal de configuration (#15) : réglages du serveur, l'auteur du changement est un membre du staff.
     config_audit: {
         serveur: "guild_id",
-        colonnes: { moderator_id: { traitement: "anonymiser", auteur: true, motif: "Le changement reste dans le journal du serveur, son auteur n'est plus identifié" } }
+        colonnes: { moderator_id: { traitement: "anonymiser", auteur: true, motif: "Le changement reste dans le journal du serveur, son auteur n'est plus identifié ; ligne effacée après 2 ans" } }
     },
     ticket_fields: { serveur: "guild_id", aucune: "Champs des formulaires de tickets (#19), aucune donnée de membre" },
     // Trace d'un ticket (#21) : transfert, alerte de délai… sans contenu de message.
     ticket_events: {
         serveur: "guild_id",
-        colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié" } }
+        colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié ; effacée avec le suivi du ticket (90 jours après sa suppression)" } }
     },
     phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" },
     // Essais de vérification (#4) : sans eux, un membre pourrait réessayer sans fin ; effacés après 1 jour.

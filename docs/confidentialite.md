@@ -36,6 +36,15 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Panneaux de rôles, bienvenue | ID des messages, salons et rôles, titres et textes écrits par les administrateurs | Faire fonctionner le bot |
 | Délai entre deux tickets | ID du serveur, ID du membre, date de la dernière ouverture | Éviter le spam. Expiré après 10 minutes, effacé automatiquement dans les 24 h environ. Non effacé par `/privacy moi effacer` (sinon il permettrait de contourner la limite) |
 | Départ du bot | Date à laquelle le bot a quitté un serveur | Suppression différée (voir plus bas) |
+| Notes du staff | ID du serveur, du membre et de l'auteur, texte écrit par le staff, date | Contexte de modération, jamais montré au membre. Effacées au bout de 2 ans, comme l'historique |
+| Modifications de sanctions | ID de la sanction et de l'auteur de la modification, ancienne et nouvelle raison, date | Trace des corrections (`/case`). Effacées avec la sanction |
+| Appels de sanction | ID du serveur, du membre, de la sanction et du membre du staff qui a tranché, texte de l'appel écrit par le membre, décision, dates | Traiter l'appel. Effacé avec la sanction (2 ans au plus) |
+| Quarantaine en cours | ID du serveur, du membre et du modérateur, rôles retirés, raison, date | Rendre ses rôles au membre à la levée. Effacée dès la levée |
+| Essais de vérification | ID du serveur et du membre, nombre d'erreurs, fin du blocage | Limiter les essais du défi « Je ne suis pas un robot ». Effacés au bout d'un jour. Non effacés par `/privacy moi effacer` (sinon ils permettraient de contourner la limite) |
+| Journal de configuration | ID du serveur et de l'auteur, description du changement, date | Journal consultable par le staff (`/journal`). Effacé au bout de 2 ans |
+| Raids détectés | ID du serveur, dates, nombre d'arrivées, ID de qui a levé le mode raid | Historique des raids. Effacé 1 an après la levée |
+| Trace des tickets | ID du salon et de l'auteur de l'action (transfert, alerte de délai), date | Suivi des tickets. Effacée avec le suivi du ticket |
+| Réglages de modération | Raisons prédéfinies, réponses prédéfinies des tickets, salons de logs par famille, filtre des comptes récents, anti-raid, vérification, mots interdits dans les pseudos, rôle de quarantaine, domaines autorisés | Faire fonctionner le bot |
 
 Le bot ne collecte rien d'autre.
 
@@ -94,6 +103,9 @@ Sans m'écrire, chaque membre peut agir seul, **serveur par serveur**, avec la c
 | **Conserver** | Avertissements et sanctions dont vous avez fait l'objet | **2 ans** au plus, intérêt légitime de modération (voir la durée de conservation) |
 | **Conserver** | Délai entre deux tickets | **10 minutes** au plus (anti-spam) |
 | **Conserver** | Ban temporaire en cours | Jusqu'à la fin du ban, sinon il ne pourrait pas être levé |
+| **Conserver** | Notes du staff et appels vous concernant | **2 ans** au plus, comme l'historique des sanctions |
+| **Conserver** | Quarantaine en cours | Jusqu'à sa levée, sinon vos rôles ne pourraient pas vous être rendus |
+| **Conserver** | Essais de vérification | **1 jour** au plus (anti-contournement) |
 
 Avant une mise à jour du schéma de la base, le bot fait une copie de sécurité (`avant-migration-*.db`) : elle est supprimée automatiquement au bout de **30 jours** (vérifié au démarrage puis chaque jour). L'export `/privacy moi exporter` ne contient, pour les lignes où vous apparaissez seulement comme auteur d'une action (modérateur, organisateur, membre du staff), que l'identifiant de la ligne, ses dates et votre rôle. `/privacy moi effacer` est limité à une fois par heure.
 

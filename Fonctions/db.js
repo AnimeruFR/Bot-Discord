@@ -204,7 +204,6 @@ const requetes = {
     purgeTicketEvents: db.prepare("DELETE FROM ticket_events WHERE channel_id NOT IN (SELECT channel_id FROM tickets)"),
     purgeConfigAudit: db.prepare("DELETE FROM config_audit WHERE created_at < ?"),
     purgeRaidEvents: db.prepare("DELETE FROM raid_events WHERE ended_at IS NOT NULL AND ended_at < ?"),
-    purgeQuarantines: db.prepare("DELETE FROM quarantines WHERE created_at < ?"),
     purgeVerificationAttempts: db.prepare("DELETE FROM verification_attempts WHERE updated_at < ?"),
     purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
     reporterTempban: db.prepare("UPDATE tempbans SET retry_at = ? WHERE guild_id = ? AND user_id = ?"),
@@ -380,11 +379,11 @@ module.exports = {
         return total
     },
     // Durées de la phase 2 (voir le registre RGPD) : journal de config 2 ans, raids levés 1 an,
-    // quarantaines 1 an (membre parti sans levée), essais de vérification 1 jour
+    // essais de vérification 1 jour. Les quarantaines ne sont jamais purgées : une ligne = une quarantaine active
+    // (la levée la supprime, un membre parti la retrouve s'il revient)
     purgePhase2({ deuxAns, unAn, unJour }) {
         requetes.purgeConfigAudit.run(deuxAns)
         requetes.purgeRaidEvents.run(unAn)
-        requetes.purgeQuarantines.run(unAn)
         requetes.purgeVerificationAttempts.run(unJour)
     },
     ticketsSince: (guildId, date) => requetes.ticketsSince.all(guildId, date),
