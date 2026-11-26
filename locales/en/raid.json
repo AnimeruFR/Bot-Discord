@@ -9,6 +9,7 @@
   "raid.niveau_2": "Medium",
   "raid.niveau_3": "High",
   "raid.niveau_4": "Highest",
+  "raid.config_sans_salon": "⚠️ No valid alert channel for anti-raid: without it the server will NOT be locked automatically (the owner will only get a direct message). Set it with `/setlogs famille:antiraid`. An open raid is lifted automatically after 60 minutes.",
   "raid.bornes": "Values out of range: {amin} to {amax} joins, and {smin} to {smax} seconds.",
   "raid.config_ok": "Anti-raid set: raid mode triggers at **{arrivees}** join(s) within **{secondes}** second(s), mode: {mode}.",
   "raid.statut_config": "**Anti-raid**: threshold of **{arrivees}** join(s) within **{secondes}** second(s), mode: {mode}.",

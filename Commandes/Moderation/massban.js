@@ -71,14 +71,25 @@ function resumeExclus(interaction, exclus) {
 }
 
 // Ban groupé (API de ban en masse si disponible, sinon un par un). Renvoie { bannis, echecs } (listes d'identifiants).
-async function bannirEnMasse(guild, ids, raison) {
+// surBanni(id) est appelé aussitôt qu'un ban a réussi (réponse de l'API pour le ban groupé, juste après chaque appel
+// pour le repli un par un), avant tout autre appel réseau : un ban réussi ne reste jamais sans sanction écrite.
+async function bannirEnMasse(guild, ids, raison, surBanni = () => {}) {
     const options = { reason: raison, deleteMessageSeconds: SUPPRESSION_MESSAGES }
     const bannis = new Set()
+    const noter = id => {
+        if (bannis.has(id)) return
+        bannis.add(id)
+        try {
+            surBanni(id)
+        } catch (err) {
+            console.error(`Ban en masse (${id}) : sanction non écrite :`, err.message)
+        }
+    }
     let enMasse = false
     if (typeof guild.bans.bulkCreate === "function") {
         try {
             const resultat = await guild.bans.bulkCreate(ids, options)
-            for (const id of resultat.bannedUsers ?? []) bannis.add(id)
+            for (const id of resultat.bannedUsers ?? []) if (ids.includes(id)) noter(id)
             enMasse = true
         } catch (err) {
             // Erreur globale de l'API : on retombe sur des bans un par un avec les mêmes cibles
@@ -89,7 +100,7 @@ async function bannirEnMasse(guild, ids, raison) {
         for (const id of ids) {
             try {
                 await guild.bans.create(id, options)
-                bannis.add(id)
+                noter(id)
             } catch (err) {
                 console.error(`Ban en masse (${id}) :`, err.message)
             }
@@ -104,7 +115,7 @@ const permissionsOk = permissions => Boolean(permissions?.has(PERMISSIONS_REQUIS
 module.exports = {
     name: "massban",
     description: "Ban en masse : liste d'identifiants ou membres arrivés récemment (avec confirmation)",
-    permission: Discord.PermissionFlagsBits.BanMembers,
+    permission: PERMISSIONS_REQUISES,
     dm: false,
     category: "Modération",
     options: [
@@ -193,13 +204,12 @@ module.exports = {
         }
         if (!verifie.cibles.length) return interaction.editReply({ content: t(interaction, "raid.massban_aucune", { exclus: resumeExclus(interaction, verifie.exclus) }) })
 
-        const { bannis, echecs } = await bannirEnMasse(guild, verifie.cibles, auditReason(interaction, raisonBrute))
-        // Une sanction par membre banni ; un ban définitif remplace un éventuel ban temporaire
-        db.transaction(() => {
-            for (const userId of bannis) {
+        // Une sanction par membre banni, écrite au fil de l'eau ; un ban définitif remplace un éventuel ban temporaire
+        const { bannis, echecs } = await bannirEnMasse(guild, verifie.cibles, auditReason(interaction, raisonBrute), userId => {
+            db.transaction(() => {
                 db.removeTempban(guild.id, userId)
                 db.addCase(guild.id, { userId, moderatorId: interaction.user.id, type: "ban", reason: raisonBrute })
-            }
+            })
         })
 
         await interaction.editReply({ content: t(interaction, "raid.massban_resultat", { bannis: bannis.length, echecs: echecs.length }) })

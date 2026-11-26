@@ -39,6 +39,8 @@ function fauxServeur(rolesDefs) {
         },
         membres: new Map()
     }
+    for (const role of [...roles.values(), guild.members.me.roles.highest]) role.guild = guild
+    guild.members.me.guild = guild
     return guild
 }
 
@@ -75,7 +77,8 @@ function interaction(guild, { position = 20, perms = Flags.ModerateMembers | Fla
     const moi = faussRole(`mod${id}`, position)
     return {
         guild, guildId: guild.id, channelId: "333333333333333333", user: { id, tag: "mod#0" }, locale: "fr", client: { user: { id: BOT } },
-        inGuild: () => true, memberPermissions: new Discord.PermissionsBitField(perms), member: { roles: { highest: moi, cache: new Set() } }
+        inGuild: () => true, memberPermissions: new Discord.PermissionsBitField(perms),
+        member: { id, guild, permissions: new Discord.PermissionsBitField(perms), roles: { highest: moi, cache: new Set() } }
     }
 }
 
@@ -127,7 +130,7 @@ test("config : rôle dangereux, supérieur, @everyone, intégration ou hors de p
 test("config : enregistrée, puis changement refusé tant que des membres sont en quarantaine", async () => {
     const guild = fauxServeur([...defs(), ["autre", 2]])
     const i = interaction(guild)
-    assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { ok: true })
+    assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { ok: true, salon: null })
     assert.strictEqual(q.getRoleIsole(guild.id), R.iso)
     assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { inchange: true })
     const membre = fauxMembre(guild, [R.a])
@@ -186,6 +189,79 @@ test("mettre : déjà en quarantaine, hiérarchie, bot, rôle non configuré, me
 
     const sansConfig = fauxServeur(defs())
     assert.match((await q.mettre(interaction(sansConfig), fauxMembre(sansConfig, [R.a]).user, null)).erreur, /Aucun rôle isolé/)
+})
+
+test("rôle isolé au-dessus du modérateur : refusé à la config et à la mise en quarantaine", async () => {
+    const guild = serveurConfigure()
+    // Le rôle isolé monte à la position 4 : un modérateur en position 3 ne peut plus le donner
+    guild.roles.cache.get(R.iso).position = 4
+    guild.roles.cache.get(R.iso).comparePositionTo = autre => 4 - autre.position
+    const bas = interaction(guild, { position: 3 })
+    assert.match(q.refusRoleIsole(bas, guild.roles.cache.get(R.iso)), /supérieur ou égal à votre rôle/)
+    const membre = fauxMembre(guild, [R.a])
+    const r = await q.mettre(bas, membre.user, null)
+    assert.match(r.erreur, /supérieur ou égal à votre rôle/)
+    assert.strictEqual(membre.appels.length, 0, "aucun rôle touché")
+    assert.strictEqual(q.getQuarantine(guild.id, membre.id), null, "rien d'enregistré")
+    // Sans « Gérer les rôles » : refusé aussi, avec le bon message
+    const sansDroit = interaction(guild, { perms: Flags.ModerateMembers })
+    assert.match((await q.mettre(sansDroit, membre.user, null)).erreur, /Gérer les rôles/)
+    // Un modérateur assez haut peut isoler
+    assert.ok(!(await q.mettre(interaction(guild, { position: 20 }), membre.user, null)).erreur)
+    // Le bot lui-même doit pouvoir donner le rôle
+    const autre = fauxMembre(guild, [R.a])
+    guild.members.me.roles.highest = faussRole("bot", 3)
+    guild.members.me.roles.highest.guild = guild
+    assert.match((await q.mettre(interaction(guild, { position: 20 }), autre.user, null)).erreur, /Je ne peux pas donner ce rôle/)
+})
+
+test("surcharge de salon dangereuse sur le rôle isolé : signalée à la config et à la mise en quarantaine", async () => {
+    const guild = fauxServeur(defs())
+    const salon = { id: nouvelId(), permissionOverwrites: { cache: new Discord.Collection([[R.iso, { allow: new Discord.PermissionsBitField(Flags.ManageMessages) }]]) } }
+    guild.channels.cache.set(salon.id, salon)
+    const i = interaction(guild)
+    const config = await q.changerRoleIsole(i, guild.roles.cache.get(R.iso))
+    assert.ok(config.ok)
+    assert.strictEqual(config.salon.id, salon.id, "salon signalé à la config")
+    const r = await q.mettre(i, fauxMembre(guild, [R.a]).user, null)
+    assert.ok(!r.erreur, r.erreur)
+    assert.strictEqual(r.salon.id, salon.id, "salon signalé à la mise en quarantaine")
+    // Surcharge sans permission dangereuse : rien à signaler
+    salon.permissionOverwrites.cache.set(R.iso, { allow: new Discord.PermissionsBitField(Flags.ViewChannel) })
+    assert.strictEqual((await q.mettre(i, fauxMembre(guild, [R.a]).user, null)).salon, null)
+})
+
+test("mettre : reprise après un arrêt entre l'écriture et roles.set (ligne sans rôle isolé)", async () => {
+    const guild = serveurConfigure()
+    const membre = fauxMembre(guild, [R.a, R.b])
+    // Crash simulé : la ligne est écrite (avec R.a seulement), roles.set n'a jamais eu lieu
+    db.sqlRun("INSERT INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [guild.id, membre.id, JSON.stringify([R.a]), "800000000000000002", "ancienne raison", Date.now() - 1000])
+    assert.ok(!membre.roles.cache.has(R.iso))
+
+    const r = await q.mettre(interaction(guild), membre.user, "reprise")
+    assert.ok(!r.erreur, r.erreur)
+    assert.strictEqual(membre.appels.length, 1, "l'isolement est repris")
+    assert.deepStrictEqual(membre.appels[0].ids, [R.iso])
+    assert.ok(membre.roles.cache.has(R.iso))
+    const ligne = q.getQuarantine(guild.id, membre.id)
+    assert.deepStrictEqual(ligne.roles.sort(), [R.a, R.b].sort(), "sauvegarde complétée avec les rôles du membre")
+    assert.strictEqual(ligne.moderator_id, MOD)
+    assert.strictEqual(db.listCases(guild.id, membre.id).length, 1, "le dossier est créé maintenant")
+    assert.strictEqual(db.sqlAll("SELECT * FROM quarantines WHERE guild_id = ? AND user_id = ?", [guild.id, membre.id]).length, 1, "une seule ligne")
+    // Maintenant le rôle isolé est posé : « déjà en quarantaine »
+    assert.match((await q.mettre(interaction(guild), membre.user, null)).erreur, /déjà en quarantaine/)
+
+    // Échec de la reprise : la sauvegarde existante est gardée
+    const autre = fauxMembre(guild, [R.a], { echec: 1 })
+    db.sqlRun("INSERT INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [guild.id, autre.id, JSON.stringify([R.a]), MOD, "x", Date.now()])
+    const log = console.error
+    console.error = () => {}
+    const echec = await q.mettre(interaction(guild), autre.user, null)
+    console.error = log
+    assert.match(echec.erreur, /reste enregistrée/)
+    assert.ok(q.getQuarantine(guild.id, autre.id), "ligne conservée")
 })
 
 test("mettre : rôle isolé devenu dangereux depuis la configuration : refusé", async () => {

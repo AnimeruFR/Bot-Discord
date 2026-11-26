@@ -36,7 +36,7 @@
   "appel.bouton_refuser": "Refuser",
   "appel.introuvable_staff": "Cet appel n'existe pas sur ce serveur.",
   "appel.deja_traite": "Cet appel a déjà été traité : {statut}.",
-  "appel.pas_auteur": "Cette sanction a été prononcée par un autre modérateur : il faut pouvoir gérer le serveur pour accepter l'appel.",
+  "appel.pas_auteur": "Cette sanction a été prononcée par un autre modérateur : il faut pouvoir gérer le serveur pour traiter l'appel.",
   "appel.statut.en_attente": "en attente",
   "appel.statut.accepte": "accepté",
   "appel.statut.refuse": "refusé",

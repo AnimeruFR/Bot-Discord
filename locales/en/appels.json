@@ -36,7 +36,7 @@
   "appel.bouton_refuser": "Refuse",
   "appel.introuvable_staff": "This appeal does not exist on this server.",
   "appel.deja_traite": "This appeal has already been handled: {statut}.",
-  "appel.pas_auteur": "This sanction was issued by another moderator: you need to be able to manage the server to accept the appeal.",
+  "appel.pas_auteur": "This sanction was issued by another moderator: you need to be able to manage the server to handle the appeal.",
   "appel.statut.en_attente": "pending",
   "appel.statut.accepte": "accepted",
   "appel.statut.refuse": "refused",

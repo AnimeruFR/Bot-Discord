@@ -7,20 +7,28 @@ const { moduleActif } = require('./modules')
 const { sendModLog, envoyerLog } = require('./logs')
 const { refusRole } = require('./rolesBoutons')
 const { getQuarantine } = require('./quarantaine')
+const { peutDonnerRole } = require('./moderation')
+const { raidEnCours } = require('./raid')
 const { refusSalonLogs } = require('./config')
 
 // Vérification à l'arrivée (idée #4) : un panneau avec un bouton « Je ne suis pas un robot », puis un défi en
 // boutons d'emojis (éphémère). Le bon choix donne le rôle « vérifié ». Le serveur règle lui-même les salons
 // visibles sans ce rôle : le bot ne touche à aucune permission de salon.
 //
+// LIMITE : ce défi se lit comme du texte (l'énoncé nomme l'emoji à cliquer). Un script qui lit le message et clique
+// le bon bouton le réussit à tous les coups. La grille de 8 boutons, les 3 erreurs avant un blocage de 10 minutes
+// (gardé en base, donc encore là après un redémarrage) et la suspension pendant un raid freinent les clics au hasard
+// et les arrivées en masse ; ce n'est pas un vrai CAPTCHA et cela n'arrête pas un attaquant outillé.
+//
 // customId (préfixe « verif: », composant public) :
 //   verif:ouvrir                          bouton du panneau
-//   verif:r:<membre>:<jeton>:<n°>         réponse n° 0 à 4 du défi de ce membre
+//   verif:r:<membre>:<jeton>:<n°>         réponse n° 0 à 7 du défi de ce membre
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 
-const NB_CHOIX = 5
+const NB_CHOIX = 8 // 2 lignes de 4 boutons : 1 chance sur 8 de réussir au hasard
+const PAR_LIGNE = 4
 const MAX_ERREURS = 3
 const DUREE_BLOCAGE = 10 * 60 * 1000
 const FENETRE_ERREURS = 10 * 60 * 1000 // des erreurs espacées de plus de 10 minutes ne s'additionnent pas
@@ -33,8 +41,8 @@ const EMOJIS = [["pomme", "🍎"], ["chat", "🐱"], ["voiture", "🚗"], ["etoi
     ["de", "🎲"], ["cle", "🔑"], ["lune", "🌙"], ["pizza", "🍕"], ["poisson", "🐟"]]
 
 // État en mémoire (perdu au redémarrage : un défi se refait en un clic). Chaque entrée porte sa date d'`expire`.
+// Les erreurs et le blocage, eux, sont en base (verification_attempts) : un redémarrage ne remet pas les compteurs à zéro.
 const defis = new Map() // "serveur:membre" -> { jeton, choix, bon, expire }
-const etats = new Map() // "serveur:membre" -> { erreurs, bloqueJusqua, expire }
 const enCours = new Set() // vérifications en cours (deux clics rapides = un seul rôle)
 const alertes = new Map() // serveur -> date de la dernière alerte « rôle inutilisable »
 const envoisMp = new Map() // serveur -> { debut, n }
@@ -73,21 +81,20 @@ function supprimerConfig(guildId) {
 
 // Le bot peut-il donner ce rôle à n'importe quel nouveau membre ? Renvoie un message d'erreur, ou null.
 // Jamais de rôle à permissions de modération (même dans un seul salon), ni au-dessus du bot.
+// Si un configurateur est donné, il doit lui aussi pouvoir donner ce rôle (peutDonnerRole).
 // Revérifié à chaque clic : le rôle a pu gagner une permission ou monter depuis la configuration.
 function refusRoleClic(guild, role, cible = null, configurateur = null) {
-    const refus = refusRole(guild, role, configurateur, cible)
+    const refus = refusRole(guild, role, null, cible)
     if (refus) return refus
-    if (!guild.members.me?.permissions.has(Flags.ManageRoles)) return t(cible ?? "fr", "verif.bot_roles")
+    const langue = cible ?? "fr"
+    if (!peutDonnerRole(guild.members.me, role)) return t(langue, "verif.bot_roles")
+    if (configurateur && !peutDonnerRole(configurateur, role)) return t(langue, "verif.config_role")
     return null
 }
 
 // Même règle pour celui qui configure : jamais plus de pouvoir par le bot que lui n'en a.
 // Il lui faut « Gérer les rôles » et le rôle doit être strictement sous son rôle le plus haut (sauf propriétaire).
-function refusRoleConfig(interaction, role) {
-    const guild = interaction.guild
-    if (interaction.user.id !== guild.ownerId && !interaction.memberPermissions?.has(Flags.ManageRoles)) return t(interaction, "config.filtre_roles_membre")
-    return refusRoleClic(guild, role, interaction, interaction.member)
-}
+const refusRoleConfig = (interaction, role) => refusRoleClic(interaction.guild, role, interaction, interaction.member)
 
 // --- Commande /verification ---
 
@@ -183,15 +190,48 @@ function contenuDefi(interaction, defi, userId, debut = "") {
     const nom = t(interaction, `verif.emoji.${defi.choix[defi.bon][0]}`)
     const boutons = defi.choix.map(([, emoji], i) => new Discord.ButtonBuilder()
         .setCustomId(`verif:r:${userId}:${defi.jeton}:${i}`).setEmoji(emoji).setStyle(Discord.ButtonStyle.Secondary))
-    return { content: debut + t(interaction, "verif.defi", { nom }), components: [new Discord.ActionRowBuilder().addComponents(boutons)] }
+    const lignes = []
+    for (let i = 0; i < boutons.length; i += PAR_LIGNE) lignes.push(new Discord.ActionRowBuilder().addComponents(boutons.slice(i, i + PAR_LIGNE)))
+    return { content: debut + t(interaction, "verif.defi", { nom }), components: lignes }
 }
 
 const repondreEph = (interaction, cle, variables) => interaction.reply({ content: t(interaction, cle, variables), flags: EPHEMERAL })
 const quand = jusqua => `<t:${Math.ceil(jusqua / 1000)}:R>`
 
-function blocage(cle) {
-    const etat = etats.get(cle)
-    return etat && etat.bloqueJusqua > Date.now() ? etat.bloqueJusqua : 0
+// --- Erreurs et blocage (table verification_attempts) ---
+
+const lireEssais = (guildId, userId) => db.sqlAll("SELECT errors, blocked_until, updated_at FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [guildId, userId])[0] ?? null
+const oublierEssais = (guildId, userId) => db.sqlRun("DELETE FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [guildId, userId])
+
+// Fin du blocage de ce membre (0 s'il n'est pas bloqué)
+function blocage(guildId, userId) {
+    const ligne = lireEssais(guildId, userId)
+    return ligne && ligne.blocked_until > Date.now() ? ligne.blocked_until : 0
+}
+
+// Compte une erreur. Renvoie { erreurs, bloqueJusqua }. Au bout de MAX_ERREURS : blocage, et le compteur repart à zéro.
+function noterErreur(guildId, userId) {
+    const maintenant = Date.now()
+    const ligne = lireEssais(guildId, userId)
+    let erreurs = ligne && maintenant - ligne.updated_at <= FENETRE_ERREURS ? ligne.errors : 0
+    erreurs++
+    let bloqueJusqua = 0
+    if (erreurs >= MAX_ERREURS) {
+        bloqueJusqua = maintenant + DUREE_BLOCAGE
+        erreurs = 0
+    }
+    db.sqlRun(`INSERT INTO verification_attempts (guild_id, user_id, errors, blocked_until, updated_at) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT (guild_id, user_id) DO UPDATE SET errors = excluded.errors, blocked_until = excluded.blocked_until, updated_at = excluded.updated_at`,
+    [guildId, userId, erreurs, bloqueJusqua, maintenant])
+    return { erreurs, bloqueJusqua }
+}
+
+// La vérification est-elle utilisable maintenant ? Renvoie la clé du message de refus, ou null.
+// Module Modération coupé : comme si elle n'était pas activée. Raid en cours : suspendue, un script ne doit pas en profiter.
+function refusEtat(guildId) {
+    if (!moduleActif(guildId, "moderation")) return "verif.inactif"
+    if (raidEnCours(guildId)) return "verif.raid"
+    return null
 }
 
 // Rôle inutilisable (permission ajoutée, rôle supprimé ou monté) : une seule alerte par heure et par serveur dans les logs
@@ -206,6 +246,8 @@ async function ouvrir(bot, interaction) {
     const guild = interaction.guild
     const config = lireConfig(guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
+    const etat = refusEtat(guild.id)
+    if (etat) return repondreEph(interaction, etat)
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
     if (getQuarantine(guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")
 
@@ -215,7 +257,7 @@ async function ouvrir(bot, interaction) {
         return alerter(bot, guild, refus)
     }
     const cle = `${guild.id}:${interaction.user.id}`
-    const jusqua = blocage(cle)
+    const jusqua = blocage(guild.id, interaction.user.id)
     if (jusqua) return repondreEph(interaction, "verif.bloque", { quand: quand(jusqua) })
     // Un seul défi par membre : en ouvrir un deuxième remplace le premier (les anciens boutons ne servent plus)
     return interaction.reply({ ...contenuDefi(interaction, creerDefi(cle), interaction.user.id), flags: EPHEMERAL })
@@ -241,7 +283,7 @@ async function reussir(bot, interaction, config, cle) {
             return alerter(bot, guild, `ajout du rôle impossible (${err.message})`)
         }
         defis.delete(cle)
-        etats.delete(cle)
+        oublierEssais(guild.id, interaction.user.id)
         await interaction.editReply({ content: t(interaction, "verif.reussi", { role }), components: [] })
         const embed = new Discord.EmbedBuilder()
             .setColor(0x2ECC71)
@@ -255,19 +297,13 @@ async function reussir(bot, interaction, config, cle) {
 }
 
 function rater(interaction, cle, userId) {
-    const maintenant = Date.now()
-    let etat = etats.get(cle)
-    if (!etat || etat.expire <= maintenant) etat = { erreurs: 0, bloqueJusqua: 0 }
-    etat.erreurs++
-    if (etat.erreurs >= MAX_ERREURS) etat.bloqueJusqua = maintenant + DUREE_BLOCAGE
-    etat.expire = Math.max(etat.bloqueJusqua, maintenant + FENETRE_ERREURS)
-    borner(etats, cle, etat)
-    if (etat.bloqueJusqua) {
+    const { erreurs, bloqueJusqua } = noterErreur(interaction.guild.id, userId)
+    if (bloqueJusqua) {
         defis.delete(cle)
-        return interaction.update({ content: t(interaction, "verif.bloque", { quand: quand(etat.bloqueJusqua) }), components: [] })
+        return interaction.update({ content: t(interaction, "verif.bloque", { quand: quand(bloqueJusqua) }), components: [] })
     }
-    // Nouveau défi à chaque erreur : on ne peut pas essayer les 5 boutons d'une même grille
-    const debut = t(interaction, "verif.mauvais", { erreurs: etat.erreurs, max: MAX_ERREURS }) + "\n"
+    // Nouveau défi à chaque erreur : on ne peut pas essayer tous les boutons d'une même grille
+    const debut = t(interaction, "verif.mauvais", { erreurs, max: MAX_ERREURS }) + "\n"
     return interaction.update(contenuDefi(interaction, creerDefi(cle), userId, debut))
 }
 
@@ -276,6 +312,8 @@ async function repondre(bot, interaction, { userId, jeton, numero }) {
     if (userId !== interaction.user.id) return repondreEph(interaction, "verif.pas_le_votre")
     const config = lireConfig(interaction.guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
+    const etat = refusEtat(interaction.guild.id)
+    if (etat) return repondreEph(interaction, etat)
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
     if (getQuarantine(interaction.guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")
 
@@ -285,7 +323,7 @@ async function repondre(bot, interaction, { userId, jeton, numero }) {
     if (!defi || defi.jeton !== jeton || defi.expire <= Date.now() || !Number.isInteger(numero) || numero < 0 || numero >= NB_CHOIX) {
         return repondreEph(interaction, "verif.expire")
     }
-    const jusqua = blocage(cle)
+    const jusqua = blocage(interaction.guild.id, interaction.user.id)
     if (jusqua) return repondreEph(interaction, "verif.bloque", { quand: quand(jusqua) })
 
     // Tout ce qui précède est synchrone : deux clics simultanés ne passent jamais tous les deux ici
@@ -330,7 +368,15 @@ async function accueillir(member) {
     return { mp: true }
 }
 
+// Oublie l'état en mémoire (défis, alertes) : sert aux tests pour simuler un redémarrage du bot
+function reinitialiserMemoire() {
+    defis.clear()
+    enCours.clear()
+    alertes.clear()
+    envoisMp.clear()
+}
+
 module.exports = {
-    accueillir, onClicVerification, configurer, poserPanneau, desactiver, lireConfig, refusRoleClic, refusRoleConfig,
+    reinitialiserMemoire, accueillir, onClicVerification, configurer, poserPanneau, desactiver, lireConfig, refusRoleClic, refusRoleConfig,
     MAX_ERREURS, DUREE_BLOCAGE
 }

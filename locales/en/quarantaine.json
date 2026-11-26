@@ -44,6 +44,8 @@
   "quar.config_aucune": "No isolated role is set. Choose it with `/quarantaine action:config role:...`.",
   "quar.pas_gerable": "I can't change this member's roles (their role is higher than or equal to mine).",
   "quar.deja": "This member is already in quarantine.",
+  "quar.echec_reprise": "Discord refused the role change: the quarantine is still recorded, you can try again.",
+  "quar.salon_dangereux": "Warning: a permission override in {salon} gives the isolated role a dangerous power in that channel. Remove it.",
   "quar.echec": "Discord refused the role change: the member is not in quarantine and nothing was saved.",
   "quar.mise": "{moderateur} put {user} in quarantine: {n} role(s) saved, {gardes} kept.{suite}",
   "quar.mp_ok": " The member was notified by direct message.",

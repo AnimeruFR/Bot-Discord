@@ -10,6 +10,7 @@ const EPHEMERAL = Discord.MessageFlags.Ephemeral
 module.exports = {
     name: "pseudos",
     description: "Filtre de pseudos : caractères qui placent en haut de la liste, zalgo, mots interdits",
+    // Base : « Gérer les pseudos » (désactiver, voir la liste). Activer et changer les mots demandent aussi « Gérer le serveur ».
     permission: Discord.PermissionFlagsBits.ManageNicknames,
     dm: false,
     category: "Configuration",
@@ -38,6 +39,12 @@ module.exports = {
     async run(bot, message, args) {
         const guild = message.guild
         const action = args.getString("action")
+
+        // Le bot renomme des membres à la place de celui qui règle le filtre : activer et changer les mots demandent
+        // « Gérer le serveur » en plus de « Gérer les pseudos » (revérifié ici, la garde commune ne regarde que la seconde)
+        if (["activer", "ajouter", "retirer"].includes(action) && !message.memberPermissions?.has(Flags.ManageGuild)) {
+            return refuser(message, t(message, "pseudo.config_guild"))
+        }
 
         if (action === "activer") {
             if (!activerFiltre(guild.id)) return refuser(message, t(message, "pseudo.deja_actif"))

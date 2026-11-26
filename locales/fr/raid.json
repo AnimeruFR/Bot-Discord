@@ -9,6 +9,7 @@
   "raid.niveau_2": "Moyen",
   "raid.niveau_3": "Élevé",
   "raid.niveau_4": "Très élevé",
+  "raid.config_sans_salon": "⚠️ Aucun salon d'alerte valide pour l'anti-raid : sans lui, le serveur ne sera PAS verrouillé automatiquement (le propriétaire recevra seulement un message privé). Configurez-le avec `/setlogs famille:antiraid`. Un raid ouvert est levé automatiquement après 60 minutes.",
   "raid.bornes": "Valeurs hors limites : de {amin} à {amax} arrivées, et de {smin} à {smax} secondes.",
   "raid.config_ok": "Anti-raid configuré : le mode raid se déclenche à partir de **{arrivees}** arrivée(s) en **{secondes}** seconde(s), mode : {mode}.",
   "raid.statut_config": "**Anti-raid** : seuil de **{arrivees}** arrivée(s) en **{secondes}** seconde(s), mode : {mode}.",

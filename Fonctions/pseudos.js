@@ -2,23 +2,35 @@ const Discord = require('discord.js')
 const db = require('./db')
 const { moduleActif } = require('./modules')
 const { envoyerLog } = require('./logs')
+const { estAuDessus } = require('./moderation')
 
 // Filtre de pseudos (idée #25) : corrige à l'arrivée et au changement de pseudo
 //   - les caractères « hoist » en tête (!, ., -, ', ", *, (, [… ou invisibles) qui placent le membre tout en haut de la liste ;
 //   - le zalgo (pile de diacritiques combinants) ;
 //   - les mots interdits du serveur (nick_filter), sans tenir compte de la casse ni des accents.
 // Actif seulement si le serveur l'a activé (une ligne dans nick_filter).
+//
+// Limite de pouvoir (tribunal phase 2, S1) : la config ne garde pas qui a réglé le filtre en dernier (pas de migration).
+// À la place, le bot ne renomme que des membres SANS permission de modération et strictement sous son propre rôle.
+// Il ne peut donc jamais être utilisé pour renommer un modérateur ou quelqu'un de plus haut que lui, et /pseudos
+// demande « Gérer le serveur » en plus de « Gérer les pseudos » pour activer le filtre et changer ses mots.
 
 const MAX_MOTS = 50
 const MAX_LONGUEUR_MOT = 32
 const MIN_LONGUEUR_MOT = 2
 const LONGUEUR_PSEUDO = 32
+const pseudoNeutre = id => `Membre ${String(id).slice(-4)}`
 
-// Garde-fou contre une dispute avec un autre bot ou un membre qui remet son pseudo : 3 renommages par membre et 10 minutes
+// Un membre avec une de ces permissions n'est jamais renommé
+const { Flags } = Discord.PermissionsBitField
+const PERMS_STAFF = Flags.ManageNicknames | Flags.ModerateMembers | Flags.KickMembers | Flags.BanMembers | Flags.ManageGuild | Flags.Administrator
+
+// Détecte une dispute avec un autre bot (ou un membre qui remet son pseudo) : plus de 3 renommages par membre en 10 minutes.
+// Passé ce plafond, le membre reçoit un pseudo neutre et un log part (une fois par fenêtre), mais la correction continue.
 const MAX_RENOMMAGES = 3
 const FENETRE_RENOMMAGES = 10 * 60 * 1000
 const MAX_SUIVIS = 2000
-const renommages = new Map() // "serveur:membre" -> { debut, n }
+const renommages = new Map() // "serveur:membre" -> { debut, n, signale }
 
 // Caractères qui placent un pseudo en haut de la liste : espaces, ponctuation ASCII et caractères invisibles
 const estInvisible = point => (point >= 0x200B && point <= 0x200F) || point === 0x2060 || point === 0xFEFF
@@ -86,7 +98,7 @@ function nettoyer(pseudo, mots = [], id = "0000") {
     }
     if (r === pseudo) return r
     if (r.length > LONGUEUR_PSEUDO) r = [...r].slice(0, LONGUEUR_PSEUDO).join("").trim()
-    return r || `Membre ${String(id).slice(-4)}`
+    return r || pseudoNeutre(id)
 }
 
 // --- Réglage du serveur (table nick_filter) ---
@@ -143,56 +155,85 @@ function retirerMot(guildId, saisie) {
 
 // --- Correction d'un membre ---
 
-function renommageAutorise(cle) {
+// Compte un renommage. Renvoie "ok", "plafond" (dispute : pseudo neutre et log) ou "plafond-signale" (déjà signalé dans cette fenêtre).
+function compterRenommage(cle) {
     const maintenant = Date.now()
     const suivi = renommages.get(cle)
     if (!suivi || maintenant - suivi.debut > FENETRE_RENOMMAGES) {
         renommages.delete(cle)
-        renommages.set(cle, { debut: maintenant, n: 1 })
+        renommages.set(cle, { debut: maintenant, n: 1, signale: false })
         if (renommages.size > MAX_SUIVIS) renommages.delete(renommages.keys().next().value)
-        return true
+        return "ok"
     }
-    if (suivi.n >= MAX_RENOMMAGES) return false
-    suivi.n++
-    return true
+    if (suivi.n < MAX_RENOMMAGES) {
+        suivi.n++
+        return "ok"
+    }
+    if (suivi.signale) return "plafond-signale"
+    suivi.signale = true
+    return "plafond"
+}
+
+// Pourquoi le pseudo est corrigé, sans jamais citer le pseudo lui-même (texte écrit par le membre)
+function motifs(pseudo, mots) {
+    const interdits = mots.map(normaliser).filter(Boolean)
+    const liste = []
+    if (retirerDebut(pseudo) !== pseudo) liste.push("hoist")
+    if (estZalgo(pseudo)) liste.push("zalgo")
+    if (retirerMots(pseudo, interdits) !== pseudo) liste.push("mot interdit")
+    return liste.length ? liste : ["hoist"]
+}
+
+// Peut-on renommer ce membre ? Ni staff, ni bot, ni propriétaire, et strictement sous le bot (« manageable » ne suffit pas).
+function renommable(member) {
+    const guild = member.guild
+    const moi = guild.members.me
+    if (!moi?.permissions.has(Flags.ManageNicknames)) return false
+    if (!member.permissions || member.permissions.any(PERMS_STAFF)) return false // permissions inconnues : par prudence, on ne touche pas
+    return estAuDessus(moi, member)
 }
 
 // Corrige le pseudo affiché d'un membre. Renvoie { avant, apres } si le membre a été renommé, sinon null.
 // Appelée à l'arrivée et à chaque changement de pseudo : le renommage du bot redéclenche guildMemberUpdate,
-// mais le pseudo corrigé est déjà propre, donc il n'y a rien à refaire (et le garde-fou ci-dessus coupe toute dispute).
+// mais le pseudo corrigé est déjà propre, donc il n'y a rien à refaire.
 async function corrigerPseudo(member) {
     const guild = member?.guild
     if (!guild || member.user?.bot || member.id === guild.ownerId) return null
     if (!moduleActif(guild.id, "moderation")) return null
     const filtre = lireFiltre(guild.id)
-    if (!filtre) return null
-    // « manageable » ne regarde que la hiérarchie : il faut aussi la permission de changer les pseudos
-    if (!member.manageable || !guild.members.me?.permissions.has(Discord.PermissionsBitField.Flags.ManageNicknames)) return null
+    if (!filtre || !renommable(member)) return null
 
     const avant = member.displayName
-    const apres = nettoyer(avant, filtre.mots, member.id)
+    let apres = nettoyer(avant, filtre.mots, member.id)
     if (apres === avant) return null
-    if (!renommageAutorise(`${guild.id}:${member.id}`)) return null
+    const compte = compterRenommage(`${guild.id}:${member.id}`)
+    const plafond = compte !== "ok"
+    if (plafond) apres = pseudoNeutre(member.id)
+    if (apres === avant) return null
 
     try {
-        await member.setNickname(apres, "Filtre de pseudos")
+        await member.setNickname(apres, plafond ? "Filtre de pseudos (trop de corrections)" : "Filtre de pseudos")
     } catch {
         return null // permission retirée, membre parti, hiérarchie changée : le prochain changement de pseudo retentera
     }
-    const embed = new Discord.EmbedBuilder()
-        .setColor(0x3498DB)
-        .setTitle("Pseudo corrigé")
-        .addFields(
-            { name: "Membre", value: `${member} (\`${member.id}\`)` },
-            { name: "Avant", value: Discord.escapeMarkdown(avant).slice(0, 1024) || "(vide)", inline: true },
-            { name: "Après", value: Discord.escapeMarkdown(apres).slice(0, 1024), inline: true }
-        )
-        .setTimestamp()
-    await envoyerLog(guild, "membres", embed)
-    return { avant, apres }
+    if (compte !== "plafond-signale") {
+        // Jamais l'ancien pseudo dans le log : c'est un texte écrit par le membre
+        const embed = new Discord.EmbedBuilder()
+            .setColor(plafond ? 0xE67E22 : 0x3498DB)
+            .setTitle(plafond ? "Pseudo remplacé par un pseudo neutre" : "Pseudo corrigé")
+            .addFields({ name: "Membre", value: `${member} (\`${member.id}\`)` })
+            .setTimestamp()
+        if (plafond) {
+            embed.setDescription(`Plus de ${MAX_RENOMMAGES} corrections en ${FENETRE_RENOMMAGES / 60000} minutes : un autre bot ou le membre remet un pseudo interdit. Pseudo neutre posé, la correction continue.`)
+        } else {
+            embed.setDescription(`Pseudo corrigé (motif : ${motifs(avant, filtre.mots).join(", ")}).`)
+        }
+        await envoyerLog(guild, "membres", embed)
+    }
+    return plafond ? { avant, apres, plafond } : { avant, apres }
 }
 
 module.exports = {
-    corrigerPseudo, nettoyer, normaliser, lireFiltre, activerFiltre, desactiverFiltre, ajouterMot, retirerMot,
+    corrigerPseudo, nettoyer, pseudoNeutre, normaliser, lireFiltre, activerFiltre, desactiverFiltre, ajouterMot, retirerMot,
     MAX_MOTS, MAX_LONGUEUR_MOT
 }

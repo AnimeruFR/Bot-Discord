@@ -1,7 +1,7 @@
 const Discord = require('discord.js')
 const db = require('./db')
 const { moduleActif } = require('./modules')
-const { getLogChannel, COULEURS } = require('./logs')
+const { getLogChannel, envoyerLog, COULEURS } = require('./logs')
 
 const { Flags } = Discord.PermissionsBitField
 
@@ -12,6 +12,15 @@ const NIVEAU_RAID = Discord.GuildVerificationLevel.VeryHigh
 const NOMS_NIVEAUX = ["Aucun", "Faible", "Moyen", "Élevé", "Très élevé"]
 const INVITES_SUSPENDUES = Discord.GuildFeature?.InvitesDisabled ?? "INVITES_DISABLED"
 const MAX_SERVEURS_SUIVIS = 5000
+
+// Levée automatique : un raid ouvert depuis plus longtemps est levé tout seul (même fonction `lever` que le bouton).
+// Durée fixe de 60 minutes : la rendre réglable (/raid config) demanderait une colonne de plus dans raid_config,
+// donc une migration. Trois relances espacées de 5 minutes si la restauration échoue ; l'arrivée suivante réessaie aussi.
+const DUREE_RAID_MAX_MS = 60 * 60 * 1000
+const RELANCE_MS = 5 * 60 * 1000
+const ESSAIS_MAX = 3
+const minuteurs = new Map() // raid -> minuteur de levée automatique (unref : n'empêche pas l'arrêt du bot)
+const dernieresTentatives = new Map() // raid -> date de la dernière levée automatique tentée
 
 // Fenêtre glissante en mémoire : serveur -> dates (ms) des dernières arrivées. Bornée : au plus MAX_SERVEURS_SUIVIS
 // serveurs, et au plus « arrivees » dates par serveur (on déclenche dès qu'on les atteint).
@@ -134,17 +143,20 @@ async function alerter(guild, id, reglage, nb, mesures) {
 
 // Compte l'arrivée d'un membre et déclenche le mode raid au-delà du seuil. Ne lève jamais d'erreur.
 // Renvoie { declenche, id?, suite? } ; suite est la promesse du verrouillage et de l'alerte (utile aux tests ; l'événement l'ignore).
+// Sans salon d'alerte valide (famille antiraid), le raid est enregistré mais le serveur n'est PAS verrouillé : le propriétaire reçoit un MP.
 // Tout ce qui décide du déclenchement est synchrone (aucun await avant l'enregistrement du raid) :
 // 50 arrivées simultanées ne produisent donc qu'un seul raid.
 async function noterArrivee(member, maintenant = Date.now()) {
     try {
         const guild = member.guild
         if (member.user?.bot || !moduleActif(guild.id, "moderation")) return { declenche: false }
+        // Un raid ouvert depuis trop longtemps est levé ici aussi (le minuteur est perdu si le bot a redémarré)
+        const expire = leverSiExpire(guild, maintenant)
         const reglage = getReglage(guild.id)
-        if (!reglage) return { declenche: false }
+        if (!reglage) return { declenche: false, suite: expire }
 
         const nb = compter(guild.id, reglage, maintenant)
-        if (nb < reglage.arrivees) return { declenche: false }
+        if (nb < reglage.arrivees) return { declenche: false, suite: expire }
 
         // Pas de second déclenchement tant qu'un raid est en cours (même après un redémarrage : l'état est en base)
         const id = db.transaction(() => {
@@ -156,7 +168,13 @@ async function noterArrivee(member, maintenant = Date.now()) {
 
         // Verrouillage et alerte (appels REST) partent sans être attendus : la ligne raid_events est déjà écrite,
         // et le filtre des comptes / la bienvenue du membre ne doivent pas attendre l'API. `suite` sert aux tests.
+        planifierLevee(guild, id, DUREE_RAID_MAX_MS)
         const suite = (async () => {
+            // Sans salon d'alerte valide, personne ne verrait le bouton de levée : on ne verrouille pas
+            if (!getLogChannel(guild, "antiraid")) {
+                const mp = await prevenirProprietaire(guild, reglage, nb)
+                return { mesures: null, alerte: false, alerteImpossible: true, mp }
+            }
             const mesures = reglage.alerteSeule
                 ? { niveau: null, invites: false, invitesDeja: false, echecs: [], refus: null }
                 : await verrouiller(guild, id, `Mode raid automatique : ${nb} arrivées en ${reglage.secondes} s`)
@@ -170,6 +188,21 @@ async function noterArrivee(member, maintenant = Date.now()) {
     } catch (err) {
         console.error("Anti-raid :", err.message)
         return { declenche: false }
+    }
+}
+
+// Mode « alerte impossible » : le raid est enregistré, le propriétaire du serveur est prévenu en MP (renvoie true si le MP est parti)
+async function prevenirProprietaire(guild, reglage, nb) {
+    try {
+        if (typeof guild.fetchOwner !== "function") return false
+        const proprietaire = await guild.fetchOwner()
+        await proprietaire.send(`Anti-raid sur « ${guild.name} » : ${nb} arrivée(s) en ${reglage.secondes} seconde(s) (seuil : ${reglage.arrivees}). `
+            + "Aucun salon d'alerte valide n'est configuré (/setlogs famille:antiraid) : le serveur n'a PAS été verrouillé. "
+            + "Configurez le salon, puis levez le raid avec /raid action:lever. Il sera clos automatiquement dans 60 minutes.")
+        return true
+    } catch (err) {
+        console.error("Anti-raid : MP au propriétaire impossible :", err.message)
+        return false
     }
 }
 
@@ -214,6 +247,8 @@ async function lever(guild, { id = null, par }) {
 
         if (!db.sqlRun("UPDATE raid_events SET ended_at = ?, lifted_by = ? WHERE id = ? AND ended_at IS NULL", [Date.now(), par, ligne.id])) return { erreur: "deja" }
         fenetres.delete(guild.id)
+        clearTimeout(minuteurs.get(ligne.id))
+        minuteurs.delete(ligne.id)
         resultat.leve = true
         return resultat
     } finally {
@@ -221,7 +256,63 @@ async function lever(guild, { id = null, par }) {
     }
 }
 
+// Lève le raid en cours du serveur s'il est ouvert depuis plus de DUREE_RAID_MAX_MS. Ne lève jamais d'erreur.
+// Renvoie la promesse de la levée (résultat de `lever`) ou null s'il n'y a rien à lever. Pas plus d'une tentative par minute et par raid.
+function leverSiExpire(guild, maintenant = Date.now()) {
+    try {
+        const ligne = raidEnCours(guild.id)
+        if (!ligne || maintenant - ligne.started_at < DUREE_RAID_MAX_MS) return null
+        if (maintenant - (dernieresTentatives.get(ligne.id) ?? -Infinity) < 60 * 1000) return null
+        if (dernieresTentatives.size >= 1000) dernieresTentatives.delete(dernieresTentatives.keys().next().value)
+        dernieresTentatives.set(ligne.id, maintenant)
+        return leverAutomatiquement(guild, ligne.id)
+    } catch (err) {
+        console.error("Anti-raid (levée automatique) :", err.message)
+        return null
+    }
+}
+
+async function leverAutomatiquement(guild, id) {
+    try {
+        const par = guild.members?.me?.id ?? guild.client?.user?.id ?? "auto"
+        const r = await lever(guild, { id, par })
+        const ok = r.leve === true
+        const detail = r.erreur ? `déjà levé ou introuvable (${r.erreur})` : ok ? "levée terminée" : `restauration incomplète (${r.echecs.join(" ; ")})`
+        console.log(`Anti-raid : levée automatique du raid n°${id} sur ${guild.id} : ${detail}`)
+        if (!r.erreur) {
+            const embed = new Discord.EmbedBuilder()
+                .setColor(COULEURS.ban)
+                .setTitle("Anti-raid : levée automatique")
+                .setDescription(`Le mode raid n°${id} est ouvert depuis plus de ${DUREE_RAID_MAX_MS / 60000} minutes : ${ok ? "il a été levé automatiquement" : "la levée automatique est incomplète, il reste ouvert (utilisez /raid action:lever)"}.`)
+                .setTimestamp()
+            if (r.echecs.length) embed.addFields({ name: "Échecs", value: r.echecs.join(" ; ").slice(0, 1024) })
+            await envoyerLog(guild, "antiraid", embed)
+        }
+        return r
+    } catch (err) {
+        console.error("Anti-raid (levée automatique) :", err.message)
+        return { erreur: "echec" }
+    }
+}
+
+// Minuteur de levée automatique pour un raid (unref). Ne lève jamais d'erreur.
+function planifierLevee(guild, id, delai, essai = 1) {
+    try {
+        clearTimeout(minuteurs.get(id))
+        const minuteur = setTimeout(async () => {
+            minuteurs.delete(id)
+            const r = await leverSiExpire(guild, Date.now() + 1000)
+            if (r && r.leve === false && !r.erreur && essai < ESSAIS_MAX) planifierLevee(guild, id, RELANCE_MS, essai + 1)
+        }, delai)
+        minuteur.unref?.()
+        minuteurs.set(id, minuteur)
+    } catch (err) {
+        console.error("Anti-raid (minuteur) :", err.message)
+    }
+}
+
 module.exports = {
+    leverSiExpire, DUREE_RAID_MAX_MS,
     noterArrivee, getReglage, setReglage, supprimerReglage, raidEnCours, dernierRaid, lever, nomNiveau,
     BORNES, NIVEAU_RAID
 }

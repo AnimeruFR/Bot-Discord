@@ -315,12 +315,35 @@ test("refuser un appel : sanction maintenue, membre prévenu", async () => {
     const r = routeurAppel()
     const numero = nouveauWarn(m.G)
     const { id } = appels.creerAppel(m.G, U, numero, "injuste")
-    const clic = composant(m, `appel-non:${id}`, { utilisateur: MOD2, perms: [Flags.ModerateMembers] })
+    const clic = composant(m, `appel-non:${id}`, { utilisateur: MOD, perms: [Flags.ModerateMembers] })
     await r.router(null, clic)
     assert.strictEqual(appels.lireAppel(m.G, id).status, "refuse")
     assert.strictEqual(cases.lireCase(m.G, numero).cancelled_at, null)
     assert.strictEqual(db.countWarns(m.G, U), 1)
     assert.ok(m.mp[0].includes("refusé"))
+})
+
+test("refuser : l'auteur de la sanction ou ManageGuild seulement, et la hiérarchie est revérifiée", async () => {
+    const m = monde()
+    const r = routeurAppel()
+    const numero = nouveauWarn(m.G, MOD)
+    const { id } = appels.creerAppel(m.G, U, numero, "injuste")
+
+    const autre = composant(m, `appel-non:${id}`, { utilisateur: MOD2, perms: [Flags.ModerateMembers] })
+    await r.router(null, autre)
+    assert.strictEqual(appels.lireAppel(m.G, id).status, "en_attente", "ni auteur ni ManageGuild : refusé")
+    assert.ok(texteDe(autre).includes("autre modérateur"))
+    assert.strictEqual(m.mp.length, 0)
+
+    m.membre.roles.highest = role(50)
+    const haut = composant(m, `appel-non:${id}`, { utilisateur: MOD, perms: [Flags.ModerateMembers] })
+    await r.router(null, haut)
+    assert.strictEqual(appels.lireAppel(m.G, id).status, "en_attente", "membre devenu plus haut : refusé")
+    m.membre.roles.highest = role(1)
+
+    const gestionnaire = composant(m, `appel-non:${id}`, { utilisateur: MOD2, perms: [Flags.ModerateMembers, Flags.ManageGuild] })
+    await r.router(null, gestionnaire)
+    assert.strictEqual(appels.lireAppel(m.G, id).status, "refuse")
 })
 
 test("accepter : l'auteur de la sanction ou ManageGuild seulement, et la hiérarchie est revérifiée", async () => {

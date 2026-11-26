@@ -67,7 +67,8 @@ module.exports = {
             const r = await q.mettre(message, user, args.getString("raison"))
             if (r.erreur) return refuser(message, r.erreur)
             const suite = t(message, r.prevenu ? "quar.mp_ok" : "quar.mp_ko")
-            return message.editReply(t(message, "quar.mise", { moderateur: message.user, user, n: r.retires, gardes: r.gardes, suite }))
+            const alerte = r.salon ? `\n${t(message, "quar.salon_dangereux", { salon: `<#${r.salon.id}>` })}` : ""
+            return message.editReply(t(message, "quar.mise", { moderateur: message.user, user, n: r.retires, gardes: r.gardes, suite }) + alerte)
         }
 
         const r = await q.lever(message, user)
@@ -88,7 +89,8 @@ async function config(message, role) {
     const r = await q.changerRoleIsole(message, role)
     if (r.erreur) return refuser(message, r.erreur)
     if (r.inchange) return message.reply({ content: t(message, "quar.config_inchangee", { role }), flags: EPHEMERAL, allowedMentions: { parse: [] } })
-    return message.reply({ content: t(message, "quar.config_ok", { role }), flags: EPHEMERAL, allowedMentions: { parse: [] } })
+    const alerte = r.salon ? `\n${t(message, "quar.salon_dangereux", { salon: `<#${r.salon.id}>` })}` : ""
+    return message.reply({ content: t(message, "quar.config_ok", { role }) + alerte, flags: EPHEMERAL, allowedMentions: { parse: [] } })
 }
 
 async function liste(message) {

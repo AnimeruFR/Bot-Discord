@@ -179,6 +179,11 @@ function retirerChamp(guildId, typeId, rang) {
     })
 }
 
+// Supprime tous les champs du formulaire d'un type (appelé quand le type est retiré). Renvoie le nombre de champs supprimés.
+function retirerChampsDuType(guildId, typeId) {
+    return db.sqlRun("DELETE FROM ticket_fields WHERE guild_id = ? AND type_id = ?", [guildId, typeId])
+}
+
 // Délai cible d'un type en minutes (null : aucun). false si le type n'existe pas ou si le délai est hors limites.
 function definirDelai(guildId, typeId, minutes) {
     if (minutes !== null && !(Number.isInteger(minutes) && minutes >= SLA_MIN && minutes <= SLA_MAX)) return false
@@ -627,5 +632,5 @@ async function noterTicket(bot, interaction) {
 module.exports = {
     onBoutonTicket, onMenuType, onFormulaire, claimTicket, closeTicket, noterTicket, gererMembre, fermerPourAuteur,
     retirerAccesAuteur, accesAuteurRetire, menuTypes, ticketOwnerId, roleValide, categorieUtilisable, isStaff, staffRoleId, verifierOuverture, texteSur,
-    transfererTicket, trouverType, construireFormulaire, champsDuType, ajouterChamp, retirerChamp, definirDelai, ajouterEvenement, MAX_CHAMPS, SLA_MIN, SLA_MAX
+    transfererTicket, trouverType, construireFormulaire, champsDuType, ajouterChamp, retirerChamp, retirerChampsDuType, definirDelai, ajouterEvenement, MAX_CHAMPS, SLA_MIN, SLA_MAX
 }

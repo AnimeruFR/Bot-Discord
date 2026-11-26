@@ -1,7 +1,7 @@
 const Discord = require('discord.js')
 const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
-const { sendModLog } = require('../../Fonctions/logs')
+const { sendModLog, getLogChannel } = require('../../Fonctions/logs')
 const raid = require('../../Fonctions/raid')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -29,7 +29,10 @@ async function config(interaction, args) {
         action: "raid",
         details: `Anti-raid configuré : ${reglage.arrivees} arrivée(s) en ${reglage.secondes} s, ${reglage.alerteSeule ? "alerte seule" : "verrouillage automatique"}`
     })
-    await interaction.editReply({ content: t(interaction, "raid.config_ok", { arrivees: reglage.arrivees, secondes: reglage.secondes, mode: mode(interaction, reglage.alerteSeule) }) })
+    // Sans salon d'alerte valide, le mode raid ne verrouille pas le serveur : on le dit tout de suite
+    const avertissement = getLogChannel(interaction.guild, "antiraid") ? "" : `
+${t(interaction, "raid.config_sans_salon")}`
+    await interaction.editReply({ content: t(interaction, "raid.config_ok", { arrivees: reglage.arrivees, secondes: reglage.secondes, mode: mode(interaction, reglage.alerteSeule) }) + avertissement })
 }
 
 async function statut(interaction) {

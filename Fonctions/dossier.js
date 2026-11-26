@@ -14,7 +14,8 @@ const { listerAppelsMembre, compterAppels } = require('./appels')
 // Règles de confidentialité (S6) :
 //   - on ne consulte jamais son propre dossier : les notes du staff sur soi ne sont pas faites pour être lues ;
 //   - les notes (texte et nombre) ne sont montrées que si le membre consulté n'a pas un rôle plus haut ou égal à celui
-//     de la personne qui consulte, sauf si elle peut gérer le serveur (ou en est propriétaire). Le reste du dossier
+//     de la personne qui consulte, sauf si elle peut gérer le serveur (ou en est propriétaire). Si le membre a quitté
+//     le serveur, seuls ManageGuild et le propriétaire les voient (le rôle staff seul ne suffit pas). Le reste du dossier
 //     (sanctions, tickets, appels) reste visible : c'est le travail normal du staff.
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -33,7 +34,8 @@ function refusDossier(interaction, user) {
 function notesVisibles(interaction, membre) {
     if (interaction.memberPermissions?.has(Discord.PermissionFlagsBits.ManageGuild)) return true
     if (interaction.user.id === interaction.guild.ownerId) return true
-    if (!membre) return true
+    // Membre parti : pas de rôle à comparer, donc seulement ManageGuild ou le propriétaire (testés ci-dessus)
+    if (!membre) return false
     return membre.roles.highest.comparePositionTo(interaction.member.roles.highest) < 0
 }
 

@@ -81,7 +81,17 @@ test("notes masquées si la cible a un rôle plus haut ou égal, sauf ManageGuil
     assert.ok(tout(construirePages(gestionnaire, cible, membre(50)).pages).includes("note secrète"), "ManageGuild voit tout")
     const proprio = interaction({ user: PROPRIO })
     assert.strictEqual(notesVisibles(proprio, membre(50)), true, "le propriétaire aussi")
-    assert.strictEqual(notesVisibles(interaction(), null), true, "membre parti du serveur : pas de rôle à comparer")
+
+    // Membre parti du serveur : ni rôle staff seul ni ModerateMembers, seulement ManageGuild ou le propriétaire
+    const staffSeul = interaction({ perms: [] })
+    staffSeul.member = { roles: { cache: new Set(["123456789012345678"]), highest: role(10) } }
+    assert.strictEqual(notesVisibles(staffSeul, null), false, "rôle staff seul : notes masquées")
+    assert.strictEqual(notesVisibles(interaction(), null), false, "ModerateMembers seul : notes masquées")
+    const parti = construirePages(interaction(), cible, null)
+    assert.ok(!tout(parti.pages).includes("note secrète"), "texte masqué")
+    assert.strictEqual(parti.debuts.notes, undefined)
+    assert.ok(tout(construirePages(gestionnaire, cible, null).pages).includes("note secrète"), "ManageGuild voit les notes d'un membre parti")
+    assert.strictEqual(notesVisibles(proprio, null), true, "le propriétaire aussi")
 
     // Ni le texte ni le nombre des notes dans l'ouverture « sanctions » de /historique
     db.addCase(G, { userId: CIBLE, moderatorId: MOD, type: "kick", reason: "raison visible" })

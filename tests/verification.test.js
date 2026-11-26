@@ -10,6 +10,7 @@ const { chargerCommandes } = require('./aides')
 const verification = require('../Fonctions/verification')
 const pseudos = require('../Fonctions/pseudos')
 const evenementMiseAJour = require('../Events/guildMemberUpdate')
+const { setSalonFamille } = require('../Fonctions/logs')
 
 const { Flags } = Discord.PermissionsBitField
 const bot = chargerCommandes()
@@ -25,20 +26,26 @@ const mkRole = (id, position, perms = 0n) => ({ id, position, managed: false, pe
 // Faux serveur : un rôle « vérifié » (position 5) sous le rôle du bot (position 10)
 function mkGuild(id, { botPerms = Flags.ManageRoles | Flags.ManageNicknames } = {}) {
     const verifie = mkRole(ID_ROLE, 5)
-    return {
+    const guild = {
         id, ownerId: PROPRIETAIRE, verifie, name: "Serveur test",
         roles: { cache: new Discord.Collection([[verifie.id, verifie]]), everyone: { id } },
         channels: { cache: new Discord.Collection() },
-        members: { me: { permissions: new Discord.PermissionsBitField(botPerms), roles: { highest: mkRole("900000000000000009", 10) } } }
+        members: { me: { id: "900000000000000099", permissions: new Discord.PermissionsBitField(botPerms), roles: { highest: mkRole("900000000000000009", 10) } } }
     }
+    guild.members.me.guild = guild
+    verifie.guild = guild
+    guild.members.me.roles.highest.guild = guild
+    return guild
 }
 
 // Faux membre : ses rôles se modifient vraiment (roles.add est compté)
-function mkMembre(guild, id, { roles = [], displayName = "Bob", manageable = true, bot: estBot = false } = {}) {
+// position : position de son rôle le plus haut (le bot est en 10) ; perms : ses permissions de serveur
+function mkMembre(guild, id, { roles = [], displayName = "Bob", position = 1, perms = 0n, bot: estBot = false } = {}) {
     const cache = new Set(roles)
     const membre = {
-        id, guild, user: { id, bot: estBot }, displayName, manageable, ajouts: 0, envoyes: [], surnoms: [],
-        roles: { cache, add: async roleId => { membre.ajouts++; cache.add(roleId) } },
+        id, guild, user: { id, bot: estBot }, displayName, ajouts: 0, envoyes: [], surnoms: [],
+        permissions: new Discord.PermissionsBitField(perms),
+        roles: { cache, highest: mkRole(`9000000000000${id.slice(-5)}`, position), add: async roleId => { membre.ajouts++; cache.add(roleId) } },
         setNickname: async nom => { membre.surnoms.push(nom); membre.displayName = nom },
         send: async texte => { membre.envoyes.push(texte) },
         toString: () => `<@${id}>`
@@ -66,7 +73,7 @@ const texte = r => (typeof r === "string" ? r : r.content)
 // Défi affiché : le nom de l'emoji demandé, et les boutons (customId + emoji)
 function lireDefi(payload) {
     const nom = payload.content.match(/\*\*(.+)\*\*/)[1]
-    const boutons = payload.components[0].components.map(b => ({ id: b.data.custom_id, emoji: b.data.emoji.name }))
+    const boutons = payload.components.flatMap(ligne => ligne.components).map(b => ({ id: b.data.custom_id, emoji: b.data.emoji.name }))
     return { demande: NOMS[nom], boutons, bon: boutons.find(b => b.emoji === NOMS[nom]), faux: boutons.filter(b => b.emoji !== NOMS[nom]) }
 }
 
@@ -122,8 +129,8 @@ test("un bon choix donne le rôle, un mauvais choix compte une erreur et renouve
     configurerServeur(guild)
     const membre = mkMembre(guild, "700000000000000003")
     const { defi } = await ouvrirDefi(guild, membre)
-    assert.strictEqual(defi.boutons.length, 5)
-    assert.strictEqual(new Set(defi.boutons.map(b => b.emoji)).size, 5, "5 emojis différents")
+    assert.strictEqual(defi.boutons.length, 8)
+    assert.strictEqual(new Set(defi.boutons.map(b => b.emoji)).size, 8, "8 emojis différents")
     assert.ok(defi.bon, "l'emoji demandé est bien parmi les boutons")
 
     const faux = clic(guild, membre, defi.faux[0].id)
@@ -312,14 +319,17 @@ test("la configuration refuse un rôle dangereux, trop haut, ou un configurateur
     const guild = mkGuild(G)
     const configurateur = mkMembre(guild, "700000000000000012")
     configurateur.roles.highest = mkRole("900000000000000008", 8)
-    const interaction = perms => Object.assign(clic(guild, configurateur, "x", { perms }), { member: configurateur })
+    const interaction = perms => {
+        configurateur.permissions = new Discord.PermissionsBitField(perms)
+        return Object.assign(clic(guild, configurateur, "x", { perms }), { member: configurateur })
+    }
     const droits = Flags.ManageGuild | Flags.ManageRoles
 
     const dangereux = mkRole("900000000000000002", 3, Flags.ManageMessages)
     assert.ok((await verification.configurer(interaction(droits), dangereux, null)).erreur, "permissions de modération")
     const administrateur = mkRole("900000000000000003", 3, Flags.Administrator)
     assert.ok((await verification.configurer(interaction(droits), administrateur, null)).erreur)
-    const auDessus = mkRole("900000000000000004", 9)
+    const auDessus = Object.assign(mkRole("900000000000000004", 9), { guild })
     assert.ok((await verification.configurer(interaction(droits), auDessus, null)).erreur, "au-dessus du configurateur")
     assert.ok((await verification.configurer(interaction(Flags.ManageGuild), guild.verifie, null)).erreur, "configurateur sans Gérer les rôles")
     assert.ok((await verification.configurer(interaction(droits), null, null)).erreur, "rôle manquant")
@@ -327,8 +337,14 @@ test("la configuration refuse un rôle dangereux, trop haut, ou un configurateur
 
     // Le bot ne peut pas donner un rôle sans « Gérer les rôles »
     const sansPermission = mkGuild("111111111111111110", { botPerms: Flags.ManageNicknames })
-    const i = clic(sansPermission, configurateur, "x", { perms: droits })
+    configurateur.permissions = new Discord.PermissionsBitField(droits)
+    const i = Object.assign(clic(sansPermission, configurateur, "x", { perms: droits }), { member: configurateur })
     assert.ok((await verification.configurer(i, sansPermission.verifie, null)).erreur, "le bot ne peut pas donner ce rôle")
+    // Le propriétaire configure toujours, même sans « Gérer les rôles » ni rôle plus haut
+    const proprietaire = mkMembre(guild, PROPRIETAIRE)
+    const iProprietaire = Object.assign(clic(guild, proprietaire, "x", { perms: Flags.ManageGuild }), { member: proprietaire })
+    assert.deepStrictEqual(await verification.configurer(iProprietaire, auDessus, null), { ok: true }, "le propriétaire configure")
+    db.sqlRun("DELETE FROM verification_config WHERE guild_id = ?", [G])
 
     assert.deepStrictEqual(await verification.configurer(interaction(droits), guild.verifie, null), { ok: true })
     assert.strictEqual(verification.lireConfig(G).role_id, ID_ROLE)
@@ -337,7 +353,7 @@ test("la configuration refuse un rôle dangereux, trop haut, ou un configurateur
 test("le panneau est posté dans le salon, remplace l'ancien et enregistre son message", async () => {
     const G = "111111111111111111"
     const guild = mkGuild(G)
-    const configurateur = mkMembre(guild, "700000000000000013")
+    const configurateur = mkMembre(guild, "700000000000000013", { perms: Flags.ManageGuild | Flags.ManageRoles })
     configurateur.roles.highest = mkRole("900000000000000008", 8)
     const i = Object.assign(clic(guild, configurateur, "x", { perms: Flags.ManageGuild | Flags.ManageRoles }), { member: configurateur })
     assert.ok((await verification.poserPanneau(i, null)).erreur, "rien de configuré : refusé")
@@ -474,8 +490,9 @@ test("corrigerPseudo : pseudo vide, bots, propriétaire, membres non gérables e
 
     const robot = mkMembre(guild, "800000000000000003", { displayName: "!Bot", bot: true })
     const proprietaire = mkMembre(guild, PROPRIETAIRE, { displayName: "!Chef" })
-    const haut = mkMembre(guild, "800000000000000004", { displayName: "!Admin", manageable: false })
-    for (const m of [robot, proprietaire, haut]) {
+    const haut = mkMembre(guild, "800000000000000004", { displayName: "!Admin", position: 12 })
+    const egal = mkMembre(guild, "800000000000000010", { displayName: "!Egal", position: 10 })
+    for (const m of [robot, proprietaire, haut, egal]) {
         assert.strictEqual(await pseudos.corrigerPseudo(m), null)
         assert.strictEqual(m.surnoms.length, 0, "jamais renommé")
     }
@@ -500,16 +517,212 @@ test("corrigerPseudo : pseudo vide, bots, propriétaire, membres non gérables e
     assert.strictEqual(await pseudos.corrigerPseudo(c), null)
 })
 
-test("garde-fou : pas plus de 3 renommages en 10 minutes pour un même membre", async () => {
+test("garde-fou : au-delà de 3 renommages en 10 minutes, le pseudo corrigé devient le pseudo neutre", async () => {
     const G = "222222222222222206"
     const guild = mkGuild(G)
     pseudos.activerFiltre(G)
     const membre = mkMembre(guild, "800000000000000008", { displayName: "!A" })
     // Un autre bot ou le membre remet sans cesse un pseudo interdit
-    let renommes = 0
+    const apres = []
     for (let n = 0; n < 6; n++) {
         membre.displayName = "!Bob"
-        if (await pseudos.corrigerPseudo(membre)) renommes++
+        apres.push((await pseudos.corrigerPseudo(membre)).apres)
     }
-    assert.strictEqual(renommes, 3)
+    assert.deepStrictEqual(apres, ["Bob", "Bob", "Bob", "Membre 0008", "Membre 0008", "Membre 0008"])
+})
+
+// --- Tribunal phase 2 : pouvoir du bot, persistance, raid ---
+
+test("S1 : un membre staff (permission de modération) n'est jamais renommé, un membre ordinaire l'est", async () => {
+    const G = "222222222222222210"
+    const guild = mkGuild(G)
+    pseudos.activerFiltre(G)
+    const droits = [Flags.ManageNicknames, Flags.ModerateMembers, Flags.KickMembers, Flags.BanMembers, Flags.ManageGuild, Flags.Administrator]
+    for (const [n, droit] of droits.entries()) {
+        const staff = mkMembre(guild, `80000000000000002${n}`, { displayName: "!Staff", perms: droit })
+        assert.strictEqual(await pseudos.corrigerPseudo(staff), null, `permission ${droit} : jamais renommé`)
+        assert.strictEqual(staff.surnoms.length, 0)
+    }
+    const ordinaire = mkMembre(guild, "800000000000000030", { displayName: "!Eve", perms: Flags.SendMessages | Flags.ViewChannel })
+    assert.deepStrictEqual(await pseudos.corrigerPseudo(ordinaire), { avant: "!Eve", apres: "Eve" })
+})
+
+// Faux salon de logs de la famille « membres »
+function salonDeLogs(guild) {
+    const id = "300000000000000777"
+    const envois = []
+    guild.channels.cache.set(id, { id, isTextBased: () => true, permissionsFor: () => ({ has: () => true }), send: async m => { envois.push(m) } })
+    setSalonFamille(guild.id, "membres", id)
+    return envois
+}
+const texteEmbed = envois => envois.map(m => JSON.stringify(m.embeds[0].toJSON())).join("\n")
+
+test("S8 : le log d'une correction ne recopie jamais l'ancien pseudo, il donne le motif et la mention", async () => {
+    const G = "222222222222222211"
+    const guild = mkGuild(G)
+    const envois = salonDeLogs(guild)
+    pseudos.activerFiltre(G)
+    pseudos.ajouterMot(G, "insulte")
+    const membre = mkMembre(guild, "800000000000000040", { displayName: "!!SecretInsulte" })
+    assert.ok(await pseudos.corrigerPseudo(membre))
+    assert.strictEqual(envois.length, 1)
+    const log = texteEmbed(envois)
+    assert.ok(!log.includes("SecretInsulte") && !log.includes("!!Secret"), "aucun fragment de l'ancien pseudo")
+    assert.ok(log.includes("<@800000000000000040>"), "mention du membre")
+    assert.ok(log.includes("hoist") && log.includes("mot interdit"), "motifs")
+})
+
+test("S2 : passé le plafond, le pseudo neutre est posé et signalé, puis la correction continue", async () => {
+    const G = "222222222222222212"
+    const guild = mkGuild(G)
+    const envois = salonDeLogs(guild)
+    pseudos.activerFiltre(G)
+    const membre = mkMembre(guild, "800000000000000050", { displayName: "!A" })
+    // Un autre bot remet sans cesse un pseudo interdit
+    for (let n = 0; n < 3; n++) {
+        membre.displayName = "!Bob"
+        assert.deepStrictEqual(await pseudos.corrigerPseudo(membre), { avant: "!Bob", apres: "Bob" })
+    }
+    assert.strictEqual(envois.length, 3)
+    membre.displayName = "!Bob"
+    const r = await pseudos.corrigerPseudo(membre)
+    assert.strictEqual(r.apres, "Membre 0050", "pseudo neutre")
+    assert.strictEqual(r.plafond, true)
+    assert.strictEqual(membre.displayName, "Membre 0050", "le pseudo interdit ne reste pas")
+    assert.strictEqual(envois.length, 4, "un log part")
+    assert.ok(texteEmbed(envois.slice(3)).includes("neutre"))
+    // Il continue : le membre remet un pseudo interdit, il est encore remplacé (un seul log par fenêtre)
+    membre.displayName = "!Encore"
+    assert.strictEqual((await pseudos.corrigerPseudo(membre)).apres, "Membre 0050")
+    assert.strictEqual(membre.displayName, "Membre 0050")
+    assert.strictEqual(envois.length, 4, "pas de log en double")
+})
+
+test("/pseudos : activer, ajouter et retirer demandent « Gérer le serveur » en plus de « Gérer les pseudos »", async () => {
+    const commande = bot.commands.get("pseudos")
+    const G = "222222222222222213"
+    const guild = mkGuild(G)
+    const lancer = async (perms, options) => {
+        const reponses = []
+        const i = {
+            guild, guildId: G, locale: "fr", user: { id: "700000000000000050", tag: "mod#0" }, deferred: false, replied: false,
+            memberPermissions: new Discord.PermissionsBitField(perms),
+            reply: async r => { reponses.push(r.content) }, followUp: async r => { reponses.push(r.content) }
+        }
+        const args = { getString: n => options[n] ?? null }
+        await commande.run(bot, i, args)
+        return reponses.at(-1)
+    }
+    const seulementPseudos = Flags.ManageNicknames
+    const complet = Flags.ManageNicknames | Flags.ManageGuild
+    assert.match(await lancer(seulementPseudos, { action: "activer" }), /Gérer le serveur/)
+    assert.strictEqual(pseudos.lireFiltre(G), null, "rien d'activé")
+    assert.match(await lancer(complet, { action: "activer" }), /activé/)
+    assert.match(await lancer(seulementPseudos, { action: "ajouter", mot: "insulte" }), /Gérer le serveur/)
+    assert.deepStrictEqual(pseudos.lireFiltre(G).mots, [], "aucun mot ajouté")
+    assert.match(await lancer(complet, { action: "ajouter", mot: "insulte" }), /ajouté/)
+    assert.match(await lancer(seulementPseudos, { action: "retirer", mot: "insulte" }), /Gérer le serveur/)
+    assert.deepStrictEqual(pseudos.lireFiltre(G).mots, ["insulte"], "mot conservé")
+    assert.match(await lancer(complet, { action: "retirer", mot: "insulte" }), /retiré/)
+    // Lire la liste ne demande que « Gérer les pseudos »
+    assert.match(await lancer(seulementPseudos, { action: "liste" }), /Mots interdits/)
+})
+
+test("S4 : le blocage est conservé en base après un redémarrage, et remis à zéro par une réussite", async () => {
+    const G = "111111111111111120"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000020")
+    let { defi } = await ouvrirDefi(guild, membre)
+    for (let essai = 1; essai <= 3; essai++) {
+        const faux = clic(guild, membre, defi.faux[0].id)
+        await verification.onClicVerification(bot, faux)
+        if (essai < 3) defi = lireDefi(faux.mises[0])
+    }
+    const ligne = db.sqlAll("SELECT * FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [G, membre.id])[0]
+    assert.ok(ligne.blocked_until > Date.now(), "blocage écrit en base")
+
+    // Redémarrage : toute la mémoire est perdue, la base reste
+    verification.reinitialiserMemoire()
+    const reouverture = clic(guild, membre, "verif:ouvrir")
+    await verification.onClicVerification(bot, reouverture)
+    assert.ok(texte(reouverture.reponses[0]).includes("Trop d'erreurs"), "toujours bloqué")
+    assert.ok(!reouverture.reponses[0].components, "aucun défi")
+
+    // Fin du blocage : réessayer est possible, et une réussite efface la ligne
+    db.sqlRun("UPDATE verification_attempts SET blocked_until = ? WHERE guild_id = ? AND user_id = ?", [Date.now() - 1, G, membre.id])
+    const { defi: nouveau } = await ouvrirDefi(guild, membre)
+    await verification.onClicVerification(bot, clic(guild, membre, nouveau.bon.id))
+    assert.strictEqual(membre.ajouts, 1)
+    assert.strictEqual(db.sqlAll("SELECT * FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [G, membre.id]).length, 0, "compteur remis à zéro")
+})
+
+test("S4 : les erreurs sont comptées en base et survivent à un redémarrage (2 avant, la 3e bloque)", async () => {
+    const G = "111111111111111121"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000021")
+    let { defi } = await ouvrirDefi(guild, membre)
+    for (let essai = 1; essai <= 2; essai++) {
+        const faux = clic(guild, membre, defi.faux[0].id)
+        await verification.onClicVerification(bot, faux)
+        defi = lireDefi(faux.mises[0])
+    }
+    assert.strictEqual(db.sqlAll("SELECT errors FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [G, membre.id])[0].errors, 2)
+    verification.reinitialiserMemoire()
+    const { defi: apresRedemarrage } = await ouvrirDefi(guild, membre)
+    const faux = clic(guild, membre, apresRedemarrage.faux[0].id)
+    await verification.onClicVerification(bot, faux)
+    assert.ok(faux.mises[0].content.includes("Trop d'erreurs"), "la 3e erreur bloque malgré le redémarrage")
+})
+
+test("A4 : vérification refusée pendant un raid et quand le module Modération est coupé", async () => {
+    const G = "111111111111111122"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000022")
+    const { defi } = await ouvrirDefi(guild, membre)
+
+    // Raid en cours : ni ouverture, ni réponse (même à un défi ouvert avant le raid)
+    db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals) VALUES (?, ?, ?)", [G, Date.now(), 12])
+    const ouverture = clic(guild, membre, "verif:ouvrir")
+    await verification.onClicVerification(bot, ouverture)
+    assert.ok(texte(ouverture.reponses[0]).includes("suspendue pendant un raid"))
+    assert.ok(!ouverture.reponses[0].components, "aucun défi")
+    const reponse = clic(guild, membre, defi.bon.id)
+    await verification.onClicVerification(bot, reponse)
+    assert.strictEqual(membre.ajouts, 0, "aucun rôle pendant le raid")
+    assert.ok(texte(reponse.reponses[0]).includes("suspendue pendant un raid"))
+
+    // Raid levé : le même défi fonctionne
+    db.sqlRun("UPDATE raid_events SET ended_at = ? WHERE guild_id = ?", [Date.now(), G])
+    await verification.onClicVerification(bot, clic(guild, membre, defi.bon.id))
+    assert.strictEqual(membre.ajouts, 1)
+
+    // Module Modération coupé : refusé comme si la vérification n'était pas activée
+    const G2 = "111111111111111123"
+    const coupe = mkGuild(G2)
+    configurerServeur(coupe)
+    const autre = mkMembre(coupe, "700000000000000023")
+    const { defi: defi2 } = await ouvrirDefi(coupe, autre)
+    db.setModule(G2, "moderation", false)
+    const o2 = clic(coupe, autre, "verif:ouvrir")
+    await verification.onClicVerification(bot, o2)
+    assert.ok(texte(o2.reponses[0]).includes("pas activée"))
+    assert.ok(!o2.reponses[0].components)
+    const r2 = clic(coupe, autre, defi2.bon.id)
+    await verification.onClicVerification(bot, r2)
+    assert.strictEqual(autre.ajouts, 0)
+    assert.ok(texte(r2.reponses[0]).includes("pas activée"))
+})
+
+test("le défi est une grille de 8 boutons sur 2 lignes, tous distincts", async () => {
+    const G = "111111111111111124"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const { ouverture } = await ouvrirDefi(guild, mkMembre(guild, "700000000000000024"))
+    const lignes = ouverture.reponses[0].components
+    assert.deepStrictEqual(lignes.map(l => l.components.length), [4, 4])
+    const numeros = lignes.flatMap(l => l.components).map(b => b.data.custom_id.split(":")[4])
+    assert.deepStrictEqual(numeros, ["0", "1", "2", "3", "4", "5", "6", "7"])
 })

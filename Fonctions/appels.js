@@ -226,9 +226,13 @@ async function decider(bot, interaction) {
 
     const c = lireCase(guild.id, appel.case_id)
     let membre = null
-    if (accepter) {
-        if (!c) return refuser(interaction, t(interaction, "appel.sanction_effacee"))
-        // Même garde que /case annuler : l'auteur de la sanction ou un membre qui gère le serveur, et la hiérarchie actuelle
+    if (!c) {
+        // Sanction effacée : rien à annuler. Un refus reste possible, mais seulement pour qui gère le serveur
+        if (accepter) return refuser(interaction, t(interaction, "appel.sanction_effacee"))
+        if (!interaction.memberPermissions?.has(Discord.PermissionFlagsBits.ManageGuild)) return refuser(interaction, t(interaction, "appel.pas_auteur"))
+    } else {
+        // Accepter comme refuser : même garde que /case annuler (auteur de la sanction ou ManageGuild, puis hiérarchie actuelle),
+        // revérifiée ici à chaque clic
         const droit = await verifierDroitSurCible(interaction, { auteurId: c.moderator_id, userId: appel.user_id, cleAutre: "appel.pas_auteur" })
         if (droit.refus) return refuser(interaction, droit.refus)
         membre = droit.membre
@@ -275,7 +279,7 @@ async function decider(bot, interaction) {
 }
 
 module.exports = {
-    DELAI_APPEL, TAILLE_MAX, PREFIXE_OUVRIR, PREFIXE_ENVOI, PREFIXE_OUI, PREFIXE_NON,
-    lireAppel, appelDeCase, listerAppelsMembre, compterAppels, listerEnAttente, refusEligibilite, creerAppel, retirerAppel, trancher,
-    composantsAppel, mpSanction, ouvrirAppel, envoyerAppel, messageStaff, decider
+    PREFIXE_OUVRIR, PREFIXE_ENVOI, PREFIXE_OUI, PREFIXE_NON,
+    lireAppel, appelDeCase, listerAppelsMembre, compterAppels, listerEnAttente, creerAppel, trancher,
+    composantsAppel, mpSanction, ouvrirAppel, envoyerAppel, decider
 }

@@ -3,7 +3,7 @@ const db = require('../../Fonctions/db')
 const { exigerPremium } = require('../../Fonctions/premium')
 const { sendModLog } = require('../../Fonctions/logs')
 const { t } = require('../../Fonctions/i18n')
-const { roleValide, categorieUtilisable, champsDuType, ajouterChamp, retirerChamp, definirDelai, MAX_CHAMPS, SLA_MIN, SLA_MAX } = require('../../Fonctions/tickets')
+const { roleValide, categorieUtilisable, champsDuType, ajouterChamp, retirerChamp, retirerChampsDuType, definirDelai, MAX_CHAMPS, SLA_MIN, SLA_MAX } = require('../../Fonctions/tickets')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const P = Discord.PermissionFlagsBits
@@ -193,7 +193,7 @@ module.exports = {
             const type = numero ? db.getTicketType(guild.id, numero) : null
             if (!type) return message.reply({ content: t(message, "tk.ty_inconnu"), flags: EPHEMERAL })
             db.removeTicketType(guild.id, numero)
-            db.sqlRun("DELETE FROM ticket_fields WHERE guild_id = ? AND type_id = ?", [guild.id, numero])
+            retirerChampsDuType(guild.id, numero)
             await message.reply({ content: t(message, "tk.ty_retire", { nom: Discord.escapeMarkdown(type.nom) }), flags: EPHEMERAL })
             return sendModLog(message, { action: "config", details: `Type de ticket retiré : ${type.nom}` })
         }

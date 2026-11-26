@@ -1,7 +1,7 @@
 const Discord = require('discord.js')
 const db = require('./db')
 const { t } = require('./i18n')
-const { checkHierarchy, fetchMember, formatReason, auditReason } = require('./moderation')
+const { checkHierarchy, fetchMember, formatReason, auditReason, peutDonnerRole } = require('./moderation')
 const { sendModLog } = require('./logs')
 const { PERMISSIONS_MODERATION } = require('./config')
 const { roleValide } = require('./tickets')
@@ -46,9 +46,21 @@ const supprimerLigne = (guildId, userId) => db.sqlRun("DELETE FROM quarantines W
 // --- Rôle isolé ------------------------------------------------------------------------------------------------
 
 // Le bot peut-il donner ce rôle ? Il lui faut « Gérer les rôles » et un rôle plus haut.
-const botPeutDonner = (guild, role) => {
-    const moi = guild.members.me
-    return Boolean(moi?.permissions.has(Flags.ManageRoles) && role.comparePositionTo(moi.roles.highest) < 0)
+const botPeutDonner = (guild, role) => Boolean(guild.members.me) && peutDonnerRole(guild.members.me, role)
+
+// Le modérateur peut-il donner ce rôle ? Même règle que pour le bot : jamais plus de pouvoir par le bot que lui n'en a.
+// Renvoie un message d'erreur, ou null.
+function refusModerateur(interaction, role) {
+    const moderateur = interaction.member
+    if (peutDonnerRole(moderateur, role)) return null
+    const aLesDroits = moderateur.id === interaction.guild.ownerId || moderateur.permissions?.has(Flags.ManageRoles)
+    return t(interaction, aLesDroits ? "quar.role_superieur" : "quar.config_roles_membre")
+}
+
+// Salon dont une surcharge donne au rôle une permission dangereuse (le rôle serait alors dangereux dans ce salon), ou null.
+// Même idée que salonDangereux de rolesBoutons.js (non exportée, et ses permissions sont celles des rôles-boutons).
+function salonDangereux(guild, role) {
+    return guild.channels.cache.find(c => c.permissionOverwrites?.cache.get(role.id)?.allow.any(PERMISSIONS_DANGEREUSES)) ?? null
 }
 
 // Rôle isolé acceptable pour ce membre qui configure ? Renvoie un message d'erreur, ou null.
@@ -56,15 +68,13 @@ function refusRoleIsole(interaction, role) {
     const guild = interaction.guild
     if (!roleValide(guild, role.id)) return t(interaction, "quar.role_invalide")
     if (role.permissions.any(PERMISSIONS_DANGEREUSES)) return t(interaction, "quar.role_pouvoir")
-    // Jamais plus de pouvoir par le bot que celui qui configure : « Gérer les rôles » et un rôle strictement sous le sien
-    const proprietaire = interaction.user.id === guild.ownerId
-    if (!proprietaire && !interaction.memberPermissions?.has(Flags.ManageRoles)) return t(interaction, "quar.config_roles_membre")
-    if (!proprietaire && role.comparePositionTo(interaction.member.roles.highest) >= 0) return t(interaction, "quar.role_superieur")
+    const refus = refusModerateur(interaction, role)
+    if (refus) return refus
     if (!botPeutDonner(guild, role)) return t(interaction, "quar.role_bot")
     return null
 }
 
-// Choisit le rôle isolé. Renvoie { erreur } ou { inchange } ou { ok }.
+// Choisit le rôle isolé. Renvoie { erreur } ou { inchange } ou { ok, salon } (salon : surcharge dangereuse à signaler, ou null).
 async function changerRoleIsole(interaction, role) {
     const guild = interaction.guild
     const refus = refusRoleIsole(interaction, role)
@@ -75,12 +85,14 @@ async function changerRoleIsole(interaction, role) {
     if (ancien && listerQuarantaines(guild.id).length) return { erreur: t(interaction, "quar.config_en_cours") }
     setRoleIsole(guild.id, role.id)
     await sendModLog(interaction, { action: "config", details: `Rôle de quarantaine : ${ancien ? `<@&${ancien}>` : "aucun"} → ${role}` })
-    return { ok: true }
+    return { ok: true, salon: salonDangereux(guild, role) }
 }
 
 // --- Mettre en quarantaine -------------------------------------------------------------------------------------
 
-// Renvoie { erreur } (rien n'est enregistré) ou { numero, retires, gardes, prevenu }.
+// Renvoie { erreur } (rien n'est enregistré) ou { numero, retires, gardes, prevenu, salon }.
+// Si la ligne existe déjà mais que le membre n'a pas le rôle isolé (arrêt du bot entre l'écriture et roles.set,
+// ou rôle retiré à la main), l'isolement est repris au lieu d'être refusé.
 async function mettre(interaction, user, raisonSaisie) {
     const guild = interaction.guild
     const roleId = getRoleIsole(guild.id)
@@ -88,6 +100,8 @@ async function mettre(interaction, user, raisonSaisie) {
     if (!iso) return { erreur: t(interaction, "quar.pas_configure") }
     // Le rôle a pu changer depuis /quarantaine config : on revérifie ce que le bot va donner
     if (iso.permissions.any(PERMISSIONS_DANGEREUSES)) return { erreur: t(interaction, "quar.role_pouvoir") }
+    const refusMod = refusModerateur(interaction, iso)
+    if (refusMod) return { erreur: refusMod }
     if (!botPeutDonner(guild, iso)) return { erreur: t(interaction, "quar.role_bot") }
 
     const member = await fetchMember(guild, user.id)
@@ -95,7 +109,7 @@ async function mettre(interaction, user, raisonSaisie) {
     const erreur = checkHierarchy(interaction, member, "quarantaine")
     if (erreur) return { erreur }
     if (!member.manageable) return { erreur: t(interaction, "quar.pas_gerable") }
-    if (getQuarantine(guild.id, user.id)) return { erreur: t(interaction, "quar.deja") }
+    if (getQuarantine(guild.id, user.id) && member.roles.cache.has(iso.id)) return { erreur: t(interaction, "quar.deja") }
 
     // Retirables : ni @everyone, ni rôle d'intégration (booster, bot…), ni rôle au-dessus de celui du bot. Les autres restent.
     const plusHaut = guild.members.me.roles.highest
@@ -109,28 +123,41 @@ async function mettre(interaction, user, raisonSaisie) {
 
     // Sauvegarde AVANT le retrait : si le bot s'arrête entre les deux, les rôles ne sont pas perdus
     const raisonBrute = raisonSaisie?.trim() || "Aucune raison fournie"
-    const ecrit = db.transaction(() => {
-        if (getQuarantine(guild.id, user.id)) return false
+    let aSauver = retirables
+    const etat = db.transaction(() => {
+        const ligne = getQuarantine(guild.id, user.id)
+        if (ligne && member.roles.cache.has(iso.id)) return "deja"
+        if (ligne) {
+            // Reprise : on garde les rôles déjà sauvegardés (certains ont pu être retirés) et on ajoute ceux du membre
+            aSauver = [...new Set([...ligne.roles, ...retirables])]
+            db.sqlRun("UPDATE quarantines SET roles = ?, moderator_id = ?, reason = ? WHERE guild_id = ? AND user_id = ?",
+                [JSON.stringify(aSauver), interaction.user.id, raisonBrute, guild.id, user.id])
+            return "reprise"
+        }
         db.sqlRun("INSERT INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             [guild.id, user.id, JSON.stringify(retirables), interaction.user.id, raisonBrute, Date.now()])
-        return true
+        return "neuf"
     })
-    if (!ecrit) return { erreur: t(interaction, "quar.deja") }
+    if (etat === "deja") return { erreur: t(interaction, "quar.deja") }
 
     try {
         await member.roles.set([iso.id, ...gardes], auditReason(interaction, raisonSaisie))
     } catch (err) {
         console.error("Échec de la mise en quarantaine :", err.message)
-        // Le changement a pu partir à moitié : on tente de rendre les rôles, puis on oublie la sauvegarde
+        // Le changement a pu partir à moitié : on tente de rendre les rôles
         await member.roles.set(avant, auditReason(interaction, "Quarantaine annulée (échec)")).catch(() => {})
-        supprimerLigne(guild.id, user.id)
-        return { erreur: t(interaction, "quar.echec") }
+        // Une reprise garde sa sauvegarde (elle existait déjà) ; un enregistrement neuf est oublié
+        if (etat === "neuf") {
+            supprimerLigne(guild.id, user.id)
+            return { erreur: t(interaction, "quar.echec") }
+        }
+        return { erreur: t(interaction, "quar.echec_reprise") }
     }
 
     const numero = db.addCase(guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "quarantaine", reason: raisonSaisie })
-    await sendModLog(interaction, { action: "quarantaine", cible: user, raison: raisonSaisie, details: `${retirables.length} rôle(s) sauvegardé(s), ${gardes.length} conservé(s)` })
+    await sendModLog(interaction, { action: "quarantaine", cible: user, raison: raisonSaisie, details: `${aSauver.length} rôle(s) sauvegardé(s), ${gardes.length} conservé(s)${etat === "reprise" ? " (isolement repris : la sauvegarde existait déjà)" : ""}` })
     const prevenu = await user.send(t(guild, "quar.mp", { serveur: guild.name, reason: formatReason(raisonSaisie) })).then(() => true).catch(() => false)
-    return { numero, retires: retirables.length, gardes: gardes.length, prevenu }
+    return { numero, retires: aSauver.length, gardes: gardes.length, prevenu, salon: salonDangereux(guild, iso) }
 }
 
 const MAX_RAISON = 400
