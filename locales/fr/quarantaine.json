@@ -45,7 +45,7 @@
   "quar.pas_gerable": "Je ne peux pas modifier les rôles de ce membre (son rôle est supérieur ou égal au mien).",
   "quar.deja": "Ce membre est déjà en quarantaine.",
   "quar.echec_reprise": "Discord a refusé le changement de rôles : la quarantaine reste enregistrée, vous pouvez réessayer.",
-  "quar.salon_dangereux": "Attention : une permission propre au salon {salon} donne au rôle isolé un pouvoir dangereux dans ce salon. Retirez-la.",
+  "quar.salon_dangereux": "Refusé : une permission propre au salon {salon} donne au rôle isolé un pouvoir dangereux dans ce salon. Retirez-la d'abord.",
   "quar.echec": "Discord a refusé le changement de rôles : le membre n'est pas en quarantaine et rien n'a été enregistré.",
   "quar.mise": "{moderateur} a mis {user} en quarantaine : {n} rôle(s) sauvegardé(s), {gardes} conservé(s).{suite}",
   "quar.mp_ok": " Le membre a été prévenu en message privé.",

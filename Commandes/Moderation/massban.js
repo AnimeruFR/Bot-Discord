@@ -3,7 +3,7 @@ const db = require('../../Fonctions/db')
 const { refuser } = require('../../Fonctions/erreurs')
 const { t } = require('../../Fonctions/i18n')
 const { sendModLog } = require('../../Fonctions/logs')
-const { checkHierarchy, auditReason, formatReason } = require('../../Fonctions/moderation')
+const { estAuDessus, auditReason, formatReason } = require('../../Fonctions/moderation')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -35,7 +35,8 @@ async function recentsDepuis(guild, minutes, maintenant = Date.now()) {
 }
 
 // Trie les cibles : { cibles (ids à bannir), exclus: { soi, bot, proprietaire, hierarchie } }.
-// Pour ceux qui sont sur le serveur : hiérarchie du modérateur (checkHierarchy) et du bot (bannable).
+// Pour ceux qui sont sur le serveur : ils doivent être strictement sous le modérateur et sous le bot (estAuDessus).
+// Un identifiant qui n'est pas membre du serveur n'a pas de hiérarchie : il reste bannissable.
 // Lève une erreur si les membres ne peuvent pas être lus : sans cela, la hiérarchie ne serait pas vérifiée.
 async function evaluer(interaction, ids) {
     const { guild } = interaction
@@ -57,7 +58,7 @@ async function evaluer(interaction, ids) {
     const cibles = []
     for (const id of candidats) {
         const membre = presents.get(id)
-        if (membre && (checkHierarchy(interaction, membre, "ban") || !membre.bannable)) exclus.hierarchie++
+        if (membre && !(estAuDessus(interaction.member, membre) && estAuDessus(guild.members.me, membre))) exclus.hierarchie++
         else cibles.push(id)
     }
     return { cibles, exclus }

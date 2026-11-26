@@ -130,7 +130,7 @@ test("config : rôle dangereux, supérieur, @everyone, intégration ou hors de p
 test("config : enregistrée, puis changement refusé tant que des membres sont en quarantaine", async () => {
     const guild = fauxServeur([...defs(), ["autre", 2]])
     const i = interaction(guild)
-    assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { ok: true, salon: null })
+    assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { ok: true })
     assert.strictEqual(q.getRoleIsole(guild.id), R.iso)
     assert.deepStrictEqual(await q.changerRoleIsole(i, guild.roles.cache.get(R.iso)), { inchange: true })
     const membre = fauxMembre(guild, [R.a])
@@ -215,20 +215,27 @@ test("rôle isolé au-dessus du modérateur : refusé à la config et à la mise
     assert.match((await q.mettre(interaction(guild, { position: 20 }), autre.user, null)).erreur, /Je ne peux pas donner ce rôle/)
 })
 
-test("surcharge de salon dangereuse sur le rôle isolé : signalée à la config et à la mise en quarantaine", async () => {
+test("surcharge de salon dangereuse sur le rôle isolé : refusée à la config et à la mise en quarantaine", async () => {
     const guild = fauxServeur(defs())
     const salon = { id: nouvelId(), permissionOverwrites: { cache: new Discord.Collection([[R.iso, { allow: new Discord.PermissionsBitField(Flags.ManageMessages) }]]) } }
     guild.channels.cache.set(salon.id, salon)
     const i = interaction(guild)
     const config = await q.changerRoleIsole(i, guild.roles.cache.get(R.iso))
-    assert.ok(config.ok)
-    assert.strictEqual(config.salon.id, salon.id, "salon signalé à la config")
-    const r = await q.mettre(i, fauxMembre(guild, [R.a]).user, null)
-    assert.ok(!r.erreur, r.erreur)
-    assert.strictEqual(r.salon.id, salon.id, "salon signalé à la mise en quarantaine")
-    // Surcharge sans permission dangereuse : rien à signaler
+    assert.match(config.erreur, /Refusé/)
+    assert.ok(config.erreur.includes(`<#${salon.id}>`), "le salon est nommé")
+    assert.strictEqual(q.getRoleIsole(guild.id), null, "rien n'est enregistré")
+
+    // Rôle déjà configuré, surcharge ajoutée depuis : la mise en quarantaine est refusée et rien n'est touché
+    db.sqlRun("INSERT INTO quarantine_config (guild_id, role_id) VALUES (?, ?)", [guild.id, R.iso])
+    const membre = fauxMembre(guild, [R.a])
+    const r = await q.mettre(i, membre.user, null)
+    assert.match(r.erreur, /Refusé/)
+    assert.strictEqual(membre.appels.length, 0, "aucun rôle touché")
+    assert.strictEqual(q.getQuarantine(guild.id, membre.id), null, "rien d'enregistré")
+
+    // Surcharge sans permission dangereuse : acceptée
     salon.permissionOverwrites.cache.set(R.iso, { allow: new Discord.PermissionsBitField(Flags.ViewChannel) })
-    assert.strictEqual((await q.mettre(i, fauxMembre(guild, [R.a]).user, null)).salon, null)
+    assert.ok(!(await q.mettre(i, membre.user, null)).erreur)
 })
 
 test("mettre : reprise après un arrêt entre l'écriture et roles.set (ligne sans rôle isolé)", async () => {

@@ -47,7 +47,7 @@ module.exports = {
         }
 
         if (action === "activer") {
-            if (!activerFiltre(guild.id)) return refuser(message, t(message, "pseudo.deja_actif"))
+            if (!activerFiltre(guild.id, message.user.id)) return refuser(message, t(message, "pseudo.deja_actif"))
             await sendModLog(message, { action: "config", details: "Filtre de pseudos : activé" })
             const manque = guild.members.me?.permissions.has(Flags.ManageNicknames) ? "" : `\n${t(message, "pseudo.bot_perm")}`
             return message.reply({ content: t(message, "pseudo.active") + manque, flags: EPHEMERAL })
@@ -69,7 +69,7 @@ module.exports = {
         const mot = args.getString("mot")?.trim()
         if (!mot) return refuser(message, t(message, "pseudo.mot_requis"))
         if (action === "ajouter") {
-            const r = ajouterMot(guild.id, mot)
+            const r = ajouterMot(guild.id, mot, message.user.id)
             if (r !== "ok") return refuser(message, t(message, `pseudo.refus_${r}`, { max: MAX_MOTS, longueur: MAX_LONGUEUR_MOT }))
             await sendModLog(message, { action: "config", details: `Filtre de pseudos : mot interdit ajouté (\`${mot.replace(/`/g, "")}\`)` })
             return message.reply({ content: t(message, "pseudo.ajoute", { mot: mot.replace(/`/g, "") }), flags: EPHEMERAL })

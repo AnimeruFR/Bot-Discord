@@ -9,7 +9,7 @@
   "verif.expire": "Ce défi n'est plus valable. Cliquez de nouveau sur le bouton du panneau de vérification.",
   "verif.pas_le_votre": "Ce défi appartient à un autre membre.",
   "verif.encours": "Votre vérification est en cours, un instant.",
-  "verif.raid": "Vérification suspendue pendant un raid : réessayez dans quelques minutes, quand un modérateur aura levé l'alerte.",
+  "verif.raid": "Le serveur est en mode raid : la vérification est suspendue et reprendra à la levée du mode raid. Réessayez plus tard.",
   "verif.config_role": "Vous ne pouvez pas donner ce rôle : il vous faut « Gérer les rôles » et un rôle placé au-dessus de lui.",
   "verif.bot_roles": "Je ne peux pas donner ce rôle : il me faut la permission « Gérer les rôles » et un rôle placé au-dessus de lui.",
   "verif.panneau_titre": "Vérification",

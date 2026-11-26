@@ -8,7 +8,7 @@ const { sendModLog, envoyerLog } = require('./logs')
 const { refusRole } = require('./rolesBoutons')
 const { getQuarantine } = require('./quarantaine')
 const { peutDonnerRole } = require('./moderation')
-const { raidEnCours } = require('./raid')
+const { raidEnCours, leverSiExpire, DUREE_RAID_MAX_MS } = require('./raid')
 const { refusSalonLogs } = require('./config')
 
 // Vérification à l'arrivée (idée #4) : un panneau avec un bouton « Je ne suis pas un robot », puis un défi en
@@ -17,7 +17,7 @@ const { refusSalonLogs } = require('./config')
 //
 // LIMITE : ce défi se lit comme du texte (l'énoncé nomme l'emoji à cliquer). Un script qui lit le message et clique
 // le bon bouton le réussit à tous les coups. La grille de 8 boutons, les 3 erreurs avant un blocage de 10 minutes
-// (gardé en base, donc encore là après un redémarrage) et la suspension pendant un raid freinent les clics au hasard
+// (gardé en base, donc encore là après un redémarrage) et la suspension pendant un raid verrouillé freinent les clics au hasard
 // et les arrivées en masse ; ce n'est pas un vrai CAPTCHA et cela n'arrête pas un attaquant outillé.
 //
 // customId (préfixe « verif: », composant public) :
@@ -227,10 +227,16 @@ function noterErreur(guildId, userId) {
 }
 
 // La vérification est-elle utilisable maintenant ? Renvoie la clé du message de refus, ou null.
-// Module Modération coupé : comme si elle n'était pas activée. Raid en cours : suspendue, un script ne doit pas en profiter.
-function refusEtat(guildId) {
-    if (!moduleActif(guildId, "moderation")) return "verif.inactif"
-    if (raidEnCours(guildId)) return "verif.raid"
+// Module Modération coupé : comme si elle n'était pas activée.
+// Suspendue seulement pendant un raid qui a réellement verrouillé le serveur (niveau de vérification relevé ou invitations
+// coupées) : en « alerte seule », ou sans permission pour verrouiller, rien n'est bloqué et la vérification reste ouverte.
+// Un raid ouvert depuis plus de DUREE_RAID_MAX_MS est ignoré (levée automatique perdue, bot redémarré) et sa levée est demandée.
+function refusEtat(guild) {
+    if (!moduleActif(guild.id, "moderation")) return "verif.inactif"
+    leverSiExpire(guild)?.catch?.(() => {})
+    const raid = raidEnCours(guild.id)
+    if (!raid || Date.now() - raid.started_at >= DUREE_RAID_MAX_MS) return null
+    if (raid.previous_level !== null || raid.invites_paused === 1) return "verif.raid"
     return null
 }
 
@@ -246,7 +252,7 @@ async function ouvrir(bot, interaction) {
     const guild = interaction.guild
     const config = lireConfig(guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
-    const etat = refusEtat(guild.id)
+    const etat = refusEtat(guild)
     if (etat) return repondreEph(interaction, etat)
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
     if (getQuarantine(guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")
@@ -312,7 +318,7 @@ async function repondre(bot, interaction, { userId, jeton, numero }) {
     if (userId !== interaction.user.id) return repondreEph(interaction, "verif.pas_le_votre")
     const config = lireConfig(interaction.guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
-    const etat = refusEtat(interaction.guild.id)
+    const etat = refusEtat(interaction.guild)
     if (etat) return repondreEph(interaction, etat)
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
     if (getQuarantine(interaction.guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")

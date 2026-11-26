@@ -30,7 +30,15 @@ function mkGuild(id, { botPerms = Flags.ManageRoles | Flags.ManageNicknames } = 
         id, ownerId: PROPRIETAIRE, verifie, name: "Serveur test",
         roles: { cache: new Discord.Collection([[verifie.id, verifie]]), everyone: { id } },
         channels: { cache: new Discord.Collection() },
-        members: { me: { id: "900000000000000099", permissions: new Discord.PermissionsBitField(botPerms), roles: { highest: mkRole("900000000000000009", 10) } } }
+        members: {
+            me: { id: "900000000000000099", permissions: new Discord.PermissionsBitField(botPerms), roles: { highest: mkRole("900000000000000009", 10) } },
+            cache: new Discord.Collection(),
+            fetch: async ({ user }) => {
+                const membre = guild.members.cache.get(user)
+                if (!membre) throw Object.assign(new Error("Unknown Member"), { code: Discord.RESTJSONErrorCodes.UnknownMember })
+                return membre
+            }
+        }
     }
     guild.members.me.guild = guild
     verifie.guild = guild
@@ -50,7 +58,15 @@ function mkMembre(guild, id, { roles = [], displayName = "Bob", position = 1, pe
         send: async texte => { membre.envoyes.push(texte) },
         toString: () => `<@${id}>`
     }
+    guild.members.cache.set(id, membre)
     return membre
+}
+
+// Active le filtre de pseudos au nom d'un membre du serveur (position 20 : au-dessus des membres ordinaires)
+function activerFiltre(guild, { position = 20, id = "700000000000000900" } = {}) {
+    const auteur = mkMembre(guild, id, { position })
+    pseudos.activerFiltre(guild.id, auteur.id)
+    return auteur
 }
 
 // Faux clic de bouton d'un membre sur le serveur
@@ -461,7 +477,7 @@ test("corrigerPseudo : renomme une fois, sans boucle avec guildMemberUpdate", as
     assert.strictEqual(await pseudos.corrigerPseudo(membre), null, "filtre non activé : rien")
     assert.strictEqual(membre.surnoms.length, 0)
 
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
     assert.deepStrictEqual(await pseudos.corrigerPseudo(membre), { avant: "!!Bob", apres: "Bob" })
     assert.deepStrictEqual(membre.surnoms, ["Bob"])
     // Le renommage redéclenche guildMemberUpdate : l'ancien pseudo est « !!Bob », le nouveau « Bob »
@@ -483,7 +499,7 @@ test("corrigerPseudo : renomme une fois, sans boucle avec guildMemberUpdate", as
 test("corrigerPseudo : pseudo vide, bots, propriétaire, membres non gérables et bot sans permission ignorés", async () => {
     const G = "222222222222222203"
     const guild = mkGuild(G)
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
 
     const vide = mkMembre(guild, "800000000000000002", { displayName: "...." })
     assert.deepStrictEqual(await pseudos.corrigerPseudo(vide), { avant: "....", apres: "Membre 0002" })
@@ -498,7 +514,7 @@ test("corrigerPseudo : pseudo vide, bots, propriétaire, membres non gérables e
     }
 
     const sansPermission = mkGuild("222222222222222204", { botPerms: Flags.ManageRoles })
-    pseudos.activerFiltre(sansPermission.id)
+    activerFiltre(sansPermission)
     const m = mkMembre(sansPermission, "800000000000000005", { displayName: "!Eve" })
     assert.strictEqual(await pseudos.corrigerPseudo(m), null)
     assert.strictEqual(m.surnoms.length, 0, "sans « Gérer les pseudos », rien n'est tenté")
@@ -511,24 +527,25 @@ test("corrigerPseudo : pseudo vide, bots, propriétaire, membres non gérables e
     // Module Modération coupé : le filtre ne fait rien
     const G2 = "222222222222222205"
     const coupe = mkGuild(G2)
-    pseudos.activerFiltre(G2)
+    activerFiltre(coupe)
     db.setModule(G2, "moderation", false)
     const c = mkMembre(coupe, "800000000000000007", { displayName: "!Max" })
     assert.strictEqual(await pseudos.corrigerPseudo(c), null)
 })
 
-test("garde-fou : au-delà de 3 renommages en 10 minutes, le pseudo corrigé devient le pseudo neutre", async () => {
+test("garde-fou : au-delà de 3 renommages en 10 minutes, le bot ne renomme plus", async () => {
     const G = "222222222222222206"
     const guild = mkGuild(G)
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
     const membre = mkMembre(guild, "800000000000000008", { displayName: "!A" })
     // Un autre bot ou le membre remet sans cesse un pseudo interdit
     const apres = []
     for (let n = 0; n < 6; n++) {
         membre.displayName = "!Bob"
-        apres.push((await pseudos.corrigerPseudo(membre)).apres)
+        apres.push((await pseudos.corrigerPseudo(membre))?.apres ?? null)
     }
-    assert.deepStrictEqual(apres, ["Bob", "Bob", "Bob", "Membre 0008", "Membre 0008", "Membre 0008"])
+    assert.deepStrictEqual(apres, ["Bob", "Bob", "Bob", null, null, null])
+    assert.strictEqual(membre.surnoms.length, 3, "plus aucun renommage au-delà du plafond")
 })
 
 // --- Tribunal phase 2 : pouvoir du bot, persistance, raid ---
@@ -536,7 +553,7 @@ test("garde-fou : au-delà de 3 renommages en 10 minutes, le pseudo corrigé dev
 test("S1 : un membre staff (permission de modération) n'est jamais renommé, un membre ordinaire l'est", async () => {
     const G = "222222222222222210"
     const guild = mkGuild(G)
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
     const droits = [Flags.ManageNicknames, Flags.ModerateMembers, Flags.KickMembers, Flags.BanMembers, Flags.ManageGuild, Flags.Administrator]
     for (const [n, droit] of droits.entries()) {
         const staff = mkMembre(guild, `80000000000000002${n}`, { displayName: "!Staff", perms: droit })
@@ -561,7 +578,7 @@ test("S8 : le log d'une correction ne recopie jamais l'ancien pseudo, il donne l
     const G = "222222222222222211"
     const guild = mkGuild(G)
     const envois = salonDeLogs(guild)
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
     pseudos.ajouterMot(G, "insulte")
     const membre = mkMembre(guild, "800000000000000040", { displayName: "!!SecretInsulte" })
     assert.ok(await pseudos.corrigerPseudo(membre))
@@ -572,11 +589,11 @@ test("S8 : le log d'une correction ne recopie jamais l'ancien pseudo, il donne l
     assert.ok(log.includes("hoist") && log.includes("mot interdit"), "motifs")
 })
 
-test("S2 : passé le plafond, le pseudo neutre est posé et signalé, puis la correction continue", async () => {
+test("S2 : passé le plafond, le bot ne renomme plus et écrit un seul log pour la fenêtre", async () => {
     const G = "222222222222222212"
     const guild = mkGuild(G)
     const envois = salonDeLogs(guild)
-    pseudos.activerFiltre(G)
+    activerFiltre(guild)
     const membre = mkMembre(guild, "800000000000000050", { displayName: "!A" })
     // Un autre bot remet sans cesse un pseudo interdit
     for (let n = 0; n < 3; n++) {
@@ -585,17 +602,71 @@ test("S2 : passé le plafond, le pseudo neutre est posé et signalé, puis la co
     }
     assert.strictEqual(envois.length, 3)
     membre.displayName = "!Bob"
-    const r = await pseudos.corrigerPseudo(membre)
-    assert.strictEqual(r.apres, "Membre 0050", "pseudo neutre")
-    assert.strictEqual(r.plafond, true)
-    assert.strictEqual(membre.displayName, "Membre 0050", "le pseudo interdit ne reste pas")
+    assert.strictEqual(await pseudos.corrigerPseudo(membre), null, "plafond atteint : pas de renommage")
+    assert.strictEqual(membre.displayName, "!Bob", "le pseudo est laissé tel quel")
+    assert.strictEqual(membre.surnoms.length, 3)
     assert.strictEqual(envois.length, 4, "un log part")
-    assert.ok(texteEmbed(envois.slice(3)).includes("neutre"))
-    // Il continue : le membre remet un pseudo interdit, il est encore remplacé (un seul log par fenêtre)
+    assert.ok(texteEmbed(envois.slice(3)).includes("ne le renomme plus"))
+    // Le membre remet encore un pseudo interdit : toujours aucun renommage, et pas de log en double
     membre.displayName = "!Encore"
-    assert.strictEqual((await pseudos.corrigerPseudo(membre)).apres, "Membre 0050")
-    assert.strictEqual(membre.displayName, "Membre 0050")
+    assert.strictEqual(await pseudos.corrigerPseudo(membre), null)
+    assert.strictEqual(membre.displayName, "!Encore")
+    assert.strictEqual(membre.surnoms.length, 3)
     assert.strictEqual(envois.length, 4, "pas de log en double")
+})
+
+test("S1 : le bot ne renomme pas un membre au même niveau ou au-dessus de celui qui a activé le filtre", async () => {
+    const G = "222222222222222214"
+    const guild = mkGuild(G)
+    const envois = salonDeLogs(guild)
+    // L'auteur est en position 5 : sous le bot (10), au-dessus des membres en position 1
+    activerFiltre(guild, { position: 5 })
+    const egal = mkMembre(guild, "800000000000000060", { displayName: "!Egal", position: 5 })
+    const dessus = mkMembre(guild, "800000000000000061", { displayName: "!Dessus", position: 7 })
+    const dessous = mkMembre(guild, "800000000000000062", { displayName: "!Dessous", position: 1 })
+    for (const m of [egal, dessus]) {
+        assert.strictEqual(await pseudos.corrigerPseudo(m), null)
+        assert.strictEqual(m.surnoms.length, 0, "jamais renommé")
+    }
+    assert.deepStrictEqual(await pseudos.corrigerPseudo(dessous), { avant: "!Dessous", apres: "Dessous" })
+    assert.strictEqual(envois.length, 1, "seule la correction réussie est loguée")
+
+    // Un nouvel ajout de mot par un autre auteur change la limite
+    const haut = mkMembre(guild, "700000000000000901", { position: 8 })
+    assert.strictEqual(pseudos.ajouterMot(G, "insulte", haut.id), "ok")
+    assert.strictEqual(pseudos.lireFiltre(G).configuredBy, haut.id)
+    assert.deepStrictEqual(await pseudos.corrigerPseudo(dessus), { avant: "!Dessus", apres: "Dessus" }, "position 7 < 8")
+
+    // Le propriétaire n'a pas de limite (hors staff, que le bot ne renomme jamais)
+    const G2 = "222222222222222215"
+    const g2 = mkGuild(G2)
+    const proprio = mkMembre(g2, PROPRIETAIRE)
+    pseudos.activerFiltre(G2, proprio.id)
+    const cible = mkMembre(g2, "800000000000000063", { displayName: "!Cible", position: 9 })
+    assert.deepStrictEqual(await pseudos.corrigerPseudo(cible), { avant: "!Cible", apres: "Cible" })
+})
+
+test("S1 : auteur parti du serveur ou inconnu : personne n'est renommé, un seul log par jour", async () => {
+    const G = "222222222222222216"
+    const guild = mkGuild(G)
+    const envois = salonDeLogs(guild)
+    const auteur = activerFiltre(guild)
+    guild.members.cache.delete(auteur.id) // l'auteur a quitté le serveur
+    const membre = mkMembre(guild, "800000000000000064", { displayName: "!Eve" })
+    for (let n = 0; n < 3; n++) assert.strictEqual(await pseudos.corrigerPseudo(membre), null)
+    assert.strictEqual(membre.surnoms.length, 0)
+    assert.strictEqual(envois.length, 1, "un seul log")
+    assert.ok(texteEmbed(envois).includes("en pause"))
+
+    // Filtre sans auteur (créé avant la migration) : même résultat, sans nouveau log dans la journée
+    db.sqlRun("UPDATE nick_filter SET configured_by = NULL WHERE guild_id = ?", [G])
+    assert.strictEqual(await pseudos.corrigerPseudo(membre), null)
+    assert.strictEqual(membre.surnoms.length, 0)
+    assert.strictEqual(envois.length, 1)
+
+    // Un nouvel auteur réactive le filtre
+    activerFiltre(guild, { id: "700000000000000902" })
+    assert.deepStrictEqual(await pseudos.corrigerPseudo(membre), { avant: "!Eve", apres: "Eve" })
 })
 
 test("/pseudos : activer, ajouter et retirer demandent « Gérer le serveur » en plus de « Gérer les pseudos »", async () => {
@@ -676,23 +747,24 @@ test("S4 : les erreurs sont comptées en base et survivent à un redémarrage (2
     assert.ok(faux.mises[0].content.includes("Trop d'erreurs"), "la 3e erreur bloque malgré le redémarrage")
 })
 
-test("A4 : vérification refusée pendant un raid et quand le module Modération est coupé", async () => {
+test("A4 : vérification refusée pendant un raid qui a verrouillé le serveur et quand le module Modération est coupé", async () => {
     const G = "111111111111111122"
     const guild = mkGuild(G)
     configurerServeur(guild)
     const membre = mkMembre(guild, "700000000000000022")
     const { defi } = await ouvrirDefi(guild, membre)
 
-    // Raid en cours : ni ouverture, ni réponse (même à un défi ouvert avant le raid)
-    db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals) VALUES (?, ?, ?)", [G, Date.now(), 12])
+    // Raid verrouillé en cours : ni ouverture, ni réponse (même à un défi ouvert avant le raid)
+    db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals, previous_level) VALUES (?, ?, ?, ?)", [G, Date.now(), 12, 1])
     const ouverture = clic(guild, membre, "verif:ouvrir")
     await verification.onClicVerification(bot, ouverture)
-    assert.ok(texte(ouverture.reponses[0]).includes("suspendue pendant un raid"))
+    assert.ok(texte(ouverture.reponses[0]).includes("mode raid"))
+    assert.ok(texte(ouverture.reponses[0]).includes("reprendra"), "dit quand elle reprend")
     assert.ok(!ouverture.reponses[0].components, "aucun défi")
     const reponse = clic(guild, membre, defi.bon.id)
     await verification.onClicVerification(bot, reponse)
     assert.strictEqual(membre.ajouts, 0, "aucun rôle pendant le raid")
-    assert.ok(texte(reponse.reponses[0]).includes("suspendue pendant un raid"))
+    assert.ok(texte(reponse.reponses[0]).includes("mode raid"))
 
     // Raid levé : le même défi fonctionne
     db.sqlRun("UPDATE raid_events SET ended_at = ? WHERE guild_id = ?", [Date.now(), G])
@@ -714,6 +786,63 @@ test("A4 : vérification refusée pendant un raid et quand le module Modération
     await verification.onClicVerification(bot, r2)
     assert.strictEqual(autre.ajouts, 0)
     assert.ok(texte(r2.reponses[0]).includes("pas activée"))
+})
+
+test("C1 : un raid en alerte seule ou sans verrouillage ne suspend pas la vérification, un verrouillage la suspend", async () => {
+    const G = "111111111111111125"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000025")
+    const ouvre = async () => {
+        const o = clic(guild, membre, "verif:ouvrir")
+        await verification.onClicVerification(bot, o)
+        return o.reponses[0]
+    }
+
+    // Alerte seule (ou pas de permission pour verrouiller) : ni niveau relevé, ni invitations coupées
+    db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals) VALUES (?, ?, ?)", [G, Date.now(), 12])
+    assert.ok((await ouvre()).components, "un défi est proposé pendant une alerte seule")
+
+    // Le même raid a verrouillé les invitations : vérification suspendue
+    db.sqlRun("UPDATE raid_events SET invites_paused = 1 WHERE guild_id = ?", [G])
+    const suspendu = await ouvre()
+    assert.ok(!suspendu.components && texte(suspendu).includes("mode raid"))
+    db.sqlRun("UPDATE raid_events SET invites_paused = 0, previous_level = 2 WHERE guild_id = ?", [G])
+    assert.ok(!(await ouvre()).components, "niveau relevé : suspendue aussi")
+})
+
+test("C2 : un raid expiré (levée automatique perdue après un redémarrage) ne suspend plus la vérification", async () => {
+    const G = "111111111111111126"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000026")
+    const vieux = Date.now() - 2 * 60 * 60 * 1000
+    db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals, previous_level, invites_paused) VALUES (?, ?, ?, ?, ?)", [G, vieux, 12, 1, 1])
+    verification.reinitialiserMemoire() // redémarrage : plus de minuteur de levée
+    const { ouverture, defi } = await ouvrirDefi(guild, membre)
+    assert.ok(ouverture.reponses[0].components, "défi proposé malgré le raid resté ouvert en base")
+    await verification.onClicVerification(bot, clic(guild, membre, defi.bon.id))
+    assert.strictEqual(membre.ajouts, 1, "le rôle est donné")
+})
+
+test("C6 : 3 erreurs puis un double clic : aucun rôle donné et le blocage reste actif", async () => {
+    const G = "111111111111111127"
+    const guild = mkGuild(G)
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000027")
+    let { defi } = await ouvrirDefi(guild, membre)
+    const bon = defi.bon.id
+    for (let essai = 1; essai <= 3; essai++) {
+        const faux = clic(guild, membre, defi.faux[0].id)
+        await verification.onClicVerification(bot, faux)
+        if (essai < 3) defi = lireDefi(faux.mises[0])
+    }
+    const clics = [clic(guild, membre, bon), clic(guild, membre, defi.bon.id)]
+    await Promise.all(clics.map(c => verification.onClicVerification(bot, c)))
+    assert.strictEqual(membre.ajouts, 0, "aucun rôle donné")
+    assert.strictEqual(membre.roles.cache.has(ID_ROLE), false)
+    assert.ok(db.sqlAll("SELECT blocked_until FROM verification_attempts WHERE guild_id = ? AND user_id = ?", [G, membre.id])[0].blocked_until > Date.now(), "blocage actif")
+    for (const c of clics) assert.ok(c.reponses.length === 1 && !c.reponses[0].components, "refus sans nouveau défi")
 })
 
 test("le défi est une grille de 8 boutons sur 2 lignes, tous distincts", async () => {

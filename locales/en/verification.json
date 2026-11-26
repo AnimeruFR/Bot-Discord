@@ -9,7 +9,7 @@
   "verif.expire": "This challenge is no longer valid. Click the button on the verification panel again.",
   "verif.pas_le_votre": "This challenge belongs to another member.",
   "verif.encours": "Your verification is in progress, one moment.",
-  "verif.raid": "Verification is suspended during a raid: try again in a few minutes, once a moderator has lifted the alert.",
+  "verif.raid": "The server is in raid mode: verification is suspended and will resume once raid mode is lifted. Try again later.",
   "verif.config_role": "You can't give this role: you need \"Manage Roles\" and a role placed above it.",
   "verif.bot_roles": "I can't give this role: I need the \"Manage Roles\" permission and a role placed above it.",
   "verif.panneau_titre": "Verification",

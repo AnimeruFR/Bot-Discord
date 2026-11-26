@@ -63,6 +63,12 @@ function salonDangereux(guild, role) {
     return guild.channels.cache.find(c => c.permissionOverwrites?.cache.get(role.id)?.allow.any(PERMISSIONS_DANGEREUSES)) ?? null
 }
 
+// Message de refus si une surcharge de salon donne un pouvoir dangereux au rôle isolé, ou null
+function refusSalon(interaction, role) {
+    const salon = salonDangereux(interaction.guild, role)
+    return salon ? t(interaction, "quar.salon_dangereux", { salon: `<#${salon.id}>` }) : null
+}
+
 // Rôle isolé acceptable pour ce membre qui configure ? Renvoie un message d'erreur, ou null.
 function refusRoleIsole(interaction, role) {
     const guild = interaction.guild
@@ -71,10 +77,10 @@ function refusRoleIsole(interaction, role) {
     const refus = refusModerateur(interaction, role)
     if (refus) return refus
     if (!botPeutDonner(guild, role)) return t(interaction, "quar.role_bot")
-    return null
+    return refusSalon(interaction, role)
 }
 
-// Choisit le rôle isolé. Renvoie { erreur } ou { inchange } ou { ok, salon } (salon : surcharge dangereuse à signaler, ou null).
+// Choisit le rôle isolé. Renvoie { erreur } ou { inchange } ou { ok }.
 async function changerRoleIsole(interaction, role) {
     const guild = interaction.guild
     const refus = refusRoleIsole(interaction, role)
@@ -85,12 +91,12 @@ async function changerRoleIsole(interaction, role) {
     if (ancien && listerQuarantaines(guild.id).length) return { erreur: t(interaction, "quar.config_en_cours") }
     setRoleIsole(guild.id, role.id)
     await sendModLog(interaction, { action: "config", details: `Rôle de quarantaine : ${ancien ? `<@&${ancien}>` : "aucun"} → ${role}` })
-    return { ok: true, salon: salonDangereux(guild, role) }
+    return { ok: true }
 }
 
 // --- Mettre en quarantaine -------------------------------------------------------------------------------------
 
-// Renvoie { erreur } (rien n'est enregistré) ou { numero, retires, gardes, prevenu, salon }.
+// Renvoie { erreur } (rien n'est enregistré) ou { numero, retires, gardes, prevenu }.
 // Si la ligne existe déjà mais que le membre n'a pas le rôle isolé (arrêt du bot entre l'écriture et roles.set,
 // ou rôle retiré à la main), l'isolement est repris au lieu d'être refusé.
 async function mettre(interaction, user, raisonSaisie) {
@@ -103,6 +109,8 @@ async function mettre(interaction, user, raisonSaisie) {
     const refusMod = refusModerateur(interaction, iso)
     if (refusMod) return { erreur: refusMod }
     if (!botPeutDonner(guild, iso)) return { erreur: t(interaction, "quar.role_bot") }
+    const refusDuSalon = refusSalon(interaction, iso)
+    if (refusDuSalon) return { erreur: refusDuSalon }
 
     const member = await fetchMember(guild, user.id)
     if (!member) return { erreur: t(interaction, "mod.absent") }
@@ -157,7 +165,7 @@ async function mettre(interaction, user, raisonSaisie) {
     const numero = db.addCase(guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "quarantaine", reason: raisonSaisie })
     await sendModLog(interaction, { action: "quarantaine", cible: user, raison: raisonSaisie, details: `${aSauver.length} rôle(s) sauvegardé(s), ${gardes.length} conservé(s)${etat === "reprise" ? " (isolement repris : la sauvegarde existait déjà)" : ""}` })
     const prevenu = await user.send(t(guild, "quar.mp", { serveur: guild.name, reason: formatReason(raisonSaisie) })).then(() => true).catch(() => false)
-    return { numero, retires: aSauver.length, gardes: gardes.length, prevenu, salon: salonDangereux(guild, iso) }
+    return { numero, retires: aSauver.length, gardes: gardes.length, prevenu }
 }
 
 const MAX_RAISON = 400

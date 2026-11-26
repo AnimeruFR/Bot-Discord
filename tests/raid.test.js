@@ -55,7 +55,7 @@ function interaction({ perms = [], guild = null, customId = "raid:lever:1" } = {
     const envois = []
     const i = {
         envois, customId, guildId: guild?.id ?? "111111111111111111", guild, channelId: "333333333333333333", id: "inter1",
-        user: { id: MOD, tag: "mod#0" }, member: { roles: { cache: new Set(), highest: role(10) } }, locale: "fr", client: { user: { id: BOT } },
+        user: { id: MOD, tag: "mod#0" }, member: { id: MOD, guild, roles: { cache: new Set(), highest: role(10) } }, locale: "fr", client: { user: { id: BOT } },
         deferred: false, replied: false, ephemeral: false,
         inGuild: () => true, isButton: () => true, isAnySelectMenu: () => false, isModalSubmit: () => false,
         memberPermissions: new Discord.PermissionsBitField(perms),
@@ -500,7 +500,7 @@ test("massban : analyse des identifiants", () => {
 })
 
 // Faux serveur de ban : membres présents (id -> { roles, bannable })
-function serveurBan({ presents = {}, bulk = true, echoue = [], recents = [] } = {}) {
+function serveurBan({ presents = {}, bulk = true, echoue = [], recents = [], roleBot = 30 } = {}) {
     const n = ++compteur
     const membres = new Discord.Collection(Object.entries(presents).map(([id, p]) => [id, {
         id, user: { bot: p.bot ?? false }, roles: { highest: role(p.role ?? 1) }, bannable: p.bannable ?? true, joinedTimestamp: p.arrive ?? 0
@@ -509,11 +509,13 @@ function serveurBan({ presents = {}, bulk = true, echoue = [], recents = [] } = 
     const guild = {
         id: `71000000000000${String(n).padStart(4, "0")}`, ownerId: PROPRIO, bans,
         members: {
-            me: { permissions: new Discord.PermissionsBitField(Flags.BanMembers | Flags.ManageGuild) },
+            me: { id: BOT, permissions: new Discord.PermissionsBitField(Flags.BanMembers | Flags.ManageGuild), roles: { highest: role(roleBot) } },
             fetch: async opts => opts?.user ? membres.filter((_, id) => opts.user.includes(id)) : membres
         },
         channels: { cache: new Discord.Collection() }
     }
+    guild.members.me.guild = guild
+    for (const membre of membres.values()) membre.guild = guild
     bans.bulkCreate = async (ids, options) => {
         bans.groupes.push({ ids, options })
         return { bannedUsers: ids.filter(id => !echoue.includes(id)), failedUsers: echoue.filter(id => ids.includes(id)) }
@@ -575,15 +577,33 @@ test("massban : cible obligatoire, identifiants invalides refusés, limite de 20
     assert.strictEqual(guild.bans.groupes.length, 0)
 })
 
-test("massban : exclusions (soi, bot, propriétaire, rôles au-dessus ou égaux, non bannissables)", async () => {
+test("massban : exclusions (soi, bot, propriétaire, rôles au-dessus ou égaux du modérateur), sans s'appuyer sur « bannable »", async () => {
     const guild = serveurBan({ presents: {
         [U(1)]: { role: 5 }, [U(2)]: { role: 10 }, [U(3)]: { role: 20 }, [U(4)]: { role: 1, bannable: false }, [U(5)]: { role: 9 }
     } })
     const i = interaction({ perms: [Flags.BanMembers | Flags.ManageGuild], guild })
     const ids = [MOD, BOT, PROPRIO, U(1), U(2), U(3), U(4), U(5), U(6)]
     const { cibles, exclus } = await cmdMassban.evaluer(i, ids)
-    assert.deepStrictEqual(cibles, [U(1), U(5), U(6)], "U(6) absent du serveur : banni par identifiant")
-    assert.deepStrictEqual(exclus, { soi: 1, bot: 1, proprietaire: 1, hierarchie: 3 })
+    assert.deepStrictEqual(cibles, [U(1), U(4), U(5), U(6)], "U(6) absent du serveur : banni par identifiant")
+    assert.deepStrictEqual(exclus, { soi: 1, bot: 1, proprietaire: 1, hierarchie: 2 })
+})
+
+test("massban : une cible au-dessus ou au niveau du bot est exclue par la hiérarchie, même sous le modérateur", async () => {
+    const guild = serveurBan({ roleBot: 30, presents: {
+        [U(1)]: { role: 40 }, [U(2)]: { role: 30 }, [U(3)]: { role: 20 }
+    } })
+    const i = interaction({ perms: [Flags.BanMembers | Flags.ManageGuild], guild })
+    i.member.roles.highest = role(50) // le modérateur est au-dessus du bot
+    const { cibles, exclus } = await cmdMassban.evaluer(i, [U(1), U(2), U(3), U(4)])
+    assert.deepStrictEqual(cibles, [U(3), U(4)], "au-dessus ou égal au bot exclus ; U(4) absent reste bannissable")
+    assert.strictEqual(exclus.hierarchie, 2)
+
+    // Le propriétaire du serveur au-dessus de tous les membres, mais pas au-dessus du bot
+    const proprio = serveurBan({ roleBot: 30, presents: { [U(1)]: { role: 40 }, [U(2)]: { role: 20 } } })
+    const j = interaction({ perms: [Flags.BanMembers | Flags.ManageGuild], guild: proprio })
+    j.member.id = PROPRIO
+    const r = await cmdMassban.evaluer(j, [U(1), U(2)])
+    assert.deepStrictEqual(r.cibles, [U(2)], "le bot ne peut pas bannir plus haut que lui, même à la demande du propriétaire")
 })
 
 test("massban : tout est exclu -> rien n'est banni", async () => {
