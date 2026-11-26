@@ -141,7 +141,7 @@ const REGISTRE = {
     quarantines: {
         serveur: "guild_id",
         colonnes: {
-            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine" },
+            user_id: { traitement: "conserver", motif: "Nécessaire pour rendre ses rôles au membre à la levée", duree: "jusqu'à la levée de la quarantaine, 1 an au plus" },
             moderator_id: { traitement: "anonymiser", auteur: true, motif: "La quarantaine reste en place, le modérateur n'est plus identifié" }
         }
     },
@@ -156,7 +156,12 @@ const REGISTRE = {
         serveur: "guild_id",
         colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié" } }
     },
-    phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" }
+    phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" },
+    // Essais de vérification (#4) : sans eux, un membre pourrait réessayer sans fin ; effacés après 1 jour.
+    verification_attempts: {
+        serveur: "guild_id",
+        colonnes: { user_id: { traitement: "conserver", motif: "Limite d'essais de la vérification (un effacement permettrait de la contourner)", duree: "1 jour" } }
+    }
 }
 
 const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]

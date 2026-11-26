@@ -26,7 +26,7 @@
    TICKET_STAFF_ROLE_ID=id_du_role_staff   (optionnel)
    ```
    Le fichier `.env` est ignoré par git : **ne mets jamais ton token dans le code**.
-4. Installe, enregistre les slash commandes puis lance (Node.js 22.13 ou plus) :
+4. Installe, enregistre les slash commandes puis lance (Node.js 22.23.5 ou plus, pour les correctifs de sécurité) :
    ```
    npm install
    npm run deploy

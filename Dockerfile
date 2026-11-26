@@ -1,5 +1,6 @@
 # Image de production du bot
-FROM node:22-alpine
+# Version épinglée : correctifs de sécurité de Node (dont le SQLite embarqué de node:sqlite), à monter par PR
+FROM node:22.23.5-alpine
 
 ENV NODE_ENV=production \
     HEARTBEAT_FILE=/tmp/heartbeat \
