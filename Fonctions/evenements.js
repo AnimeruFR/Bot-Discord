@@ -7,6 +7,7 @@ const { enHeureDeParis } = require('./dates')
 // Événements (données : { guildId, userId, ... }) :
 //   daily (streak), travail (job, level), achat (itemId), paiement (to, amount), niveau (level),
 //   message, partie:jouee (game), partie:gagnee (game), quiz:bonne_reponse, rep:donnee (to), rep:recue (from)
+//   objet:utilise (itemId), mot:trouve (essais, serie), enigme:trouvee (rang), drop:ramasse
 const bus = new EventEmitter()
 bus.setMaxListeners(50)
 

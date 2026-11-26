@@ -1,0 +1,38 @@
+{
+  "quiz": {
+    "description": "A general knowledge question: answer within 30 seconds to earn currency",
+    "options": {
+      "theme": "Question theme (random by default)",
+      "difficulte": "Difficulty: 10, 20 or 40 currency (random by default)"
+    },
+    "choix": {
+      "theme": {
+        "sciences": "Science",
+        "histoire": "History",
+        "geographie": "Geography",
+        "langue": "Language",
+        "nature": "Nature",
+        "arts": "Arts",
+        "sport": "Sport",
+        "technologie": "Technology"
+      },
+      "difficulte": {
+        "facile": "Easy (10)",
+        "moyen": "Medium (20)",
+        "difficile": "Hard (40)"
+      }
+    }
+  },
+  "enigme": {
+    "description": "The riddle of the day: view it or try your answer (3 attempts per day)",
+    "options": {
+      "action": "What to do?"
+    },
+    "choix": {
+      "action": {
+        "voir": "View the riddle",
+        "repondre": "Answer"
+      }
+    }
+  }
+}

@@ -1,0 +1,759 @@
+[
+  {
+    "id": "e001",
+    "fr": {
+      "enigme": "Je suis plein de trous et pourtant je retiens l'eau. Que suis-je ?",
+      "reponses": [
+        "éponge",
+        "une éponge"
+      ]
+    },
+    "en": {
+      "enigme": "I am full of holes, yet I hold water. What am I?",
+      "reponses": [
+        "sponge",
+        "a sponge"
+      ]
+    }
+  },
+  {
+    "id": "e002",
+    "fr": {
+      "enigme": "Plus on m'agrandit en enlevant de la matière, plus je grandis. Que suis-je ?",
+      "reponses": [
+        "trou",
+        "un trou"
+      ]
+    },
+    "en": {
+      "enigme": "The more you take away from around me, the bigger I get. What am I?",
+      "reponses": [
+        "hole",
+        "a hole"
+      ]
+    }
+  },
+  {
+    "id": "e003",
+    "fr": {
+      "enigme": "Je n'ai ni bouche ni oreilles, pourtant je te réponds dans la montagne. Que suis-je ?",
+      "reponses": [
+        "écho",
+        "l'écho"
+      ]
+    },
+    "en": {
+      "enigme": "I have no mouth and no ears, yet I answer you in the mountains. What am I?",
+      "reponses": [
+        "echo",
+        "an echo",
+        "the echo"
+      ]
+    }
+  },
+  {
+    "id": "e004",
+    "fr": {
+      "enigme": "J'ai des touches mais aucune serrure, et une barre d'espace mais aucune pièce. Que suis-je ?",
+      "reponses": [
+        "clavier",
+        "un clavier"
+      ]
+    },
+    "en": {
+      "enigme": "I have keys but no locks, and a space bar but no room. What am I?",
+      "reponses": [
+        "keyboard",
+        "a keyboard"
+      ]
+    }
+  },
+  {
+    "id": "e005",
+    "fr": {
+      "enigme": "Je monte et je descends sans jamais bouger de ma place. Que suis-je ?",
+      "reponses": [
+        "escalier",
+        "un escalier",
+        "escaliers"
+      ]
+    },
+    "en": {
+      "enigme": "I go up and down without ever moving from my place. What am I?",
+      "reponses": [
+        "staircase",
+        "stairs",
+        "a staircase",
+        "stairway"
+      ]
+    }
+  },
+  {
+    "id": "e006",
+    "fr": {
+      "enigme": "Dès que tu prononces mon nom, je n'existe plus. Que suis-je ?",
+      "reponses": [
+        "silence",
+        "le silence"
+      ]
+    },
+    "en": {
+      "enigme": "As soon as you say my name, I no longer exist. What am I?",
+      "reponses": [
+        "silence",
+        "the silence"
+      ]
+    }
+  },
+  {
+    "id": "e007",
+    "fr": {
+      "enigme": "Je t'appartiens, mais les autres s'en servent bien plus que toi. Que suis-je ?",
+      "reponses": [
+        "nom",
+        "prénom",
+        "ton nom",
+        "mon nom",
+        "le nom"
+      ]
+    },
+    "en": {
+      "enigme": "I belong to you, but other people use me far more than you do. What am I?",
+      "reponses": [
+        "name",
+        "your name",
+        "a name"
+      ]
+    }
+  },
+  {
+    "id": "e008",
+    "fr": {
+      "enigme": "J'ai quatre pieds mais je ne marche jamais, et tu t'assieds sur moi. Que suis-je ?",
+      "reponses": [
+        "chaise",
+        "une chaise"
+      ]
+    },
+    "en": {
+      "enigme": "I have four legs but never walk, and you sit on me. What am I?",
+      "reponses": [
+        "chair",
+        "a chair"
+      ]
+    }
+  },
+  {
+    "id": "e009",
+    "fr": {
+      "enigme": "Je n'ai pas de jambes mais j'avance sans cesse, j'ai un lit et deux rives. Que suis-je ?",
+      "reponses": [
+        "rivière",
+        "fleuve",
+        "une rivière",
+        "un fleuve"
+      ]
+    },
+    "en": {
+      "enigme": "I have no legs yet I keep moving, and I have a bed and two banks. What am I?",
+      "reponses": [
+        "river",
+        "a river",
+        "stream"
+      ]
+    }
+  },
+  {
+    "id": "e010",
+    "fr": {
+      "enigme": "Je brille la nuit, je change de forme au fil des semaines et je fais bouger les marées. Que suis-je ?",
+      "reponses": [
+        "lune",
+        "la lune"
+      ]
+    },
+    "en": {
+      "enigme": "I shine at night, change shape through the weeks and move the tides. What am I?",
+      "reponses": [
+        "moon",
+        "the moon"
+      ]
+    }
+  },
+  {
+    "id": "e011",
+    "fr": {
+      "enigme": "Plus je sèche de choses, plus je deviens mouillée. Que suis-je ?",
+      "reponses": [
+        "serviette",
+        "une serviette",
+        "essuie",
+        "un essuie-mains"
+      ]
+    },
+    "en": {
+      "enigme": "The more I dry, the wetter I get. What am I?",
+      "reponses": [
+        "towel",
+        "a towel"
+      ]
+    }
+  },
+  {
+    "id": "e012",
+    "fr": {
+      "enigme": "Je suis blanche, je tombe sans bruit en hiver et je fonds au soleil. Que suis-je ?",
+      "reponses": [
+        "neige",
+        "la neige"
+      ]
+    },
+    "en": {
+      "enigme": "I am white, I fall silently in winter and melt in the sun. What am I?",
+      "reponses": [
+        "snow",
+        "the snow"
+      ]
+    }
+  },
+  {
+    "id": "e013",
+    "fr": {
+      "enigme": "J'ai des aiguilles mais je ne pique pas, et je te dis quelle heure il est. Que suis-je ?",
+      "reponses": [
+        "horloge",
+        "montre",
+        "pendule",
+        "une horloge",
+        "une montre",
+        "réveil"
+      ]
+    },
+    "en": {
+      "enigme": "I have hands but I cannot clap, and I tell you the time. What am I?",
+      "reponses": [
+        "clock",
+        "watch",
+        "a clock",
+        "a watch"
+      ]
+    }
+  },
+  {
+    "id": "e014",
+    "fr": {
+      "enigme": "J'ai une face et un revers, mais ni tête ni corps, et tu me jettes pour décider. Que suis-je ?",
+      "reponses": [
+        "pièce",
+        "pièce de monnaie",
+        "une pièce",
+        "une pièce de monnaie"
+      ]
+    },
+    "en": {
+      "enigme": "I have two faces but no body, and you flip me to decide. What am I?",
+      "reponses": [
+        "coin",
+        "a coin"
+      ]
+    }
+  },
+  {
+    "id": "e015",
+    "fr": {
+      "enigme": "Je vole sans ailes et je pleure sans yeux. Que suis-je ?",
+      "reponses": [
+        "nuage",
+        "un nuage"
+      ]
+    },
+    "en": {
+      "enigme": "I fly without wings and cry without eyes. What am I?",
+      "reponses": [
+        "cloud",
+        "a cloud"
+      ]
+    }
+  },
+  {
+    "id": "e016",
+    "fr": {
+      "enigme": "On me jette quand on veut s'arrêter et on me remonte quand on veut partir. Que suis-je ?",
+      "reponses": [
+        "ancre",
+        "une ancre"
+      ]
+    },
+    "en": {
+      "enigme": "You throw me overboard to stop and haul me up to leave. What am I?",
+      "reponses": [
+        "anchor",
+        "an anchor"
+      ]
+    }
+  },
+  {
+    "id": "e017",
+    "fr": {
+      "enigme": "Je suis pleine de pages et je parle sans voix. Que suis-je ?",
+      "reponses": [
+        "livre",
+        "un livre"
+      ]
+    },
+    "en": {
+      "enigme": "I am full of pages and I speak without a voice. What am I?",
+      "reponses": [
+        "book",
+        "a book"
+      ]
+    }
+  },
+  {
+    "id": "e018",
+    "fr": {
+      "enigme": "Je suis grande quand je suis jeune et je rapetisse en vieillissant. Que suis-je ?",
+      "reponses": [
+        "bougie",
+        "une bougie"
+      ]
+    },
+    "en": {
+      "enigme": "I am tall when I am young and I shrink as I grow old. What am I?",
+      "reponses": [
+        "candle",
+        "a candle"
+      ]
+    }
+  },
+  {
+    "id": "e019",
+    "fr": {
+      "enigme": "J'ai un goulot mais pas de tête, un col mais pas de chemise. Que suis-je ?",
+      "reponses": [
+        "bouteille",
+        "une bouteille"
+      ]
+    },
+    "en": {
+      "enigme": "I have a neck but no head, and a cap but no hair. What am I?",
+      "reponses": [
+        "bottle",
+        "a bottle"
+      ]
+    }
+  },
+  {
+    "id": "e020",
+    "fr": {
+      "enigme": "Je suis toujours devant toi, mais personne ne peut me voir. Que suis-je ?",
+      "reponses": [
+        "avenir",
+        "futur",
+        "l'avenir",
+        "le futur"
+      ]
+    },
+    "en": {
+      "enigme": "I am always ahead of you, yet nobody can see me. What am I?",
+      "reponses": [
+        "future",
+        "the future"
+      ]
+    }
+  },
+  {
+    "id": "e021",
+    "fr": {
+      "enigme": "Léger comme une plume, pourtant l'homme le plus fort ne peut me retenir plus de quelques minutes. Que suis-je ?",
+      "reponses": [
+        "souffle",
+        "haleine",
+        "respiration",
+        "le souffle",
+        "mon souffle"
+      ]
+    },
+    "en": {
+      "enigme": "Light as a feather, yet the strongest person cannot hold me for more than a few minutes. What am I?",
+      "reponses": [
+        "breath",
+        "your breath",
+        "a breath"
+      ]
+    }
+  },
+  {
+    "id": "e022",
+    "fr": {
+      "enigme": "J'ai des villes sans maisons, des forêts sans arbres et des mers sans eau. Que suis-je ?",
+      "reponses": [
+        "carte",
+        "une carte",
+        "plan"
+      ]
+    },
+    "en": {
+      "enigme": "I have cities with no houses, forests with no trees and seas with no water. What am I?",
+      "reponses": [
+        "map",
+        "a map"
+      ]
+    }
+  },
+  {
+    "id": "e023",
+    "fr": {
+      "enigme": "Je me lève à l'est, je me couche à l'ouest et je fais pousser les plantes. Que suis-je ?",
+      "reponses": [
+        "soleil",
+        "le soleil"
+      ]
+    },
+    "en": {
+      "enigme": "I rise in the east, set in the west and make plants grow. What am I?",
+      "reponses": [
+        "sun",
+        "the sun"
+      ]
+    }
+  },
+  {
+    "id": "e024",
+    "fr": {
+      "enigme": "On me prend sans jamais me voler et je garde un souvenir. Que suis-je ?",
+      "reponses": [
+        "photo",
+        "photographie",
+        "une photo",
+        "une photographie",
+        "selfie"
+      ]
+    },
+    "en": {
+      "enigme": "You take me without stealing me, and I keep a memory. What am I?",
+      "reponses": [
+        "photo",
+        "photograph",
+        "picture",
+        "a photo",
+        "a photograph",
+        "a picture",
+        "selfie"
+      ]
+    }
+  },
+  {
+    "id": "e025",
+    "fr": {
+      "enigme": "Je suis noir quand on m'achète, rouge quand on me brûle et gris quand on me jette. Que suis-je ?",
+      "reponses": [
+        "charbon",
+        "braise",
+        "du charbon",
+        "le charbon"
+      ]
+    },
+    "en": {
+      "enigme": "I am black when you buy me, red when you burn me and grey when you throw me away. What am I?",
+      "reponses": [
+        "charcoal",
+        "coal",
+        "the coal"
+      ]
+    }
+  },
+  {
+    "id": "e026",
+    "fr": {
+      "enigme": "Je tourne sans cesse sur moi-même et tu vis sur mon dos. Que suis-je ?",
+      "reponses": [
+        "terre",
+        "la terre",
+        "planète terre"
+      ]
+    },
+    "en": {
+      "enigme": "I spin on myself all the time and you live on my back. What am I?",
+      "reponses": [
+        "earth",
+        "the earth",
+        "planet earth"
+      ]
+    }
+  },
+  {
+    "id": "e027",
+    "fr": {
+      "enigme": "Nous sommes deux jumeaux séparés par un nez et nous ne nous voyons jamais. Que sommes-nous ?",
+      "reponses": [
+        "yeux",
+        "les yeux",
+        "des yeux"
+      ]
+    },
+    "en": {
+      "enigme": "We are twins separated by a nose, and we never see each other. What are we?",
+      "reponses": [
+        "eyes",
+        "the eyes",
+        "your eyes"
+      ]
+    }
+  },
+  {
+    "id": "e028",
+    "fr": {
+      "enigme": "J'ai cinq doigts mais pas de sang, et en hiver je te tiens chaud. Que suis-je ?",
+      "reponses": [
+        "gant",
+        "un gant",
+        "gants",
+        "moufle"
+      ]
+    },
+    "en": {
+      "enigme": "I have five fingers but no blood, and in winter I keep you warm. What am I?",
+      "reponses": [
+        "glove",
+        "a glove",
+        "gloves",
+        "mitten"
+      ]
+    }
+  },
+  {
+    "id": "e029",
+    "fr": {
+      "enigme": "Je me gonfle de vent et je fais avancer les bateaux. Que suis-je ?",
+      "reponses": [
+        "voile",
+        "une voile"
+      ]
+    },
+    "en": {
+      "enigme": "I swell with the wind and push boats along. What am I?",
+      "reponses": [
+        "sail",
+        "a sail"
+      ]
+    }
+  },
+  {
+    "id": "e030",
+    "fr": {
+      "enigme": "On me casse avant de m'utiliser et on ne me répare jamais. Que suis-je ?",
+      "reponses": [
+        "œuf",
+        "oeuf",
+        "un œuf",
+        "un oeuf"
+      ]
+    },
+    "en": {
+      "enigme": "You break me before you use me, and you never repair me. What am I?",
+      "reponses": [
+        "egg",
+        "an egg"
+      ]
+    }
+  },
+  {
+    "id": "e031",
+    "fr": {
+      "enigme": "Je vis dans l'eau, je suis couvert d'écailles et je respire par des branchies. Que suis-je ?",
+      "reponses": [
+        "poisson",
+        "un poisson"
+      ]
+    },
+    "en": {
+      "enigme": "I live in water, I am covered in scales and I breathe through gills. What am I?",
+      "reponses": [
+        "fish",
+        "a fish"
+      ]
+    }
+  },
+  {
+    "id": "e032",
+    "fr": {
+      "enigme": "J'ouvre les portes sans être une main. Que suis-je ?",
+      "reponses": [
+        "clé",
+        "clef",
+        "une clé",
+        "une clef"
+      ]
+    },
+    "en": {
+      "enigme": "I open doors without being a hand. What am I?",
+      "reponses": [
+        "key",
+        "a key"
+      ]
+    }
+  },
+  {
+    "id": "e033",
+    "fr": {
+      "enigme": "Je suis faite d'eau, mais si tu me plonges dans l'eau, je disparais. Que suis-je ?",
+      "reponses": [
+        "glaçon",
+        "glace",
+        "un glaçon",
+        "la glace"
+      ]
+    },
+    "en": {
+      "enigme": "I am made of water, but if you drop me in water I vanish. What am I?",
+      "reponses": [
+        "ice",
+        "ice cube",
+        "an ice cube",
+        "a cube of ice"
+      ]
+    }
+  },
+  {
+    "id": "e034",
+    "fr": {
+      "enigme": "Je tombe tous les soirs, mais je ne me fais jamais mal. Que suis-je ?",
+      "reponses": [
+        "nuit",
+        "la nuit"
+      ]
+    },
+    "en": {
+      "enigme": "I fall every evening, yet I never get hurt. What am I?",
+      "reponses": [
+        "night",
+        "the night",
+        "nightfall"
+      ]
+    }
+  },
+  {
+    "id": "e035",
+    "fr": {
+      "enigme": "Je suis un feu à trois yeux de couleurs différentes et je règle la circulation. Que suis-je ?",
+      "reponses": [
+        "feu tricolore",
+        "feu rouge",
+        "feu de circulation",
+        "un feu tricolore"
+      ]
+    },
+    "en": {
+      "enigme": "I am a light with three differently coloured eyes and I direct the traffic. What am I?",
+      "reponses": [
+        "traffic light",
+        "a traffic light",
+        "traffic lights",
+        "stoplight"
+      ]
+    }
+  },
+  {
+    "id": "e036",
+    "fr": {
+      "enigme": "Je mords sans dents et je pince les joues en hiver. Que suis-je ?",
+      "reponses": [
+        "froid",
+        "le froid",
+        "gel",
+        "le gel"
+      ]
+    },
+    "en": {
+      "enigme": "I bite without teeth and I nip your cheeks in winter. What am I?",
+      "reponses": [
+        "cold",
+        "the cold",
+        "frost",
+        "the frost"
+      ]
+    }
+  },
+  {
+    "id": "e037",
+    "fr": {
+      "enigme": "Plus il y en a, moins on y voit. Qu'est-ce que c'est ?",
+      "reponses": [
+        "obscurité",
+        "noir",
+        "ténèbres",
+        "l'obscurité",
+        "nuit"
+      ]
+    },
+    "en": {
+      "enigme": "The more there is of me, the less you see. What am I?",
+      "reponses": [
+        "darkness",
+        "dark",
+        "the dark",
+        "the darkness"
+      ]
+    }
+  },
+  {
+    "id": "e038",
+    "fr": {
+      "enigme": "On me donne avant de me tenir, et si on me brise je ne peux plus être réparée. Que suis-je ?",
+      "reponses": [
+        "promesse",
+        "parole",
+        "une promesse",
+        "la parole"
+      ]
+    },
+    "en": {
+      "enigme": "You give me before you keep me, and once I am broken I cannot be mended. What am I?",
+      "reponses": [
+        "promise",
+        "a promise",
+        "word",
+        "your word"
+      ]
+    }
+  },
+  {
+    "id": "e039",
+    "fr": {
+      "enigme": "J'ai huit bras, trois cœurs et du sang bleu. Que suis-je ?",
+      "reponses": [
+        "pieuvre",
+        "poulpe",
+        "une pieuvre",
+        "un poulpe"
+      ]
+    },
+    "en": {
+      "enigme": "I have eight arms, three hearts and blue blood. What am I?",
+      "reponses": [
+        "octopus",
+        "an octopus"
+      ]
+    }
+  },
+  {
+    "id": "e040",
+    "fr": {
+      "enigme": "Je suis une fois dans « minute », deux fois dans « moment » et jamais dans « siècle ». Que suis-je ?",
+      "reponses": [
+        "m",
+        "la lettre m",
+        "lettre m"
+      ]
+    },
+    "en": {
+      "enigme": "I appear once in \"minute\", twice in \"moment\" and never in \"century\". What am I?",
+      "reponses": [
+        "m",
+        "the letter m",
+        "letter m"
+      ]
+    }
+  }
+]
