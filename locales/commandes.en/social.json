@@ -1,0 +1,50 @@
+{
+  "profil": {
+    "description": "View a profile, or customize yours (bio, theme, badge)",
+    "options": {
+      "action": "What to do? (view a profile by default)",
+      "membre": "The member to view (you by default)",
+      "texte": "Your bio, 200 characters at most (empty: clear it)",
+      "theme": "Your profile color",
+      "badge": "An earned achievement to feature (empty: remove it)"
+    },
+    "choix": {
+      "action": {
+        "voir": "View a profile",
+        "bio": "Change my bio",
+        "theme": "Change my theme",
+        "badge": "Pick my featured badge"
+      },
+      "theme": {
+        "bleu": "Blue",
+        "vert": "Green",
+        "rose": "Pink"
+      }
+    }
+  },
+  "rep": {
+    "description": "Give a reputation point to a member (once a day)",
+    "options": {
+      "membre": "The member to thank"
+    }
+  },
+  "anniversaire": {
+    "description": "Your birthday (day and month only) and its settings",
+    "options": {
+      "action": "What to do?",
+      "jour": "Day of the month (1 to 31)",
+      "mois": "Month (1 to 12)",
+      "salon": "Announcement channel (config)",
+      "role": "Role given on the birthday (config)"
+    },
+    "choix": {
+      "action": {
+        "definir": "Set my birthday",
+        "retirer": "Remove my birthday",
+        "voir": "View my birthday",
+        "config": "Configure announcements (admin)",
+        "desactiver": "Disable announcements (admin)"
+      }
+    }
+  }
+}
