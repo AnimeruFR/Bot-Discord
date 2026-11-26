@@ -133,7 +133,7 @@ async function alerter(guild, id, reglage, nb, mesures) {
 }
 
 // Compte l'arrivée d'un membre et déclenche le mode raid au-delà du seuil. Ne lève jamais d'erreur.
-// Renvoie { declenche, id?, mesures?, alerte? } (utile aux tests ; l'événement l'ignore).
+// Renvoie { declenche, id?, suite? } ; suite est la promesse du verrouillage et de l'alerte (utile aux tests ; l'événement l'ignore).
 // Tout ce qui décide du déclenchement est synchrone (aucun await avant l'enregistrement du raid) :
 // 50 arrivées simultanées ne produisent donc qu'un seul raid.
 async function noterArrivee(member, maintenant = Date.now()) {
@@ -154,50 +154,71 @@ async function noterArrivee(member, maintenant = Date.now()) {
         if (id === null) return { declenche: false }
         fenetres.delete(guild.id)
 
-        const mesures = reglage.alerteSeule
-            ? { niveau: null, invites: false, invitesDeja: false, echecs: [], refus: null }
-            : await verrouiller(guild, id, `Mode raid automatique : ${nb} arrivées en ${reglage.secondes} s`)
-        const alerte = await alerter(guild, id, reglage, nb, mesures)
-        return { declenche: true, id, mesures, alerte }
+        // Verrouillage et alerte (appels REST) partent sans être attendus : la ligne raid_events est déjà écrite,
+        // et le filtre des comptes / la bienvenue du membre ne doivent pas attendre l'API. `suite` sert aux tests.
+        const suite = (async () => {
+            const mesures = reglage.alerteSeule
+                ? { niveau: null, invites: false, invitesDeja: false, echecs: [], refus: null }
+                : await verrouiller(guild, id, `Mode raid automatique : ${nb} arrivées en ${reglage.secondes} s`)
+            const alerte = await alerter(guild, id, reglage, nb, mesures)
+            return { mesures, alerte }
+        })().catch(err => {
+            console.error("Anti-raid (verrouillage) :", err.message)
+            return { mesures: null, alerte: false }
+        })
+        return { declenche: true, id, suite }
     } catch (err) {
         console.error("Anti-raid :", err.message)
         return { declenche: false }
     }
 }
 
+// Raids dont la levée est en cours (verrou en mémoire : deux clics simultanés ne restaurent qu'une fois)
+const leveesEnCours = new Set()
+
 // Lève le mode raid : restaure le niveau de vérification et les invitations, et trace qui l'a levé.
 // id : un raid précis (bouton), sinon le raid en cours du serveur. par : identifiant du modérateur.
-// Renvoie { erreur: "aucun" | "deja" } ou { id, niveau, niveauModifie, invites, echecs }.
-// Le raid est marqué levé d'abord (un seul clic effectif) ; un échec de restauration est rapporté, pas bloquant.
+// Renvoie { erreur: "aucun" | "deja" } ou { id, niveau, niveauModifie, invites, echecs, leve }.
+// Le raid n'est marqué terminé qu'après une restauration réussie : sinon leve vaut false, echecs dit ce qui a échoué
+// et le raid reste ouvert (on peut relever). Ce qui est déjà restauré n'est pas refait.
 async function lever(guild, { id = null, par }) {
     const ligne = id === null ? raidEnCours(guild.id) : db.sqlAll("SELECT * FROM raid_events WHERE id = ? AND guild_id = ?", [id, guild.id])[0]
     if (!ligne) return { erreur: "aucun" }
-    if (ligne.ended_at !== null) return { erreur: "deja" }
-    if (!db.sqlRun("UPDATE raid_events SET ended_at = ?, lifted_by = ? WHERE id = ? AND ended_at IS NULL", [Date.now(), par, ligne.id])) return { erreur: "deja" }
-    fenetres.delete(guild.id)
-
-    const resultat = { id: ligne.id, niveau: null, niveauModifie: false, invites: false, echecs: [] }
-    if (ligne.previous_level !== null) {
-        // Un niveau changé à la main pendant le raid n'est pas écrasé
-        if (guild.verificationLevel !== NIVEAU_RAID) resultat.niveauModifie = true
-        else {
-            try {
-                await guild.setVerificationLevel(ligne.previous_level, "Fin du mode raid")
-                resultat.niveau = ligne.previous_level
-            } catch (err) {
-                resultat.echecs.push(`niveau de vérification : ${err.message}`)
+    if (ligne.ended_at !== null || leveesEnCours.has(ligne.id)) return { erreur: "deja" }
+    leveesEnCours.add(ligne.id)
+    try {
+        const resultat = { id: ligne.id, niveau: null, niveauModifie: false, invites: false, echecs: [], leve: false }
+        if (ligne.previous_level !== null) {
+            // Un niveau changé à la main pendant le raid n'est pas écrasé
+            if (guild.verificationLevel !== NIVEAU_RAID) resultat.niveauModifie = true
+            else {
+                try {
+                    await guild.setVerificationLevel(ligne.previous_level, "Fin du mode raid")
+                    resultat.niveau = ligne.previous_level
+                    db.sqlRun("UPDATE raid_events SET previous_level = NULL WHERE id = ?", [ligne.id])
+                } catch (err) {
+                    resultat.echecs.push(`niveau de vérification : ${err.message}`)
+                }
             }
         }
-    }
-    if (ligne.invites_paused === 1) {
-        try {
-            await guild.disableInvites(false)
-            resultat.invites = true
-        } catch (err) {
-            resultat.echecs.push(`invitations : ${err.message}`)
+        if (ligne.invites_paused === 1) {
+            try {
+                await guild.disableInvites(false)
+                resultat.invites = true
+                db.sqlRun("UPDATE raid_events SET invites_paused = 0 WHERE id = ?", [ligne.id])
+            } catch (err) {
+                resultat.echecs.push(`invitations : ${err.message}`)
+            }
         }
+        if (resultat.echecs.length) return resultat
+
+        if (!db.sqlRun("UPDATE raid_events SET ended_at = ?, lifted_by = ? WHERE id = ? AND ended_at IS NULL", [Date.now(), par, ligne.id])) return { erreur: "deja" }
+        fenetres.delete(guild.id)
+        resultat.leve = true
+        return resultat
+    } finally {
+        leveesEnCours.delete(ligne.id)
     }
-    return resultat
 }
 
 module.exports = {

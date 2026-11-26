@@ -72,6 +72,13 @@ async function traiterLevee(interaction, id) {
     if (r.invites) details.push(t(interaction, "raid.detail_invites"))
     for (const echec of r.echecs) details.push(t(interaction, "raid.detail_echec", { motif: echec }))
 
+    // Restauration incomplète : le raid reste ouvert, le bouton peut être recliqué
+    if (r.leve === false) {
+        await sendModLog(interaction, { action: "raid", details: `Levée du mode raid n°${r.id} incomplète (échecs : ${r.echecs.join(" ; ")}), raid toujours en cours` })
+        await interaction.editReply({ content: [t(interaction, "raid.lever_incomplet"), ...details].join("\n") })
+        return false
+    }
+
     await sendModLog(interaction, { action: "raid", details: `Mode raid n°${r.id} levé${r.niveau !== null ? `, niveau restauré : ${raid.nomNiveau(r.niveau)}` : ""}${r.invites ? ", invitations rétablies" : ""}${r.echecs.length ? ` (échecs : ${r.echecs.join(" ; ")})` : ""}` })
     await interaction.editReply({ content: [t(interaction, "raid.lever_ok"), ...details].join("\n") })
     return true

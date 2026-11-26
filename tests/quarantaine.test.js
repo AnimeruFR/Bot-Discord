@@ -6,6 +6,9 @@ const Discord = require('discord.js')
 const db = require('../Fonctions/db')
 const q = require('../Fonctions/quarantaine')
 const { controler } = require('../Fonctions/garde')
+const { onClicRole } = require('../Fonctions/rolesBoutons')
+const { setSalonFamille } = require('../Fonctions/logs')
+const evenementMiseAJour = require('../Events/guildMemberUpdate')
 const { erreurDiscord, chargerCommandes } = require('./aides')
 
 const { Flags } = Discord.PermissionsBitField
@@ -42,7 +45,7 @@ function fauxServeur(rolesDefs) {
 // Faux membre : roles.set applique le changement, ou échoue (echec = nombre d'appels qui échouent)
 function fauxMembre(guild, roleIds, { echec = 0, manageable = true } = {}) {
     const membre = {
-        id: nouvelId(), manageable, appels: [], user: null,
+        id: nouvelId(), manageable, appels: [], retraits: [], user: null,
         roles: {
             cache: new Discord.Collection([guild.id, ...roleIds].map(r => [r, guild.roles.cache.get(r)])),
             get highest() { return plusHaut([...membre.roles.cache.values()]) },
@@ -53,7 +56,11 @@ function fauxMembre(guild, roleIds, { echec = 0, manageable = true } = {}) {
                 membre.roles.cache = new Discord.Collection([[guild.id, guild.roles.cache.get(guild.id)], ...ids.map(r => [r, guild.roles.cache.get(r)])])
                 return membre
             },
-            add: async id => { membre.roles.cache.set(id, guild.roles.cache.get(id)) }
+            add: async id => { membre.roles.cache.set(id, guild.roles.cache.get(id)) },
+            remove: async ids => {
+                membre.retraits.push([].concat(ids))
+                for (const id of [].concat(ids)) membre.roles.cache.delete(id)
+            }
         }
     }
     membre.guild = guild
@@ -339,4 +346,103 @@ test("/quarantaine : mettre, liste et lever par la commande", async () => {
     assert.match(await lancer({ action: "config" }), /Le rôle isolé actuel/)
     assert.match(await lancer({ action: "lever", membre: membre.user }), /1 rôle\(s\) rendu/)
     assert.match(await lancer({ action: "lever", membre: membre.user }), /pas en quarantaine/)
+})
+
+// Faux salon de logs : garde les messages envoyés dans la famille « sanctions »
+function salonDeLogs(guild) {
+    const id = nouvelId()
+    const envois = []
+    guild.channels.cache.set(id, { id, isTextBased: () => true, permissionsFor: () => ({ has: () => true }), send: async m => { envois.push(m) } })
+    setSalonFamille(guild.id, "sanctions", id)
+    return envois
+}
+const champs = envois => envois.flatMap(m => m.embeds[0].data.fields).map(f => f.value).join("\n")
+
+test("rôle-bouton : refusé à un membre en quarantaine, donné à un membre normal", async () => {
+    const guild = serveurConfigure()
+    const message = nouvelId()
+    db.addRolePanel(guild.id, { messageId: message, channelId: "c", titre: "Couleurs", mode: "multiple" })
+    db.addRoleButton(guild.id, message, R.c, "C")
+    const reponses = []
+    const clic = membre => ({
+        customId: `role:${R.c}`, inCachedGuild: () => true, user: membre.user, guild, locale: "fr", message: { id: message, url: "lien" }, member: membre,
+        reply: async r => reponses.push(r.content), deferReply: async () => {}, editReply: async r => reponses.push(r)
+    })
+    const libre = fauxMembre(guild, [])
+    await onClicRole({ user: { id: BOT } }, clic(libre))
+    assert.ok(libre.roles.cache.has(R.c), "membre normal : rôle donné")
+
+    const membre = fauxMembre(guild, [R.a])
+    await q.mettre(interaction(guild), membre.user, "test")
+    reponses.length = 0
+    await onClicRole({ user: { id: BOT } }, clic(membre))
+    assert.ok(!membre.roles.cache.has(R.c), "en quarantaine : aucun rôle donné")
+    assert.match(reponses[0], /en quarantaine/)
+})
+
+test("rôle ajouté pendant la quarantaine : retiré, sauvegardé pour la levée, sans boucle", async () => {
+    const guild = serveurConfigure()
+    const envois = salonDeLogs(guild)
+    const membre = fauxMembre(guild, [R.a])
+    const i = interaction(guild)
+    await q.mettre(i, membre.user, "test")
+    // Un autre bot donne un rôle normal, un rôle d'intégration et un rôle plus haut que le bot
+    for (const id of [R.b, R.booster, R.hautbot]) membre.roles.cache.set(id, guild.roles.cache.get(id))
+    await evenementMiseAJour({ user: { id: BOT } }, { partial: true }, membre)
+    assert.deepStrictEqual(membre.retraits, [[R.b]], "seul le rôle retirable est retiré")
+    assert.ok(membre.roles.cache.has(R.iso), "le rôle isolé reste")
+    assert.deepStrictEqual(q.getQuarantine(guild.id, membre.id).roles.sort(), [R.a, R.b].sort())
+    assert.match(champs(envois), new RegExp(R.b))
+    // Le retrait redéclenche l'événement : plus rien à retirer
+    await evenementMiseAJour({ user: { id: BOT } }, { partial: true }, membre)
+    assert.strictEqual(membre.retraits.length, 1, "pas de boucle")
+    // La levée rend le rôle ajouté
+    const r = await q.lever(i, membre.user)
+    assert.strictEqual(r.restaures, 2)
+    assert.ok(membre.roles.cache.has(R.b) && membre.roles.cache.has(R.a))
+    // Après la levée (plus de rôle isolé, plus de ligne) : rien n'est retiré
+    await evenementMiseAJour({ user: { id: BOT } }, { partial: true }, membre)
+    assert.strictEqual(membre.retraits.length, 1)
+    // Un membre normal n'est jamais touché
+    const normal = fauxMembre(guild, [R.a, R.b])
+    await evenementMiseAJour({ user: { id: BOT } }, { partial: true }, normal)
+    assert.strictEqual(normal.retraits.length, 0)
+})
+
+test("lever : les rôles non rendus (supprimé, géré) sont listés dans le log et dans le dossier", async () => {
+    const guild = serveurConfigure()
+    const envois = salonDeLogs(guild)
+    const membre = fauxMembre(guild, [R.a, R.b, R.suppr])
+    const i = interaction(guild)
+    await q.mettre(i, membre.user, null)
+    guild.roles.cache.delete(R.suppr)
+    guild.roles.cache.get(R.b).managed = true // devenu rôle d'intégration : le bot ne peut plus le donner
+    const r = await q.lever(i, membre.user)
+    assert.ok(!r.erreur, r.erreur)
+    assert.strictEqual(r.supprimes, 1)
+    assert.strictEqual(r.impossibles, 1)
+    assert.strictEqual(r.nonRendus.length, 2)
+    const dossier = db.listCases(guild.id, membre.id).find(c => c.type === "fin_quarantaine")
+    assert.ok(dossier.reason.includes(R.suppr) && dossier.reason.includes(R.b), "ids dans la raison du dossier")
+    assert.ok(dossier.reason.includes("role-"), "nom du rôle dans la raison du dossier")
+    assert.ok(dossier.reason.length <= 400)
+    assert.ok(champs(envois).includes(R.suppr) && champs(envois).includes(R.b), "ids dans le log")
+})
+
+test("reappliquer : si le rôle isolé ne peut pas être donné, une alerte part dans les logs", async () => {
+    const guild = serveurConfigure()
+    const envois = salonDeLogs(guild)
+    const membre = fauxMembre(guild, [R.a])
+    await q.mettre(interaction(guild), membre.user, null)
+    membre.roles.cache = new Discord.Collection([[guild.id, guild.roles.cache.get(guild.id)]])
+    membre.roles.add = async () => { throw new Error("Missing Permissions") }
+    envois.length = 0
+    const log = console.error
+    console.error = () => {}
+    const ok = await q.reappliquer(membre)
+    console.error = log
+    assert.strictEqual(ok, false)
+    assert.strictEqual(envois.length, 1)
+    assert.match(champs(envois), /Alerte/)
+    assert.match(champs(envois), /Missing Permissions/)
 })

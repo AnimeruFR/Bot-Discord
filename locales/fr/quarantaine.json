@@ -59,5 +59,6 @@
   "quar.liste_vide": "Aucun membre n'est en quarantaine.",
   "quar.liste_titre": "**Membres en quarantaine** ({total}) :",
   "quar.liste_ligne": "• {user}, depuis le {date}, par {moderateur} ({n} rôle(s) sauvegardé(s)) : {raison}",
-  "quar.liste_reste": "… et {n} autre(s)."
+  "quar.liste_reste": "… et {n} autre(s).",
+  "quar.refus_roles": "Vous êtes en quarantaine : vous ne pouvez pas vous donner de rôle tant qu'un modérateur n'a pas levé la mesure."
 }

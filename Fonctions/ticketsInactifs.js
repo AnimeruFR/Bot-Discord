@@ -85,17 +85,23 @@ async function traiterInactifs(bot, maintenant = Date.now()) {
     return bilan
 }
 
+const MAX_SLA_PAR_PASSAGE = 10
+
 // Délai cible (SLA) : alerte, une seule fois, les tickets ouverts jamais pris en charge dont l'âge dépasse le délai de leur type.
 // Renvoie le nombre d'alertes envoyées (pour les tests).
 async function traiterSla(bot, maintenant = Date.now()) {
     let alertes = 0
+    const parServeur = new Map()
     const retards = db.sqlAll(`SELECT tk.channel_id, tk.guild_id, tk.staff_role_id, ty.nom AS type_nom, ty.sla_minutes
         FROM tickets tk JOIN ticket_types ty ON ty.guild_id = tk.guild_id AND ty.id = tk.type_id
         WHERE tk.status = 'ouvert' AND tk.claimed_by IS NULL AND tk.claimed_at IS NULL AND tk.sla_alerted_at IS NULL
-        AND ty.sla_minutes IS NOT NULL AND tk.created_at + ty.sla_minutes * 60000 <= ?`, [maintenant])
+        AND ty.sla_minutes IS NOT NULL AND tk.created_at + ty.sla_minutes * 60000 <= ?
+        ORDER BY tk.created_at`, [maintenant])
 
     for (const ticket of retards) {
         try {
+            // Au plus MAX_SLA_PAR_PASSAGE alertes par serveur : les autres tickets sont repris au passage suivant
+            if ((parServeur.get(ticket.guild_id) ?? 0) >= MAX_SLA_PAR_PASSAGE) continue
             const guild = bot.guilds.cache.get(ticket.guild_id)
             if (!guild?.available) continue
             const channel = guild.channels.cache.get(ticket.channel_id)
@@ -103,6 +109,7 @@ async function traiterSla(bot, maintenant = Date.now()) {
 
             // Écrit avant l'envoi : si le bot plante entre les deux, l'alerte ne sera pas répétée
             if (db.sqlRun("UPDATE tickets SET sla_alerted_at = ? WHERE channel_id = ? AND sla_alerted_at IS NULL", [maintenant, ticket.channel_id]) === 0) continue
+            parServeur.set(ticket.guild_id, (parServeur.get(ticket.guild_id) ?? 0) + 1)
             ajouterEvenement(ticket.guild_id, ticket.channel_id, bot.user.id, "sla_alerte", `${ticket.type_nom} : ${ticket.sla_minutes} min`)
 
             // Rôle staff figé sur le ticket, sinon le rôle de /setticket ou du .env : lui seul peut être mentionné

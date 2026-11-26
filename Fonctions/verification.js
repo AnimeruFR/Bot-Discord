@@ -6,6 +6,7 @@ const { couleur } = require('./apparence')
 const { moduleActif } = require('./modules')
 const { sendModLog, envoyerLog } = require('./logs')
 const { refusRole } = require('./rolesBoutons')
+const { getQuarantine } = require('./quarantaine')
 const { refusSalonLogs } = require('./config')
 
 // Vérification à l'arrivée (idée #4) : un panneau avec un bouton « Je ne suis pas un robot », puis un défi en
@@ -206,6 +207,7 @@ async function ouvrir(bot, interaction) {
     const config = lireConfig(guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
+    if (getQuarantine(guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")
 
     const refus = refusRoleClic(guild, guild.roles.cache.get(config.role_id), "fr")
     if (refus) {
@@ -222,8 +224,6 @@ async function ouvrir(bot, interaction) {
 async function reussir(bot, interaction, config, cle) {
     const guild = interaction.guild
     enCours.add(cle)
-    defis.delete(cle)
-    etats.delete(cle)
     try {
         await interaction.deferUpdate()
         const role = guild.roles.cache.get(config.role_id)
@@ -232,7 +232,16 @@ async function reussir(bot, interaction, config, cle) {
             await interaction.editReply({ content: t(interaction, "verif.indisponible"), components: [] })
             return alerter(bot, guild, refus)
         }
-        await interaction.member.roles.add(role.id, "Vérification à l'arrivée (captcha)")
+        try {
+            await interaction.member.roles.add(role.id, "Vérification à l'arrivée (captcha)")
+        } catch (err) {
+            // Le défi est gardé : le membre peut recliquer quand le staff a réglé le problème
+            console.error("Vérification : ajout du rôle impossible :", err.message)
+            await interaction.editReply({ content: t(interaction, "verif.indisponible") }).catch(() => {})
+            return alerter(bot, guild, `ajout du rôle impossible (${err.message})`)
+        }
+        defis.delete(cle)
+        etats.delete(cle)
         await interaction.editReply({ content: t(interaction, "verif.reussi", { role }), components: [] })
         const embed = new Discord.EmbedBuilder()
             .setColor(0x2ECC71)
@@ -268,6 +277,7 @@ async function repondre(bot, interaction, { userId, jeton, numero }) {
     const config = lireConfig(interaction.guild.id)
     if (!config) return repondreEph(interaction, "verif.inactif")
     if (interaction.member.roles.cache.has(config.role_id)) return repondreEph(interaction, "verif.deja")
+    if (getQuarantine(interaction.guild.id, interaction.user.id)) return repondreEph(interaction, "quar.refus_roles")
 
     const cle = `${interaction.guild.id}:${interaction.user.id}`
     if (enCours.has(cle)) return repondreEph(interaction, "verif.encours")

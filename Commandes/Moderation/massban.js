@@ -9,6 +9,7 @@ const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const MAX_CIBLES = 200
 const DELAI_CONFIRMATION = 60 * 1000
+const DELAI_FETCH = 15 * 1000
 const SUPPRESSION_MESSAGES = 0 // secondes de messages supprimées (comme /ban : aucun)
 const PERMISSIONS_REQUISES = Flags.BanMembers | Flags.ManageGuild // celles de l'API de ban en masse
 const ID = /^\d{17,20}$/
@@ -27,7 +28,9 @@ function parserIds(texte) {
 // Membres arrivés depuis `minutes` minutes (les bots sont ignorés : ce sont des intégrations ajoutées par le staff)
 async function recentsDepuis(guild, minutes, maintenant = Date.now()) {
     const limite = maintenant - minutes * 60 * 1000
-    const membres = await guild.members.fetch()
+    let minuteur
+    const delai = new Promise((_, rejeter) => { minuteur = setTimeout(() => rejeter(new Error("délai dépassé (15 s) pour lister les membres")), DELAI_FETCH) })
+    const membres = await Promise.race([guild.members.fetch(), delai]).finally(() => clearTimeout(minuteur))
     return [...membres.values()].filter(m => !m.user?.bot && (m.joinedTimestamp ?? 0) >= limite).map(m => m.id)
 }
 
@@ -71,14 +74,18 @@ function resumeExclus(interaction, exclus) {
 async function bannirEnMasse(guild, ids, raison) {
     const options = { reason: raison, deleteMessageSeconds: SUPPRESSION_MESSAGES }
     const bannis = new Set()
+    let enMasse = false
     if (typeof guild.bans.bulkCreate === "function") {
         try {
             const resultat = await guild.bans.bulkCreate(ids, options)
             for (const id of resultat.bannedUsers ?? []) bannis.add(id)
+            enMasse = true
         } catch (err) {
-            console.error("Ban en masse :", err.message)
+            // Erreur globale de l'API : on retombe sur des bans un par un avec les mêmes cibles
+            console.error("Ban en masse (repli un par un) :", err.message)
         }
-    } else {
+    }
+    if (!enMasse) {
         for (const id of ids) {
             try {
                 await guild.bans.create(id, options)

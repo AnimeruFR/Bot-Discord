@@ -25,7 +25,6 @@
   "raid.detail_echec": "⚠️ Échec ({motif}) : à rétablir à la main dans les paramètres du serveur.",
   "raid.deja_desactive": "L'anti-raid n'était pas configuré.",
   "raid.desactive_ok": "Anti-raid désactivé. Un raid déjà en cours reste levable avec `/raid action:lever`.",
-
   "raid.massban_manque_cible": "Indiquez des identifiants (`ids`) ou une durée (`depuis_minutes`).",
   "raid.massban_perm_membre": "Le ban en masse demande les permissions « Bannir des membres » et « Gérer le serveur ».",
   "raid.massban_perm_bot": "Le bot n'a pas les permissions « Bannir des membres » et « Gérer le serveur », nécessaires au ban en masse.",
@@ -48,5 +47,6 @@
   "raid.massban_plus_permission": "Vous n'avez plus les permissions nécessaires : ban en masse annulé.",
   "raid.massban_verif_impossible": "Vérification impossible, ban en masse annulé : {erreur}",
   "raid.massban_echec": "Le ban en masse a échoué : {erreur}",
-  "raid.massban_resultat": "Ban en masse terminé : {bannis} membre(s) banni(s), {echecs} échec(s)."
+  "raid.massban_resultat": "Ban en masse terminé : {bannis} membre(s) banni(s), {echecs} échec(s).",
+  "raid.lever_incomplet": "⚠️ Je n'ai pas pu tout restaurer : le mode raid reste actif. Corrigez le problème ci-dessous puis réessayez."
 }

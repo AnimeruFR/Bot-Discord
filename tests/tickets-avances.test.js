@@ -300,6 +300,27 @@ test("SLA : une seule alerte, pas si pris en charge, sans délai ou trop récent
     assert.strictEqual(await traiterSla(bot, T0 + 60 * MIN), 0)
 })
 
+test("SLA : au plus 10 alertes par serveur et par passage, les suivantes au passage d'après", async () => {
+    const SG2 = "555555555555555586"
+    const type = db.addTicketType(SG2, { nom: "Support", description: null, categoryId: null, staffRoleId: null })
+    tickets.definirDelai(SG2, type, 30)
+    const envoyes = []
+    const canaux = Array.from({ length: 13 }, (_, n) => `66666666666666${String(7000 + n)}`)
+    const guild = {
+        id: SG2, available: true, roles: { cache: new Discord.Collection() },
+        channels: { cache: new Discord.Collection(canaux.map(id => [id, {
+            id, name: "ticket-bob", topic: OWN, type: Discord.ChannelType.GuildText, send: async () => { envoyes.push(id); return { id: "1" } }
+        }])) }
+    }
+    const bot = { user: { id: BOT }, guilds: { cache: new Discord.Collection([[SG2, guild]]) } }
+    for (const id of canaux) db.addTicket(SG2, id, OWN, type, { staffRoleId: null, createdAt: T0 - 120 * MIN })
+    assert.strictEqual(await traiterSla(bot, T0), 10)
+    assert.strictEqual(envoyes.length, 10)
+    assert.strictEqual(await traiterSla(bot, T0 + 5 * MIN), 3, "le reste au passage suivant")
+    assert.strictEqual(new Set(envoyes).size, 13, "aucun ticket alerté deux fois")
+    assert.strictEqual(await traiterSla(bot, T0 + 10 * MIN), 0)
+})
+
 test("statistiques : taux de tickets pris en charge dans le délai", async () => {
     const types = [{ id: 1, nom: "Support", sla_minutes: 10 }, { id: 2, nom: "Libre", sla_minutes: null }]
     const now = 100 * MIN

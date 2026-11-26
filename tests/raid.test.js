@@ -42,6 +42,12 @@ function serveur({ niveau = 1, permsBot = Flags.ManageGuild, features = [], eche
 }
 
 const arrivee = guild => ({ guild, user: { bot: false } })
+// Arrivée dont on attend aussi le verrouillage et l'alerte (noterArrivee ne les attend pas)
+async function arriver(guild, maintenant) {
+    const r = await raid.noterArrivee(arrivee(guild), maintenant)
+    if (r.suite) Object.assign(r, await r.suite)
+    return r
+}
 const lireRaids = guildId => db.sqlAll("SELECT * FROM raid_events WHERE guild_id = ? ORDER BY id", [guildId])
 
 // Faux composant ou fausse commande : permissions du membre au choix
@@ -76,7 +82,7 @@ test("/raid et /massban sont refusés à un non-staff (garde commune)", async ()
 
 test("sans réglage, bot, ou module modération coupé : rien n'est compté", async () => {
     const { guild } = serveur()
-    for (let i = 0; i < 20; i++) assert.strictEqual((await raid.noterArrivee(arrivee(guild))).declenche, false)
+    for (let i = 0; i < 20; i++) assert.strictEqual((await arriver(guild)).declenche, false)
     assert.strictEqual(lireRaids(guild.id).length, 0)
 
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
@@ -84,7 +90,7 @@ test("sans réglage, bot, ou module modération coupé : rien n'est compté", as
     assert.strictEqual(lireRaids(guild.id).length, 0, "les bots ne comptent pas")
 
     db.setModule(guild.id, "moderation", false)
-    for (let i = 0; i < 10; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 10; i++) await arriver(guild)
     assert.strictEqual(lireRaids(guild.id).length, 0, "module désactivé")
     db.setModule(guild.id, "moderation", true)
 })
@@ -94,8 +100,8 @@ test("sous le seuil ou hors fenêtre : pas de raid ; noterArrivee ne lève jamai
     raid.setReglage(guild.id, { arrivees: 5, secondes: 10 })
     const t0 = 1_800_000_000_000
     // 4 arrivées, puis 4 de plus 11 s plus tard : jamais 5 dans la fenêtre
-    for (let i = 0; i < 4; i++) await raid.noterArrivee(arrivee(guild), t0 + i * 100)
-    for (let i = 0; i < 4; i++) await raid.noterArrivee(arrivee(guild), t0 + 11_000 + i * 100)
+    for (let i = 0; i < 4; i++) await arriver(guild, t0 + i * 100)
+    for (let i = 0; i < 4; i++) await arriver(guild, t0 + 11_000 + i * 100)
     assert.strictEqual(lireRaids(guild.id).length, 0)
     assert.deepStrictEqual(await raid.noterArrivee(null), { declenche: false }, "membre invalide : aucune exception")
     assert.deepStrictEqual(await raid.noterArrivee({ guild: null }), { declenche: false })
@@ -104,7 +110,7 @@ test("sous le seuil ou hors fenêtre : pas de raid ; noterArrivee ne lève jamai
 test("50 arrivées simultanées : un seul raid, serveur verrouillé, alerte avec bouton", async () => {
     const { guild, envois, appels } = serveur({ niveau: 1 })
     raid.setReglage(guild.id, { arrivees: 5, secondes: 30 })
-    const resultats = await Promise.all(Array.from({ length: 50 }, () => raid.noterArrivee(arrivee(guild))))
+    const resultats = await Promise.all(Array.from({ length: 50 }, () => arriver(guild)))
     assert.strictEqual(resultats.filter(r => r.declenche).length, 1)
     const lignes = lireRaids(guild.id)
     assert.strictEqual(lignes.length, 1)
@@ -117,7 +123,7 @@ test("50 arrivées simultanées : un seul raid, serveur verrouillé, alerte avec
     assert.strictEqual(envois[0].components[0].components[0].data.custom_id, `raid:lever:${lignes[0].id}`)
 
     // Encore des arrivées pendant le raid : toujours un seul raid
-    await Promise.all(Array.from({ length: 20 }, () => raid.noterArrivee(arrivee(guild))))
+    await Promise.all(Array.from({ length: 20 }, () => arriver(guild)))
     assert.strictEqual(lireRaids(guild.id).length, 1)
     assert.strictEqual(envois.length, 1)
 })
@@ -125,7 +131,7 @@ test("50 arrivées simultanées : un seul raid, serveur verrouillé, alerte avec
 test("levée : restaure le niveau et les invitations, trace lifted_by, une seule fois", async () => {
     const { guild, appels } = serveur({ niveau: 2 })
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 3; i++) await arriver(guild)
     assert.strictEqual(guild.verificationLevel, raid.NIVEAU_RAID)
     assert.ok(raid.raidEnCours(guild.id))
 
@@ -142,14 +148,14 @@ test("levée : restaure le niveau et les invitations, trace lifted_by, une seule
     assert.strictEqual((await raid.lever(guild, { par: MOD })).erreur, "aucun")
 
     // Un nouveau raid est possible une fois le premier levé
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 3; i++) await arriver(guild)
     assert.strictEqual(lireRaids(guild.id).length, 2)
 })
 
 test("levée : un niveau changé à la main pendant le raid n'est pas écrasé ; invitations déjà suspendues laissées", async () => {
     const a = serveur({ niveau: 1 })
     raid.setReglage(a.guild.id, { arrivees: 3, secondes: 30 })
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(a.guild))
+    for (let i = 0; i < 3; i++) await arriver(a.guild)
     a.guild.verificationLevel = 3
     const r = await raid.lever(a.guild, { par: MOD })
     assert.strictEqual(r.niveauModifie, true)
@@ -157,7 +163,7 @@ test("levée : un niveau changé à la main pendant le raid n'est pas écrasé ;
 
     const b = serveur({ niveau: 4, features: ["INVITES_DISABLED"] })
     raid.setReglage(b.guild.id, { arrivees: 3, secondes: 30 })
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(b.guild))
+    for (let i = 0; i < 3; i++) await arriver(b.guild)
     assert.deepStrictEqual(b.appels, { niveaux: [], invitations: [] }, "déjà au maximum et invitations déjà coupées : rien à faire")
     await raid.lever(b.guild, { par: MOD })
     assert.deepStrictEqual(b.appels.invitations, [], "on ne rétablit pas ce qu'on n'a pas suspendu")
@@ -167,7 +173,7 @@ test("après un redémarrage, un raid en cours reste levable et bloque un second
     const { guild, appels } = serveur({ niveau: 4 })
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
     db.sqlRun("INSERT INTO raid_events (guild_id, started_at, arrivals, previous_level, invites_paused) VALUES (?, ?, 5, 1, 1)", [guild.id, Date.now()])
-    for (let i = 0; i < 10; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 10; i++) await arriver(guild)
     assert.strictEqual(lireRaids(guild.id).length, 1, "pas de second raid pendant celui qui est en base")
     const r = await raid.lever(guild, { par: MOD })
     assert.strictEqual(r.niveau, 1)
@@ -178,7 +184,7 @@ test("après un redémarrage, un raid en cours reste levable et bloque un second
 test("alert_only : alerte au staff, le serveur n'est pas touché", async () => {
     const { guild, envois, appels } = serveur({ niveau: 1 })
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30, alerteSeule: true })
-    await Promise.all(Array.from({ length: 10 }, () => raid.noterArrivee(arrivee(guild))))
+    await Promise.all(Array.from({ length: 10 }, () => arriver(guild)))
     assert.deepStrictEqual(appels, { niveaux: [], invitations: [] })
     assert.strictEqual(guild.verificationLevel, 1)
     const [ligne] = lireRaids(guild.id)
@@ -194,7 +200,7 @@ test("alert_only : alerte au staff, le serveur n'est pas touché", async () => {
 test("bot sans « Gérer le serveur » : alerte seulement, avec le motif", async () => {
     const { guild, envois, appels } = serveur({ permsBot: 0n })
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 3; i++) await arriver(guild)
     assert.deepStrictEqual(appels, { niveaux: [], invitations: [] })
     assert.strictEqual(lireRaids(guild.id)[0].previous_level, null)
     assert.strictEqual(envois.length, 1)
@@ -205,7 +211,7 @@ test("échecs de verrouillage : notés, non bloquants, rien à restaurer à tort
     const a = serveur({ echecNiveau: true, sansInvitations: true })
     raid.setReglage(a.guild.id, { arrivees: 3, secondes: 30 })
     let r
-    for (let i = 0; i < 3; i++) r = await raid.noterArrivee(arrivee(a.guild))
+    for (let i = 0; i < 3; i++) r = await arriver(a.guild)
     assert.strictEqual(r.declenche, true)
     assert.strictEqual(r.mesures.echecs.length, 2)
     assert.strictEqual(a.envois.length, 1, "l'alerte part malgré les échecs")
@@ -216,6 +222,49 @@ test("échecs de verrouillage : notés, non bloquants, rien à restaurer à tort
     const levee = await raid.lever(a.guild, { par: MOD })
     assert.strictEqual(levee.niveau, null)
     assert.strictEqual(a.guild.verificationLevel, 3)
+})
+
+test("levée : une restauration qui échoue laisse le raid ouvert et relevable, sans refaire ce qui est restauré", async () => {
+    const { guild, appels } = serveur({ niveau: 2 })
+    raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
+    for (let i = 0; i < 3; i++) await arriver(guild)
+    let panne = true
+    const disable = guild.disableInvites
+    guild.disableInvites = async pause => { if (panne) throw new Error("API en panne"); return disable(pause) }
+
+    const [a, b] = await Promise.all([raid.lever(guild, { par: MOD }), raid.lever(guild, { par: MOD })])
+    const [reel, refus] = a.erreur ? [b, a] : [a, b]
+    assert.strictEqual(refus.erreur, "deja", "clic simultané refusé pendant la levée")
+    assert.strictEqual(reel.leve, false)
+    assert.strictEqual(reel.niveau, 2, "le niveau a été restauré")
+    assert.ok(reel.echecs[0].includes("invitations"))
+    assert.ok(raid.raidEnCours(guild.id), "le raid reste ouvert")
+    assert.strictEqual(lireRaids(guild.id)[0].ended_at, null)
+
+    panne = false
+    const r = await raid.lever(guild, { par: MOD })
+    assert.strictEqual(r.leve, true)
+    assert.strictEqual(r.invites, true)
+    assert.deepStrictEqual(appels.niveaux, [raid.NIVEAU_RAID, 2], "niveau restauré une seule fois")
+    assert.strictEqual(raid.raidEnCours(guild.id), null)
+    assert.strictEqual(lireRaids(guild.id)[0].lifted_by, MOD)
+})
+
+test("noterArrivee n'attend pas le verrouillage ni l'alerte", async () => {
+    const { guild, envois } = serveur({ niveau: 1 })
+    raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
+    let debloquer
+    const porte = new Promise(r => { debloquer = r })
+    guild.setVerificationLevel = async () => { await porte }
+    await raid.noterArrivee(arrivee(guild))
+    await raid.noterArrivee(arrivee(guild))
+    const r = await raid.noterArrivee(arrivee(guild)) // se résout alors que le verrouillage est bloqué
+    assert.strictEqual(r.declenche, true)
+    assert.strictEqual(lireRaids(guild.id).length, 1, "raid enregistré avant")
+    assert.strictEqual(envois.length, 0, "alerte pas encore partie")
+    debloquer()
+    await r.suite
+    assert.strictEqual(envois.length, 1)
 })
 
 test("réglage : bornes, désactivation", () => {
@@ -251,7 +300,7 @@ test("/raid : config, statut, lever, désactiver", async () => {
     assert.ok((await lancer({ action: "config", arrivees: 1000 })).includes("hors limites"))
     assert.ok((await lancer({ action: "lever" })).includes("Aucun mode raid"))
     await lancer({ action: "config", alerte_seule: false })
-    for (let i = 0; i < 4; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 4; i++) await arriver(guild)
     assert.ok((await lancer({ action: "statut" })).includes("en cours"))
     assert.ok((await lancer({ action: "lever" })).includes("levé"))
     assert.strictEqual(guild.verificationLevel, 1)
@@ -263,7 +312,7 @@ test("/raid : config, statut, lever, désactiver", async () => {
 test("bouton « Lever le mode raid » : refusé à un non-staff, effectif pour le staff", async () => {
     const { guild } = serveur({ niveau: 2 })
     raid.setReglage(guild.id, { arrivees: 3, secondes: 30 })
-    for (let i = 0; i < 3; i++) await raid.noterArrivee(arrivee(guild))
+    for (let i = 0; i < 3; i++) await arriver(guild)
     const id = raid.raidEnCours(guild.id).id
     const routeur = creerRouteur()
     routeur.enregistrerCommande(cmdRaid)
@@ -445,6 +494,23 @@ test("massban : sans API de ban groupé, une boucle ; annulation et délai ne ba
         assert.strictEqual(casDe(g.id, U(7)).length, 0)
         assert.ok(i.envois.at(-1).content.includes(clic ? "annulé" : "Temps écoulé"))
     }
+})
+
+test("massban : si le ban en masse échoue globalement, repli un par un sur les mêmes cibles", async () => {
+    const guild = serveurBan({ echoue: [U(2)] })
+    guild.bans.bulkCreate = async () => { throw new Error("API indisponible") }
+    const erreurs = console.error
+    console.error = () => {}
+    let i
+    try {
+        i = await lancerMassban(guild, { ids: `${U(1)} ${U(2)} ${U(3)}` })
+    } finally {
+        console.error = erreurs
+    }
+    assert.deepStrictEqual(guild.bans.uns.map(b => b.id), [U(1), U(3)])
+    assert.strictEqual(casDe(guild.id, U(1)).length, 1)
+    assert.strictEqual(casDe(guild.id, U(2)).length, 0)
+    assert.ok(i.envois.at(-1).content.includes("2 membre(s) banni(s), 1 échec(s)"))
 })
 
 test("massban : depuis_minutes ne prend que les arrivées récentes humaines, avec les identifiants", async () => {

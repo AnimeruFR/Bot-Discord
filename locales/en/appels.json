@@ -30,6 +30,7 @@
   "appel.champ_sanction": "Sanction",
   "appel.champ_texte": "Appeal text",
   "appel.champ_resultat": "Decision",
+  "appel.annulation_echec": "Cancelling the sanction failed ({motif}): the appeal stays pending, try again.",
   "appel.sanction_effacee": "The sanction no longer exists in the history.",
   "appel.bouton_accepter": "Accept",
   "appel.bouton_refuser": "Refuse",

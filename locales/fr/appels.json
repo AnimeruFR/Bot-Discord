@@ -30,6 +30,7 @@
   "appel.champ_sanction": "Sanction",
   "appel.champ_texte": "Texte de l'appel",
   "appel.champ_resultat": "Décision",
+  "appel.annulation_echec": "L'annulation de la sanction a échoué ({motif}) : l'appel reste en attente, réessayez.",
   "appel.sanction_effacee": "La sanction n'existe plus dans l'historique.",
   "appel.bouton_accepter": "Accepter",
   "appel.bouton_refuser": "Refuser",

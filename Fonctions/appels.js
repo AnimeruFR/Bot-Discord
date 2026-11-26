@@ -242,8 +242,21 @@ async function decider(bot, interaction) {
 
     let suite = ""
     if (accepter) {
+        // annulerCase a sa propre transaction (db.transaction ne s'imbrique pas) : les deux écritures se suivent sans await,
+        // et si l'annulation échoue le statut revient à « en attente » pour que le staff puisse réessayer.
         // « deja » : la sanction a été annulée entre-temps, c'est le but recherché
-        const r = annulerCase(guild.id, c.id, interaction.user.id)
+        let r, motif = null
+        try {
+            r = annulerCase(guild.id, c.id, interaction.user.id)
+        } catch (err) {
+            console.error("Appel : annulation impossible :", err.message)
+            motif = err.message
+        }
+        if (motif !== null || (r !== "ok" && r !== "deja")) {
+            db.sqlRun("UPDATE appeals SET status = 'en_attente', decided_by = NULL, decided_at = NULL WHERE guild_id = ? AND id = ? AND status = 'accepte' AND decided_by = ?",
+                [guild.id, appel.id, interaction.user.id])
+            return refuser(interaction, t(interaction, "appel.annulation_echec", { motif: motif ?? r }))
+        }
         if (r === "ok") suite = await lever(interaction, c, membre)
     }
 

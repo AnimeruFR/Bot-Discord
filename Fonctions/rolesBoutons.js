@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const db = require('./db')
 const { sendModLog } = require('./logs')
 const { t } = require('./i18n')
+const { getQuarantine } = require('./quarantaine')
 
 const { Flags } = Discord.PermissionsBitField
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
@@ -81,6 +82,8 @@ async function onClicRole(bot, interaction) {
     const panel = db.getRolePanel(guild.id, interaction.message.id)
     const bouton = panel ? db.getRoleButton(guild.id, panel.message_id, roleId) : null
     if (!bouton) return interaction.reply({ content: t(interaction, "roles.inactif"), flags: EPHEMERAL })
+    // Un membre en quarantaine ne se redonne aucun rôle (ni n'en retire : la quarantaine garde ses rôles sauvegardés)
+    if (getQuarantine(guild.id, interaction.user.id)) return interaction.reply({ content: t(interaction, "quar.refus_roles"), flags: EPHEMERAL })
 
     const role = guild.roles.cache.get(roleId)
     const refus = refusRole(guild, role) ?? (guild.members.me.permissions.has(Flags.ManageRoles) ? null : "il me manque la permission « Gérer les rôles »")

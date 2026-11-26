@@ -68,7 +68,8 @@ Règles :
 ## Configuration et langues
 
 - **`/config`** (Gérer le serveur) ouvre une fenêtre privée avec des menus : langue, couleur des embeds, **modules** (activer ou désactiver la Modération, la Communauté et chacun de ses sous-modules, limiter les jeux à certains salons ; administrateur uniquement), **rôle staff** (ses membres peuvent utiliser `/warn`, `/warns`, `/unwarn` et `/historique` ; à choisir avec « Gérer le serveur » + « Exclure temporairement »), salon de logs, tickets (catégorie, rôle staff, fermeture des inactifs), texte du panneau de tickets, et un résumé du reste. Elle applique exactement les mêmes règles que les commandes (`/setlogs`, `/setticket`) : par exemple, changer la config des tickets demande toujours Gérer le serveur + les salons + les rôles. Une seule fenêtre par membre, fermée au bout de 5 minutes.
-- **Filtre des comptes récents** (`/config`, section filtre) : un compte de moins de N jours reçoit un rôle « en attente » ou est expulsé, avec un log. Le bot a besoin de « Gérer les rôles » (rôle du bot au-dessus du rôle en attente) ou d'« Expulser des membres ». Le rôle en attente se retire à la main pour l'instant.
+- **Filtre des comptes récents** (`/config`, section filtre) : un compte de moins de N jours reçoit un rôle « en attente » ou est expulsé, avec un log. Le bot a besoin de « Gérer les rôles » (rôle du bot au-dessus du rôle en attente) ou d'« Expulser des membres ». Le rôle en attente se retire à la main, ou utilisez `/verification`.
+- **Permissions du bot pour la modération avancée** : « Gérer le serveur » (anti-raid, AutoMod, phishing), « Gérer les rôles » (vérification, quarantaine), « Gérer les pseudos » (filtre de pseudos), « Bannir des membres » (`/massban`).
 - **Interrupteur d'urgence** : `DESACTIVER=communaute.jeux,commande:quiz` dans le `.env` coupe ces fonctions sur tous les serveurs au prochain redémarrage (en cas de bug grave), sans redéployer.
 - **Langues** : le bot parle français ou anglais. Par défaut, il répond dans la langue du client Discord de chaque membre (les messages publics suivent la langue du serveur) ; `/config` permet d'imposer une langue. Les descriptions des commandes sont traduites en anglais (fichier `locales/commandes.en.json`), les messages dans `locales/fr.json` et `locales/en.json`.
   Traduit dans cette version : aide, ping, confidentialité, `/config`, panneau et ouverture des tickets, rôles à boutons, giveaways, messages de bienvenue par défaut. Les réponses des commandes de modération restent en français pour l'instant.
@@ -156,7 +157,15 @@ Les commandes sont rangées par module dans `Commandes/` : le dossier décide du
 |---|---|---|
 | `/ban`, `/unban` | Bannir des membres | Bannir (avec confirmation par bouton) / débannir |
 | `/tempban membre duree raison` | Bannir des membres | Ban temporaire (1 min à 365 j), déban automatique même après un redémarrage |
-| `/historique membre` | Exclure temporairement | Toutes les sanctions d'un membre (warns, mutes, kicks, bans, débans) |
+| `/dossier membre`, `/historique membre` | Exclure temporairement (ou rôle staff) | Dossier complet en pages : résumé, sanctions, notes, appels (jamais le sien ; notes masquées pour un membre plus haut placé) |
+| `/appel action` | Exclure temporairement | Appels de sanction en attente ; les membres font appel par le bouton de leur MP (salon `/setlogs famille:Appels` requis) |
+| `/raid action …` | Gérer le serveur | Anti-raid : au-delà de N arrivées en X s, niveau de vérification relevé, invitations suspendues, alerte avec bouton de levée (ou alerte seule) |
+| `/massban …` | Bannir + Gérer le serveur | Ban en masse (IDs ou arrivées depuis N min, 200 max), aperçu et confirmation |
+| `/quarantaine action …` | Exclure temporairement + Gérer les rôles | Isole un membre (rôles sauvegardés puis rendus à la levée) |
+| `/verification action …` | Gérer le serveur + Gérer les rôles | Panneau « Je ne suis pas un robot » : défi d'emoji, rôle vérifié |
+| `/pseudos action …` | Gérer les pseudos | Renomme les pseudos qui se mettent en haut de la liste, illisibles ou interdits |
+| `/phishing action …` | Gérer le serveur | Règle AutoMod contre les domaines d'arnaque connus (`data-statique/domaines-phishing.txt`), liste blanche par serveur |
+| `/journal …`, `/modstats …` | Gérer le serveur | Journal des sanctions et de la configuration ; activité par modérateur (90 et 365 jours : premium). Rapport automatique chaque lundi à 9 h |
 | `/sanctions action …` | Gérer le serveur | Sanctions automatiques : « au 3e warn, mute 1 h », etc. (10 seuils max) |
 | `/lock [salon]`, `/unlock [salon]` | Gérer les salons + Gérer les permissions | @everyone ne peut plus écrire ; `/unlock` remet les permissions d'avant |
 | `/slowmode duree [salon]` | Gérer les salons | Mode lent (0 = désactivé, 6 h max) |
@@ -177,9 +186,9 @@ Les commandes sont rangées par module dans `Commandes/` : le dossier décide du
 
 | Commande | Permission requise | Rôle |
 |---|---|---|
-| `/ticket action [membre]` | Panneau : Gérer les messages ; ajouter/retirer : staff du ticket | Poste le panneau, ajoute ou retire un membre d'un ticket |
+| `/ticket action [membre] [type]` | Panneau : Gérer les messages ; ajouter/retirer/transférer : staff du ticket | Poste le panneau, ajoute ou retire un membre, transfère un ticket vers un autre type |
 | `/setticket [categorie] [staff] [inactivite] [reinitialiser]` | Gérer le serveur + les salons + les rôles | Catégorie, rôle staff et fermeture des tickets inactifs |
-| `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie et son rôle staff |
+| `/tickettype action …` | Gérer le serveur + les salons + les rôles | Types de tickets (10 max), chacun avec sa catégorie, son rôle staff, son délai cible (alerte au staff) et jusqu'à 5 champs de formulaire |
 | `/stats` | Gérer le serveur | Statistiques des tickets sur 30 jours |
 | `/reponse action [nom]` | Gérer les messages ou staff du ticket ; ajouter/retirer : Gérer le serveur | Réponses prédéfinies (25 max) postées dans un ticket |
 

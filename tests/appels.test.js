@@ -281,6 +281,35 @@ test("accepter l'appel d'un warn l'annule, prévient le membre ; un double clic 
     assert.ok(texteDe(tard).includes("déjà"))
 })
 
+test("accepter puis échec de l'annulation : l'appel repasse en attente et peut être retraité", async () => {
+    const m = monde()
+    const r = routeurAppel()
+    const numero = nouveauWarn(m.G)
+    const { id } = appels.creerAppel(m.G, U, numero, "injuste")
+    const reel = db.transaction
+    db.transaction = () => { throw new Error("base verrouillée") }
+    const erreurs = console.error
+    console.error = () => {}
+    const clic = composant(m, `appel-oui:${id}`, { utilisateur: MOD, perms: [Flags.ModerateMembers] })
+    try {
+        await r.router(null, clic)
+    } finally {
+        db.transaction = reel
+        console.error = erreurs
+    }
+    const ligne = appels.lireAppel(m.G, id)
+    assert.strictEqual(ligne.status, "en_attente")
+    assert.strictEqual(ligne.decided_by, null)
+    assert.strictEqual(cases.lireCase(m.G, numero).cancelled_at, null)
+    assert.ok(texteDe(clic).includes("reste en attente"))
+    assert.strictEqual(m.mp.length, 0, "le membre n'est pas prévenu")
+
+    const retour = composant(m, `appel-oui:${id}`, { utilisateur: MOD, perms: [Flags.ModerateMembers] })
+    await r.router(null, retour)
+    assert.strictEqual(appels.lireAppel(m.G, id).status, "accepte")
+    assert.ok(cases.lireCase(m.G, numero).cancelled_at)
+})
+
 test("refuser un appel : sanction maintenue, membre prévenu", async () => {
     const m = monde()
     const r = routeurAppel()

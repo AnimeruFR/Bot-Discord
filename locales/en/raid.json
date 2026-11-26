@@ -25,7 +25,6 @@
   "raid.detail_echec": "⚠️ Failed ({motif}): please restore it by hand in the server settings.",
   "raid.deja_desactive": "Anti-raid was not set up.",
   "raid.desactive_ok": "Anti-raid disabled. A raid already in progress can still be lifted with `/raid action:lever`.",
-
   "raid.massban_manque_cible": "Provide IDs (`ids`) or a duration (`depuis_minutes`).",
   "raid.massban_perm_membre": "Mass ban requires the \"Ban Members\" and \"Manage Server\" permissions.",
   "raid.massban_perm_bot": "The bot lacks the \"Ban Members\" and \"Manage Server\" permissions required for mass ban.",
@@ -48,5 +47,6 @@
   "raid.massban_plus_permission": "You no longer have the required permissions: mass ban cancelled.",
   "raid.massban_verif_impossible": "Check failed, mass ban cancelled: {erreur}",
   "raid.massban_echec": "The mass ban failed: {erreur}",
-  "raid.massban_resultat": "Mass ban done: {bannis} member(s) banned, {echecs} failure(s)."
+  "raid.massban_resultat": "Mass ban done: {bannis} member(s) banned, {echecs} failure(s).",
+  "raid.lever_incomplet": "⚠️ I couldn't restore everything: raid mode stays active. Fix the problem below and try again."
 }

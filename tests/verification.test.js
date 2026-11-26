@@ -146,6 +146,56 @@ test("un bon choix donne le rôle, un mauvais choix compte une erreur et renouve
     assert.ok(bon.editions[0].content.includes("Vérification réussie"))
 })
 
+const mettreEnQuarantaine = (guild, membre) => db.sqlRun("INSERT OR REPLACE INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, '[]', ?, ?, ?)",
+    [guild.id, membre.id, "800000000000000001", "test", Date.now()])
+
+test("un membre en quarantaine ne peut pas se vérifier (ouverture et réponse)", async () => {
+    const guild = mkGuild("111111111111111110")
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000010")
+    mettreEnQuarantaine(guild, membre)
+    const ouverture = clic(guild, membre, "verif:ouvrir")
+    await verification.onClicVerification(bot, ouverture)
+    assert.ok(texte(ouverture.reponses[0]).includes("quarantaine"), "ouverture refusée")
+    assert.ok(!ouverture.reponses[0].components, "aucun défi")
+
+    // Défi ouvert avant la quarantaine : la bonne réponse est refusée aussi
+    const autre = mkMembre(guild, "700000000000000011")
+    const { defi } = await ouvrirDefi(guild, autre)
+    mettreEnQuarantaine(guild, autre)
+    const reponse = clic(guild, autre, defi.bon.id)
+    await verification.onClicVerification(bot, reponse)
+    assert.strictEqual(autre.ajouts, 0, "aucun rôle donné")
+    assert.ok(texte(reponse.reponses[0]).includes("quarantaine"))
+    // Quarantaine levée : le même défi fonctionne (il n'a pas été détruit)
+    db.sqlRun("DELETE FROM quarantines WHERE guild_id = ? AND user_id = ?", [guild.id, autre.id])
+    await verification.onClicVerification(bot, clic(guild, autre, defi.bon.id))
+    assert.strictEqual(autre.ajouts, 1)
+})
+
+test("échec de roles.add : le membre reçoit une réponse et le défi est conservé", async () => {
+    const guild = mkGuild("111111111111111111")
+    configurerServeur(guild)
+    const membre = mkMembre(guild, "700000000000000012")
+    const { defi } = await ouvrirDefi(guild, membre)
+    const ajouter = membre.roles.add
+    membre.roles.add = async () => { throw new Error("Missing Permissions") }
+    const log = console.error
+    console.error = () => {}
+    const echec = clic(guild, membre, defi.bon.id)
+    await verification.onClicVerification(bot, echec)
+    console.error = log
+    assert.strictEqual(echec.editions.length, 1, "le membre reçoit une réponse")
+    assert.ok(texte(echec.editions[0]).includes("indisponible"))
+    assert.strictEqual(echec.editions[0].components, undefined, "les boutons du défi restent")
+    // Discord est rétabli : le même défi peut être retenté
+    membre.roles.add = ajouter
+    const retente = clic(guild, membre, defi.bon.id)
+    await verification.onClicVerification(bot, retente)
+    assert.strictEqual(membre.ajouts, 1)
+    assert.ok(retente.editions[0].content.includes("Vérification réussie"))
+})
+
 test("3 erreurs bloquent le défi 10 minutes", async () => {
     const G = "111111111111111104"
     const guild = mkGuild(G)

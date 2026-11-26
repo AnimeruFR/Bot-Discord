@@ -133,9 +133,13 @@ async function mettre(interaction, user, raisonSaisie) {
     return { numero, retires: retirables.length, gardes: gardes.length, prevenu }
 }
 
+const MAX_RAISON = 400
+// Nom lisible d'un rôle pour un log (sans mention ni mise en forme)
+const nomRole = role => `${String(role.name ?? "?").replace(/[@`*_~|<>]/g, "").slice(0, 40)} (${role.id})`
+
 // --- Lever la quarantaine --------------------------------------------------------------------------------------
 
-// Renvoie { erreur } ou { absent: true } (membre parti : sauvegarde supprimée) ou { numero, restaures, supprimes, impossibles }.
+// Renvoie { erreur } ou { absent: true } (membre parti : sauvegarde supprimée) ou { numero, restaures, supprimes, impossibles, nonRendus }.
 async function lever(interaction, user) {
     const guild = interaction.guild
     const ligne = getQuarantine(guild.id, user.id)
@@ -154,12 +158,12 @@ async function lever(interaction, user) {
     // Un rôle plus haut est refusé en bloc (la quarantaine reste), un rôle supprimé ou hors de portée du bot est ignoré.
     const proprietaire = interaction.user.id === guild.ownerId
     const plusHautBot = guild.members.me.roles.highest
-    let supprimes = 0, impossibles = 0
+    const supprimes = [], impossibles = [] // "nom (id)" : le staff doit pouvoir les rendre à la main
     const aRendre = []
     for (const id of ligne.roles) {
         const role = guild.roles.cache.get(id)
-        if (!role) { supprimes++; continue }
-        if (role.id === guild.id || role.managed || role.comparePositionTo(plusHautBot) >= 0) { impossibles++; continue }
+        if (!role) { supprimes.push(id); continue }
+        if (role.id === guild.id || role.managed || role.comparePositionTo(plusHautBot) >= 0) { impossibles.push(nomRole(role)); continue }
         if (!proprietaire && role.comparePositionTo(interaction.member.roles.highest) >= 0) {
             return { erreur: t(interaction, "quar.lever_superieur", { role: `<@&${role.id}>` }) }
         }
@@ -176,9 +180,17 @@ async function lever(interaction, user) {
     }
 
     supprimerLigne(guild.id, user.id)
-    const numero = db.addCase(guild.id, { userId: user.id, moderatorId: interaction.user.id, type: "fin_quarantaine", reason: "Fin de quarantaine" })
-    await sendModLog(interaction, { action: "quarantaine", cible: user, details: `Fin de quarantaine : ${aRendre.length} rôle(s) rendu(s), ${supprimes} supprimé(s), ${impossibles} impossible(s) à rendre` })
-    return { numero, restaures: aRendre.length, supprimes, impossibles }
+    const nonRendus = [...supprimes.map(id => `${id} (supprimé)`), ...impossibles]
+    const aMain = nonRendus.length ? `rôles à rendre à la main : ${nonRendus.join(", ")}` : ""
+    const numero = db.addCase(guild.id, {
+        userId: user.id, moderatorId: interaction.user.id, type: "fin_quarantaine",
+        reason: ("Fin de quarantaine" + (aMain ? ` (${aMain})` : "")).slice(0, MAX_RAISON)
+    })
+    await sendModLog(interaction, {
+        action: "quarantaine", cible: user,
+        details: `Fin de quarantaine : ${aRendre.length} rôle(s) rendu(s), ${supprimes.length} supprimé(s), ${impossibles.length} impossible(s) à rendre${aMain ? "\n" + aMain : ""}`
+    })
+    return { numero, restaures: aRendre.length, supprimes: supprimes.length, impossibles: impossibles.length, nonRendus }
 }
 
 // À appeler quand un membre arrive (Events/guildMemberAdd.js) : un membre en quarantaine qui est parti puis revenu
@@ -189,11 +201,53 @@ async function reappliquer(member) {
     const roleId = getRoleIsole(guild.id)
     const iso = roleId ? roleValide(guild, roleId) : null
     if (!iso || iso.permissions.any(PERMISSIONS_DANGEREUSES) || !botPeutDonner(guild, iso)) return false
-    await member.roles.add(iso.id, "Quarantaine : retour d'un membre en quarantaine")
+    try {
+        await member.roles.add(iso.id, "Quarantaine : retour d'un membre en quarantaine")
+    } catch (err) {
+        console.error("Échec du rôle isolé au retour d'un membre :", err.message)
+        // Le membre est revenu libre : le staff doit le savoir tout de suite
+        await sendModLog({ guild, user: member.client?.user ?? guild.members.me ?? member.user }, {
+            action: "quarantaine", cible: member.user,
+            details: `Alerte : ce membre en quarantaine est revenu sur le serveur et je n'ai pas pu lui redonner le rôle isolé (${err.message}). Isolez-le à la main.`
+        })
+        return false
+    }
     return true
+}
+
+// Rôle ajouté à un membre en quarantaine (autre bot, humain) : on le retire et on le garde pour la levée.
+// À appeler à chaque mise à jour de membre. Le retrait redéclenche l'événement, mais il ne reste alors plus rien à retirer.
+// Sans le rôle isolé sur le membre, on ne fait rien : c'est le cas pendant la levée (les rôles rendus ne sont pas retirés).
+async function retirerRolesAjoutes(bot, member) {
+    const guild = member.guild
+    const ligne = getQuarantine(guild.id, member.id)
+    if (!ligne) return []
+    const isoId = getRoleIsole(guild.id)
+    if (!isoId || !member.roles.cache.has(isoId)) return []
+    const moi = guild.members.me
+    if (!moi) return []
+    // Même règle qu'à la mise en quarantaine : ni @everyone, ni rôle isolé, ni rôle d'intégration, ni rôle au-dessus du bot
+    const extras = [...member.roles.cache.values()].filter(r => r.id !== guild.id && r.id !== isoId && !r.managed && r.comparePositionTo(moi.roles.highest) < 0)
+    if (!extras.length) return []
+
+    // Sauvegarde AVANT le retrait, comme à la mise en quarantaine
+    const ids = extras.map(r => r.id)
+    db.sqlRun("UPDATE quarantines SET roles = ? WHERE guild_id = ? AND user_id = ?",
+        [JSON.stringify([...new Set([...ligne.roles, ...ids])]), guild.id, member.id])
+    const liste = extras.map(nomRole).join(", ")
+    const acteur = { guild, user: bot?.user ?? moi }
+    try {
+        await member.roles.remove(ids, "Quarantaine : rôle ajouté pendant la quarantaine")
+    } catch (err) {
+        console.error("Échec du retrait d'un rôle ajouté en quarantaine :", err.message)
+        await sendModLog(acteur, { action: "quarantaine", cible: member.user, details: `Alerte : rôle(s) ajouté(s) à un membre en quarantaine, retrait impossible (${err.message}) : ${liste}` })
+        return []
+    }
+    await sendModLog(acteur, { action: "quarantaine", cible: member.user, details: `Rôle(s) ajouté(s) pendant la quarantaine, retiré(s) et sauvegardé(s) : ${liste}` })
+    return ids
 }
 
 module.exports = {
     PERMISSIONS_DANGEREUSES, getRoleIsole, getQuarantine, listerQuarantaines, refusRoleIsole, changerRoleIsole,
-    mettre, lever, reappliquer
+    mettre, lever, reappliquer, retirerRolesAjoutes
 }

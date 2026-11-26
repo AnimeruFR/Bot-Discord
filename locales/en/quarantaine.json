@@ -59,5 +59,6 @@
   "quar.liste_vide": "No member is in quarantine.",
   "quar.liste_titre": "**Members in quarantine** ({total}):",
   "quar.liste_ligne": "• {user}, since {date}, by {moderateur} ({n} saved role(s)): {raison}",
-  "quar.liste_reste": "… and {n} more."
+  "quar.liste_reste": "… and {n} more.",
+  "quar.refus_roles": "You are in quarantine: you cannot give yourself a role until a moderator lifts the measure."
 }
