@@ -17,7 +17,10 @@ function rendre(cible, partie, fin = []) {
     if (!etat.termine) {
         lignes.push(t(cible, "duels.morpion.tour", { user: mention(etat.tour), symbole: EMOJIS[etat.symboles[etat.tour]] }))
     } else {
-        lignes.push(etat.gagnant ? t(cible, "duels.morpion.victoire", { user: mention(etat.gagnant) }) : t(cible, "duels.morpion.egalite"), ...fin)
+        const conclusion = etat.forfait
+            ? t(cible, `duels.forfait.${etat.motif}`, { perdant: mention(etat.forfait), gagnant: mention(etat.gagnant) })
+            : (etat.gagnant ? t(cible, "duels.morpion.victoire", { user: mention(etat.gagnant) }) : t(cible, "duels.morpion.egalite"))
+        lignes.push(conclusion, ...fin)
     }
     const rangees = []
     for (let r = 0; r < 3; r++) {
@@ -33,6 +36,10 @@ function rendre(cible, partie, fin = []) {
         }
         rangees.push(rangee)
     }
+    if (!etat.termine) {
+        const abandon = new Discord.ButtonBuilder().setCustomId(duels.idBouton(PREFIXE, partie.id, "ab")).setLabel(t(cible, "duels.abandonner")).setEmoji("🏳️").setStyle(Discord.ButtonStyle.Secondary)
+        rangees.push(new Discord.ActionRowBuilder().addComponents(abandon))
+    }
     return { content: lignes.join("\n"), components: rangees }
 }
 
@@ -46,9 +53,11 @@ async function demarrer(interaction, auteur, adversaire) {
 async function surBouton(bot, interaction) {
     if (await duels.repondreInvitation(interaction, { demarrer })) return
     const id = duels.lireIdBouton(PREFIXE, interaction.customId)
-    if (!id || id.action !== "c") return
+    if (!id || !["c", "ab"].includes(id.action)) return
     const partie = parties.lirePartie(id.partieId)
     if (partie?.game !== "morpion") return refuser(interaction, t(interaction, "partie.terminee"))
+    // Abandonner : possible à tout moment, même quand ce n'est pas votre tour
+    if (id.action === "ab") return duels.abandonnerPartie(interaction, partie, rendre)
     const refus = parties.verifierClic(interaction, partie)
     if (refus) return refuser(interaction, t(interaction, refus))
 
@@ -60,9 +69,13 @@ async function surBouton(bot, interaction) {
     // Fin de partie : récompenses (peut prendre un instant), puis message final
     await interaction.deferUpdate()
     const gagnant = resultat.gagnant
-    const fin = await duels.terminerDuel(partie.id, interaction.guild, { gagnants: gagnant ? [gagnant] : [], montants: duels.montantsDuel(partie, gagnant) })
+    // Si la fin échoue, la partie est terminée sans récompense et le message le dit (jamais de partie bloquée)
+    const fin = await duels.conclureDuel(partie.id, interaction.guild, { gagnants: gagnant ? [gagnant] : [], montants: duels.montantsDuel(partie, gagnant) })
     await interaction.editReply(rendre(interaction, resultat.partie, fin.ok ? duels.lignesRecompenses(interaction, partie.guildId, fin) : []))
+        .catch(err => console.warn(`Partie ${partie.id} : message non modifié (${err.message})`))
 }
+
+duels.definirRendu("morpion", rendre)
 
 module.exports = {
     name: "morpion",

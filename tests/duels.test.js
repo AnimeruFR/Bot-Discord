@@ -31,13 +31,14 @@ function creerServeur(id, ids = [A, B, C, D]) {
 function clic(guild, userId, customId, { message = { id: "900", createdTimestamp: Date.now() }, messagesPublics = [] } = {}) {
     const i = {
         guild, guildId: guild.id, channelId: "777", locale: "fr", customId, message, user: { id: userId }, member: guild.membres[userId],
-        replied: false, deferred: false, reponses: [], maj: null, finales: [],
+        replied: false, deferred: false, reponses: [], suivis: [], maj: null, finales: [],
         channel: { messages: { edit: async (id, contenu) => { messagesPublics.push([id, contenu]) } } }
     }
     i.reply = async r => { i.reponses.push(r) }
     i.update = async r => { i.maj = r }
     i.deferUpdate = async () => { i.deferred = true }
     i.editReply = async r => { i.finales.push(r) }
+    i.followUp = async r => { i.suivis.push(r) }
     return i
 }
 
@@ -315,30 +316,32 @@ test("course de réaction : le gagnant reçoit 10 par le bouton", async (t) => {
 })
 
 test("au plus 10 duels récompensés par jour et par membre", async (t) => {
-    const g = creerServeur("555555555555555609")
+    // Un adversaire différent à chaque duel : la limite contre le même adversaire (3) ne gêne pas
+    const adversaires = Array.from({ length: 12 }, (_, i) => `1000000000000002${String(i).padStart(2, "0")}`)
+    const g = creerServeur("555555555555555609", [A, C, ...adversaires])
     brancherRecompenses()
     t.after(() => parties.configurerRecompenses(null))
-    const duel = async () => {
-        const { partie } = parties.creerPartie({ guildId: g.id, game: "pfc", players: [A, B], state: duels.etatInitialPfc(A, B) })
+    const duel = async adversaire => {
+        const { partie } = parties.creerPartie({ guildId: g.id, game: "pfc", players: [A, adversaire], state: duels.etatInitialPfc(A, adversaire) })
         return duels.terminerDuel(partie.id, g, { gagnants: [A], montants: duels.montantsDuel(partie, A) })
     }
     for (let n = 1; n <= 10; n++) {
-        const fin = await duel()
-        assert.deepStrictEqual([fin.ok, fin.accordees, fin.limitees], [true, { [A]: 15, [B]: 5 }, []], `duel ${n}`)
+        const fin = await duel(adversaires[n - 1])
+        assert.deepStrictEqual([fin.ok, fin.accordees, fin.limitees], [true, { [A]: 15, [adversaires[n - 1]]: 5 }, []], `duel ${n}`)
     }
     assert.strictEqual(duels.lireCompteurJour(g.id, A), 10)
-    const onzieme = await duel()
-    assert.deepStrictEqual(onzieme.accordees, {})
-    assert.deepStrictEqual(onzieme.limitees.sort(), [A, B])
+    const onzieme = await duel(adversaires[10])
+    assert.deepStrictEqual(onzieme.accordees, { [adversaires[10]]: 5 })
+    assert.deepStrictEqual(onzieme.limitees, [A])
     assert.match(duels.lignesRecompenses({ guildId: g.id, locale: "fr" }, g.id, onzieme).join("\n"), /10 duels récompensés/)
     assert.strictEqual(economie.compte(g.id, A).balance, 150)
-    assert.strictEqual(economie.compte(g.id, B).balance, 50)
+    assert.strictEqual(economie.compte(g.id, adversaires[0]).balance, 5)
     assert.ok(economie.verifierCoherence(g.id, A))
     // Le lendemain, le compteur repart
     const demain = Date.now() + 36 * 3600 * 1000
-    assert.deepStrictEqual(duels.reserverRecompenses(g.id, { [A]: 15 }, demain), { accordees: { [A]: 15 }, limitees: [] })
+    assert.deepStrictEqual(duels.reserverRecompenses(g.id, { [A]: 15 }, demain), { accordees: { [A]: 15 }, limitees: [], limiteesAdversaire: [] })
     // Un membre à qui il reste de la place n'est pas pénalisé par l'autre
-    assert.deepStrictEqual(duels.reserverRecompenses(g.id, { [C]: 15 }), { accordees: { [C]: 15 }, limitees: [] })
+    assert.deepStrictEqual(duels.reserverRecompenses(g.id, { [C]: 15 }), { accordees: { [C]: 15 }, limitees: [], limiteesAdversaire: [] })
 })
 
 test("un membre sanctionné n'est ni récompensé ni compté ; une partie déjà terminée ne compte pas", async (t) => {
@@ -480,4 +483,313 @@ test("commandes : drops, pfc, morpion, reaction sont bien déclarées", () => {
     assert.strictEqual(drop.permission, Discord.PermissionFlagsBits.ManageGuild)
     assert.deepStrictEqual(drop.options[0].choices.map(c => c.value), ["salons", "voir"])
     for (const commande of [pfc, morpion, reaction]) assert.deepStrictEqual([commande.permission, commande.dm], ["Aucune", false])
+})
+
+// --- Lot 3C : abandon, expiration, limites, échecs de crédit --------------------------------------------------------
+
+// Démarre un duel par le bouton « Accepter » et renvoie la partie
+async function lancerDuel(g, commande, auteur = A, adversaire = B) {
+    await commande.composants[0].gestionnaire(null, clic(g, adversaire, `${commande.name}:inv:${auteur}:${adversaire}:oui`))
+    return parties.partieEnCours(g.id, auteur)
+}
+
+// Faux client pour le planificateur d'expiration : serveurs, salon, message à modifier
+function fauxClient(g) {
+    const modifs = []
+    const message = { edit: async contenu => { modifs.push(contenu) } }
+    return { modifs, guilds: { cache: new Map([[g.id, g]]) }, channels: { fetch: async () => ({ messages: { fetch: async () => message } }) } }
+}
+
+// Fait dépasser la date limite d'une partie
+const perimer = id => db.sqlRun("UPDATE parties SET expires_at = ? WHERE id = ?", [Date.now() - 1000, id])
+
+test("morpion : le bouton Abandonner donne la partie et les récompenses à l'adversaire, même hors de son tour", async (t) => {
+    const g = creerServeur("555555555555555620")
+    brancherRecompenses()
+    t.after(() => parties.configurerRecompenses(null))
+    const partie = await lancerDuel(g, morpion)
+    assert.ok(morpion.rendre({ guildId: g.id, locale: "fr" }, partie).components.at(-1).components[0].data.custom_id.endsWith(":ab"))
+
+    // Un tiers ne peut pas abandonner à la place d'un joueur
+    const tiers = clic(g, C, `morpion:${partie.id}:ab`)
+    await morpion.composants[0].gestionnaire(null, tiers)
+    assert.match(tiers.reponses[0].content, /ne participes pas/)
+    assert.strictEqual(parties.lirePartie(partie.id).status, "en_cours")
+
+    // B abandonne alors que c'est le tour de A : A gagne 15, B reçoit 5
+    const ab = clic(g, B, `morpion:${partie.id}:ab`)
+    await morpion.composants[0].gestionnaire(null, ab)
+    const final = ab.finales[0].content
+    assert.match(final, new RegExp(`<@${B}> abandonne : <@${A}> remporte`))
+    assert.match(final, new RegExp(`<@${A}> : \\+15`))
+    assert.ok(ab.finales[0].components.every(r => r.components.every(b => b.data.disabled)))
+    assert.strictEqual(parties.lirePartie(partie.id).status, "finie")
+    assert.deepStrictEqual([economie.compte(g.id, A).balance, economie.compte(g.id, B).balance], [15, 5])
+    // Deuxième clic : partie terminée
+    const encore = clic(g, A, `morpion:${partie.id}:ab`)
+    await morpion.composants[0].gestionnaire(null, encore)
+    assert.match(encore.reponses[0].content, /terminée/)
+})
+
+test("pfc : le bouton Abandonner termine le duel au profit de l'adversaire", async (t) => {
+    const g = creerServeur("555555555555555621")
+    brancherRecompenses()
+    t.after(() => parties.configurerRecompenses(null))
+    const partie = await lancerDuel(g, pfc)
+    const gagnees = []
+    evenements.ecouter("partie:gagnee", d => gagnees.push(d))
+    t.after(() => evenements.retirerEcouteurs())
+    const ab = clic(g, A, `pfc:${partie.id}:ab`)
+    await pfc.composants[0].gestionnaire(null, ab)
+    assert.match(ab.finales[0].content, new RegExp(`<@${A}> abandonne : <@${B}> remporte`))
+    assert.deepStrictEqual([economie.compte(g.id, B).balance, economie.compte(g.id, A).balance], [15, 5])
+    assert.deepStrictEqual(ab.finales[0].components, [])
+    assert.deepStrictEqual(gagnees.map(e => [e.userId, e.players]), [[B, [A, B]]], "les joueurs sont dans l'événement")
+})
+
+test("morpion : l'expiration est une défaite pour le joueur dont c'était le tour", async (t) => {
+    const g = creerServeur("555555555555555622")
+    brancherRecompenses()
+    t.after(() => parties.configurerRecompenses(null))
+    const partie = await lancerDuel(g, morpion)
+    await morpion.composants[0].gestionnaire(null, clic(g, A, `morpion:${partie.id}:c:4`)) // A joue : c'est au tour de B
+    parties.lierMessage(partie.id, "900", "777")
+    perimer(partie.id)
+    const bot = fauxClient(g)
+    assert.strictEqual(await parties.expirerParties(bot), 1)
+    const finale = parties.lirePartie(partie.id)
+    assert.strictEqual(finale.status, "finie", "terminée avec un résultat, pas « expiree »")
+    assert.strictEqual(finale.state.gagnant, A)
+    assert.deepStrictEqual([economie.compte(g.id, A).balance, economie.compte(g.id, B).balance], [15, 5])
+    assert.match(bot.modifs[0].content, new RegExp(`<@${B}> n'a pas joué à temps : <@${A}> remporte`))
+    assert.match(bot.modifs[0].content, new RegExp(`<@${A}> : \\+15`))
+    assert.strictEqual(await parties.expirerParties(bot), 0, "rien à refaire au passage suivant")
+})
+
+test("pfc : l'expiration donne la défaite à celui qui n'a pas joué ; personne n'a joué : expirée sans gain", async (t) => {
+    const g = creerServeur("555555555555555623")
+    brancherRecompenses()
+    t.after(() => parties.configurerRecompenses(null))
+    const partie = await lancerDuel(g, pfc)
+    duels.choisirPfc(partie.id, B, "pierre")
+    perimer(partie.id)
+    assert.strictEqual(await parties.expirerParties(fauxClient(g)), 1)
+    assert.strictEqual(parties.lirePartie(partie.id).state.gagnant, B)
+    assert.deepStrictEqual([economie.compte(g.id, B).balance, economie.compte(g.id, A).balance], [15, 5])
+
+    // Aucun des deux n'a choisi : pas de résultat, pas de récompense
+    const g2 = creerServeur("555555555555555624")
+    const vide = await lancerDuel(g2, pfc)
+    perimer(vide.id)
+    assert.strictEqual(await parties.expirerParties(fauxClient(g2)), 1)
+    assert.strictEqual(parties.lirePartie(vide.id).status, "expiree")
+    assert.strictEqual(economie.compte(g2.id, A).balance, 0)
+
+    // Un jeu solo expire toujours sans gain (le moteur ne connaît pas d'expiration propre à ce jeu)
+    const solo = parties.creerPartie({ guildId: g2.id, game: "quiz", players: [C], state: {} }).partie
+    perimer(solo.id)
+    assert.strictEqual(await parties.expirerParties(fauxClient(g2)), 1)
+    assert.strictEqual(parties.lirePartie(solo.id).status, "expiree")
+})
+
+test("expiration d'un duel : serveur introuvable ou crédit en échec, la partie se termine quand même", async (t) => {
+    const g = creerServeur("555555555555555625")
+    t.after(() => parties.configurerRecompenses(null))
+    const partie = await lancerDuel(g, morpion)
+    perimer(partie.id)
+    // Le bot ne connaît plus le serveur : expirée sans résultat
+    assert.strictEqual(await parties.expirerParties({ guilds: { cache: new Map() } }), 1)
+    assert.strictEqual(parties.lirePartie(partie.id).status, "expiree")
+    assert.strictEqual(parties.partieEnCours(g.id, A), null, "les joueurs sont libérés")
+})
+
+test("duels : au plus 3 duels récompensés par jour contre le même adversaire", async (t) => {
+    const g = creerServeur("555555555555555626")
+    brancherRecompenses()
+    t.after(() => parties.configurerRecompenses(null))
+    const duel = async (x, y) => {
+        const { partie } = parties.creerPartie({ guildId: g.id, game: "pfc", players: [x, y], state: duels.etatInitialPfc(x, y) })
+        return duels.terminerDuel(partie.id, g, { gagnants: [x], montants: duels.montantsDuel(partie, x) })
+    }
+    for (let n = 1; n <= 3; n++) assert.deepStrictEqual(Object.keys((await duel(A, B)).accordees).sort(), [A, B], `duel ${n}`)
+    const quatrieme = await duel(A, B)
+    assert.deepStrictEqual(quatrieme.accordees, {})
+    assert.deepStrictEqual(quatrieme.limiteesAdversaire.sort(), [A, B])
+    const lignes = duels.lignesRecompenses({ guildId: g.id, locale: "fr" }, g.id, quatrieme).join("\n")
+    assert.match(lignes, new RegExp(`<@${A}> a déjà eu 3 duels récompensés contre <@${B}>`))
+    assert.strictEqual(economie.compte(g.id, A).balance, 45)
+    // Les duels refusés ne consomment rien : un autre adversaire reste récompensé, et la limite du jour compte 4 duels pas 5
+    assert.deepStrictEqual(Object.keys((await duel(A, C)).accordees).sort(), [A, C])
+    assert.strictEqual(duels.lireCompteurJour(g.id, A), 4)
+    // Dans l'autre sens aussi, et le lendemain tout repart
+    assert.deepStrictEqual((await duel(B, A)).limiteesAdversaire.sort(), [A, B])
+    const demain = Date.now() + 36 * 3600 * 1000
+    assert.deepStrictEqual(duels.reserverRecompenses(g.id, { [A]: 15 }, demain, { contre: { [A]: B } }).accordees, { [A]: 15 })
+})
+
+test("récompenses : le compteur du jour n'est consommé qu'après un crédit réussi, l'échec est journalisé", async (t) => {
+    const g = creerServeur("555555555555555627")
+    const erreurs = []
+    const consoleErreur = console.error
+    console.error = (...args) => { erreurs.push(args.join(" ")) }
+    t.after(() => { console.error = consoleErreur; parties.configurerRecompenses(null) })
+    // B : l'économie refuse ; C : le crédit lève une erreur ; A : tout va bien
+    parties.configurerRecompenses(async (guild, userId, montant, { source }) => {
+        if (userId === B) return { ok: false, refus: "gele" }
+        if (userId === C) throw new Error("base en panne")
+        economie.crediter(g.membres[userId], montant, { source, actif: true })
+    })
+    const fin = async (x, y) => {
+        const { partie } = parties.creerPartie({ guildId: g.id, game: "pfc", players: [x, y], state: duels.etatInitialPfc(x, y) })
+        return duels.terminerDuel(partie.id, g, { gagnants: [x], montants: duels.montantsDuel(partie, x) })
+    }
+    const r1 = await fin(A, B)
+    assert.deepStrictEqual([Object.keys(r1.accordees), r1.echecs], [[A], [B]])
+    assert.strictEqual(duels.lireCompteurJour(g.id, A), 1)
+    assert.strictEqual(duels.lireCompteurJour(g.id, B), 0, "crédit refusé : rien de consommé")
+    assert.match(duels.lignesRecompenses({ guildId: g.id, locale: "fr" }, g.id, r1).join("\n"), new RegExp(`<@${B}>.*pas pu être versée`))
+    const r2 = await fin(A, C)
+    assert.deepStrictEqual(r2.echecs, [C])
+    assert.strictEqual(duels.lireCompteurJour(g.id, C), 0, "crédit en erreur : rien de consommé")
+    assert.strictEqual(duels.lireCompteurJour(g.id, A), 2)
+    // La limite par adversaire n'a pas non plus été consommée par les crédits échoués
+    assert.strictEqual(duels.lireCompteurJour(g.id, B, Date.now(), "duels_contre:" + A), 0)
+    assert.ok(erreurs.some(e => e.includes("jeu pfc") && e.includes(`membre ${B}`) && e.includes("gele")), "refus journalisé avec le membre et le jeu")
+    assert.ok(erreurs.some(e => e.includes("jeu pfc") && e.includes(`membre ${C}`) && e.includes("base en panne")), "erreur journalisée avec le membre et le jeu")
+})
+
+test("morpion : si la fin du duel échoue, la partie est terminée sans récompense et le message le dit", async (t) => {
+    const g = creerServeur("555555555555555628")
+    brancherRecompenses()
+    const erreurConsole = console.error
+    console.error = () => {}
+    t.after(() => { console.error = erreurConsole; parties.configurerRecompenses(null) })
+    const partie = await lancerDuel(g, morpion)
+    const gestionnaire = morpion.composants[0].gestionnaire
+    for (const [userId, case_] of [[A, 0], [B, 3], [A, 1], [B, 4]]) await gestionnaire(null, clic(g, userId, `morpion:${partie.id}:c:${case_}`))
+    g.members.fetch = () => { throw new Error("API Discord en panne") }
+    const dernier = clic(g, A, `morpion:${partie.id}:c:2`)
+    await gestionnaire(null, dernier)
+    assert.match(dernier.finales[0].content, /gagne la partie/)
+    assert.match(dernier.finales[0].content, /récompenses n'ont pas pu être versées/)
+    assert.strictEqual(parties.lirePartie(partie.id).status, "finie", "plus de partie bloquée")
+    assert.strictEqual(parties.partieEnCours(g.id, A), null)
+    assert.strictEqual(economie.compte(g.id, A).balance, 0)
+})
+
+// --- Réaction : message, joueurs, délai ---------------------------------------------------------------------------
+
+const attendre = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+function fauxTable(g, joueurs, editReply) {
+    const interaction = { guild: g, guildId: g.id, locale: "fr", editReply }
+    return { id: `t${Math.random()}`, guildId: g.id, channelId: "777", joueurs, interaction }
+}
+
+test("réaction : si le message ne peut pas être modifié, la course est annulée", async () => {
+    const g = creerServeur("555555555555555629")
+    const table = fauxTable(g, [A, B, C], async () => { throw new Error("message supprimé") })
+    const avertir = console.warn
+    console.warn = () => {}
+    try {
+        await reaction.demarrerCourse(table, { attenteMs: 5 })
+    } finally {
+        console.warn = avertir
+    }
+    assert.strictEqual(parties.partieEnCours(g.id, A), null, "aucune partie ne reste bloquée")
+    const annulee = db.sqlAll("SELECT status FROM parties WHERE guild_id = ?", [g.id])
+    assert.deepStrictEqual(annulee.map(p => p.status), ["annulee"])
+})
+
+test("réaction : un inscrit devenu sanctionné est retiré au départ ; trop peu de joueurs : course annulée", async () => {
+    const g = creerServeur("555555555555555630")
+    const envoyes = []
+    const table = fauxTable(g, [A, B, C], async contenu => { envoyes.push(contenu); return { id: "900" } })
+    g.membres[B].communicationDisabledUntilTimestamp = Date.now() + 3600 * 1000
+    await reaction.demarrerCourse(table, { attenteMs: 60000 })
+    assert.deepStrictEqual(db.sqlAll("SELECT players FROM parties WHERE guild_id = ?", [g.id]).map(p => JSON.parse(p.players)), [[A, C]])
+    await parties.terminerPartie(parties.partieEnCours(g.id, A).id, { status: "annulee" })
+
+    // Deux sanctionnés sur trois : il ne reste qu'un joueur
+    const g2 = creerServeur("555555555555555631")
+    g2.membres[B].communicationDisabledUntilTimestamp = Date.now() + 3600 * 1000
+    economie.geler(g2.id, C, true)
+    const finales = []
+    await reaction.demarrerCourse(fauxTable(g2, [A, B, C], async contenu => { finales.push(contenu); return { id: "901" } }), { attenteMs: 5 })
+    assert.match(finales[0].content, /Course annulée/)
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM parties WHERE guild_id = ?", [g2.id])[0].n, 0)
+})
+
+test("réaction : le délai se mesure depuis le vert affiché, et un échec d'affichage du vert annule la course", async () => {
+    const g = creerServeur("555555555555555632")
+    let finEdition = 0
+    const table = fauxTable(g, [A, B], async contenu => {
+        if (contenu.components?.[0]?.components?.[0]?.data?.disabled === undefined && /CLIQUEZ/.test(JSON.stringify(contenu.components))) {
+            await attendre(40)
+            finEdition = Date.now()
+        }
+        return { id: "902" }
+    })
+    await reaction.demarrerCourse(table, { attenteMs: 5 })
+    await attendre(120)
+    const partie = parties.partieEnCours(g.id, A)
+    assert.strictEqual(partie.state.phase, "vert")
+    assert.ok(finEdition > 0 && partie.state.vertAt >= finEdition, "vertAt est posé après l'édition réussie")
+
+    // Le bouton vert n'a pas pu être affiché : course annulée
+    const g2 = creerServeur("555555555555555633")
+    let appels = 0
+    const avertir = console.warn
+    console.warn = () => {}
+    try {
+        await reaction.demarrerCourse(fauxTable(g2, [A, B], async () => {
+            if (++appels === 2) throw new Error("Discord injoignable")
+            return { id: "903" }
+        }), { attenteMs: 5 })
+        await attendre(60)
+    } finally {
+        console.warn = avertir
+    }
+    assert.strictEqual(parties.partieEnCours(g2.id, A), null)
+    assert.strictEqual(db.sqlAll("SELECT status FROM parties WHERE guild_id = ?", [g2.id])[0].status, "annulee")
+})
+
+// --- Drops : envoi raté, coffres d'avant le redémarrage ---------------------------------------------------------------
+
+test("drops : un envoi raté ne bloque pas le salon 20 minutes ; le délai court depuis l'envoi réussi", async () => {
+    const g = creerServeur("555555555555555634")
+    const salon = creerSalon("333333333333333310")
+    drops.definirSalonsDrops(g.id, [salon.id])
+    const t0 = Math.floor(Date.now() / 3600000) * 3600000
+    const envoyer = salon.send
+    salon.send = async () => { throw new Error("permissions manquantes") }
+    const avertir = console.warn
+    console.warn = () => {}
+    try {
+        assert.strictEqual(await drops.peutEtreDrop(messageDans(g, salon), { aleatoire: () => 0, maintenant: t0 }), false)
+    } finally {
+        console.warn = avertir
+    }
+    // La minute suivante, le salon peut de nouveau recevoir un coffre
+    salon.send = envoyer
+    assert.strictEqual(await drops.peutEtreDrop(messageDans(g, salon), { aleatoire: () => 0, maintenant: t0 + 60000 }), true)
+    // Et ensuite seulement, le délai de 20 minutes s'applique
+    assert.strictEqual(await drops.peutEtreDrop(messageDans(g, salon), { aleatoire: () => 0, maintenant: t0 + 5 * 60000 }), false)
+    assert.strictEqual(salon.envoyes.length, 1)
+})
+
+test("drops : le bouton d'un coffre d'avant le redémarrage répond « coffre fermé » (route persistante drop:)", async () => {
+    const drop = require('../Commandes/Communaute/Jeux/drops')
+    const route = drop.composants[0]
+    assert.deepStrictEqual([route.prefixe, route.types, route.public], ["drop:", ["bouton"], true])
+    assert.ok(!drops.ID_COFFRE.startsWith(route.prefixe), "les nouveaux coffres ne passent pas par cette route")
+    const g = creerServeur("555555555555555635")
+    const i = clic(g, B, "drop:coffre")
+    const modifs = []
+    i.message = { edit: async contenu => { modifs.push(contenu) } }
+    await route.gestionnaire(null, i)
+    assert.match(i.reponses[0].content, /coffre est fermé/)
+    assert.ok(i.reponses[0].flags, "réponse éphémère")
+    assert.deepStrictEqual(modifs[0].components, [])
+    assert.strictEqual(economie.compte(g.id, B).balance, 0)
 })

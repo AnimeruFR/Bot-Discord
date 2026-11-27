@@ -10,8 +10,7 @@
   "eco.refus.plafond_envoi": "You have reached today's sending limit (2,000 {monnaie}). Try again tomorrow.",
   "eco.refus.plafond_reception": "This member has reached today's receiving limit (5,000 {monnaie}). Try again tomorrow.",
   "eco.refus.montant_trop_petit": "Amount too small: after fees, the recipient would receive no {monnaie}.",
-  "eco.refus.destinataire_gele": "This member's {monnaie} account is frozen.",
-  "eco.refus.destinataire_sanctionne": "This member is sanctioned and can't receive {monnaie} for now.",
+  "eco.refus.destinataire_indisponible": "This member can't receive {monnaie} right now.",
   "eco.refus.destinataire_plafond_solde": "This member has reached the maximum {monnaie} balance.",
   "eco.plafonne": "You have reached today's earnings cap: games are still playable, but they won't give any {monnaie} until tomorrow."
 }

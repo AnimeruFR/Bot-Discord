@@ -28,8 +28,9 @@
   "mots.pendu.menu_n": "Lettres N à Z",
   "mots.pendu.deja_jouee": "La lettre {lettre} a déjà été jouée. Cela ne compte pas.",
   "mots.pendu.refus_solo": "Cette partie est réservée à <@{user}>.",
-  "mots.pendu.gagne": "🎉 Trouvé ! Le mot était **{mot}**. <@{user}> gagne {gain}.",
-  "mots.pendu.gagne_sans_gain": "🎉 Trouvé ! Le mot était **{mot}**. Bravo <@{user}> !",
   "mots.pendu.perdu": "💀 Perdu... Le mot était **{mot}**.",
-  "mots.pendu.refus_action": "Action inconnue."
+  "mots.pendu.refus_action": "Action inconnue.",
+  "mots.pendu.trouve": "🎉 Trouvé ! Le mot était **{mot}**. Bravo à l'équipe !",
+  "mots.pendu.limite_jour": "{user} a déjà eu {max} pendus récompensés aujourd'hui : pas de récompense cette fois.",
+  "mots.pendu.complet": "Cette partie est complète ({max} joueurs)."
 }

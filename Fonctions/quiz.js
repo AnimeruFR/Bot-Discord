@@ -1,12 +1,16 @@
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const db = require('./db')
 const economie = require('./economie')
 const parties = require('./parties')
+const mots = require('./mots')
 const { emettre, jourParis } = require('./evenements')
 
 // Quiz (idée #46) et énigme du jour (idée #48). Les questions et les énigmes sont dans data-statique/ (JSON).
 // Le quiz passe par le moteur de parties (une partie, un joueur, 30 s) ; l'énigme par la table jeux_quotidiens.
+// Limites : une question n'est jamais reposée deux fois dans la journée au même membre, et au plus 15 quiz récompensés par
+// jour et par membre (état dans jeux_quotidiens, jeu « quiz »). L'énigme du jour dépend d'un sel secret (voir mots.selJeux).
 // Événements émis : quiz:bonne_reponse (theme, difficulte, gain), enigme:trouvee (rang, gain, essais).
 
 const THEMES = ["sciences", "histoire", "geographie", "langue", "nature", "arts", "sport", "technologie"]
@@ -14,6 +18,8 @@ const DIFFICULTES = ["facile", "moyen", "difficile"]
 const GAINS_QUIZ = { facile: 10, moyen: 20, difficile: 40 }
 const DUREE_QUIZ_MS = 30 * 1000
 const NB_CHOIX = 4
+const MAX_QUIZ_JOUR = 15
+const JEU_QUIZ = "quiz"
 
 const GAINS_ENIGME = [40, 30, 20]
 const GAIN_ENIGME_DEFAUT = 10
@@ -37,8 +43,9 @@ const enigmes = () => lireJson('enigmes.json')
 // --- Quiz ----------------------------------------------------------------------------------------------------------
 
 // Tire une question (les filtres sont facultatifs). Renvoie null si aucune ne correspond.
-function tirerQuestion({ theme = null, difficulte = null } = {}, hasard = Math.random) {
-    const candidates = banque("fr").filter(q => (!theme || q.theme === theme) && (!difficulte || q.difficulte === difficulte))
+// exclues : identifiants de questions à ne pas reposer.
+function tirerQuestion({ theme = null, difficulte = null, exclues = [] } = {}, hasard = Math.random) {
+    const candidates = banque("fr").filter(q => (!theme || q.theme === theme) && (!difficulte || q.difficulte === difficulte) && !exclues.includes(q.id))
     return candidates.length ? candidates[Math.floor(hasard() * candidates.length)] : null
 }
 
@@ -56,16 +63,38 @@ function melanger(hasard = Math.random) {
     return ordre
 }
 
+// Questions vues et quiz récompensés du jour d'un membre : { vues: [ids], recompenses: nombre }
+function etatQuizJour(guildId, userId, jour = jourParis()) {
+    const ligne = db.sqlAll("SELECT state FROM jeux_quotidiens WHERE guild_id = ? AND user_id = ? AND game = ? AND day = ?", [guildId, userId, JEU_QUIZ, jour])[0]
+    const etat = ligne ? JSON.parse(ligne.state) : {}
+    return { vues: etat.vues ?? [], recompenses: etat.recompenses ?? 0 }
+}
+
+// modifier(etat) change l'état sur place ; lecture et écriture dans la même transaction
+function majQuizJour(guildId, userId, jour, modifier) {
+    return db.transaction(() => {
+        const etat = etatQuizJour(guildId, userId, jour)
+        modifier(etat)
+        db.sqlRun(`INSERT INTO jeux_quotidiens (guild_id, user_id, game, day, state, finished) VALUES (?, ?, ?, ?, ?, 0)
+            ON CONFLICT (guild_id, user_id, game, day) DO UPDATE SET state = excluded.state`, [guildId, userId, JEU_QUIZ, jour, JSON.stringify(etat)])
+        return etat
+    })
+}
+
 // Lance une partie de quiz pour un membre. Renvoie { ok, partie, question, ordre } ou { ok: false, refus }.
-function demarrerQuiz(member, { theme = null, difficulte = null, langue = "fr", channelId = null, hasard = Math.random } = {}) {
+function demarrerQuiz(member, { theme = null, difficulte = null, langue = "fr", channelId = null, hasard = Math.random, jour = jourParis() } = {}) {
     const refus = economie.peutJouer(member)
     if (refus) return { ok: false, refus }
-    const question = tirerQuestion({ theme, difficulte }, hasard)
-    if (!question) return { ok: false, refus: "aucune_question" }
+    const jouee = etatQuizJour(member.guild.id, member.id, jour)
+    if (jouee.recompenses >= MAX_QUIZ_JOUR) return { ok: false, refus: "limite_jour" }
+    const question = tirerQuestion({ theme, difficulte, exclues: jouee.vues }, hasard)
+    if (!question) return { ok: false, refus: tirerQuestion({ theme, difficulte }) ? "toutes_vues" : "aucune_question" }
     const ordre = melanger(hasard)
     const etat = { qid: question.id, ordre, langue: langueBanque(langue), theme: question.theme, difficulte: question.difficulte, gain: GAINS_QUIZ[question.difficulte] }
     const creation = parties.creerPartie({ guildId: member.guild.id, game: "quiz", channelId, players: [member.id], state: etat, dureeMs: DUREE_QUIZ_MS })
     if (!creation.ok) return { ok: false, refus: creation.refus }
+    // La question est « vue » dès qu'elle est posée : la laisser expirer ne permet pas de la tirer à nouveau
+    majQuizJour(member.guild.id, member.id, jour, etat => { if (!etat.vues.includes(question.id)) etat.vues.push(question.id) })
     return { ok: true, partie: creation.partie, question: questionLocalisee(question.id, etat.langue), ordre }
 }
 
@@ -97,6 +126,8 @@ async function conclureQuiz(member, partieId, reponse) {
     if (credit.ok) {
         resultat.credite = credit.credite
         resultat.plafonne = credit.plafonne
+        // Le quiz ne compte dans la limite du jour que si le gain a été versé
+        if (credit.credite > 0) majQuizJour(member.guild.id, member.id, jourParis(), jouee => { jouee.recompenses++ })
     } else {
         resultat.refusEco = credit.refus
     }
@@ -121,14 +152,18 @@ function normaliser(texte) {
     return mots.join(" ")
 }
 
-// Même énigme toute la journée sur un serveur, différente d'un jour à l'autre, et pas la même sur tous les serveurs
+// Même énigme toute la journée sur un serveur, pas la même sur tous les serveurs, et imprévisible : l'indice dépend du sel
+// secret (mots.selJeux). Jamais deux jours de suite la même énigme.
+function indiceEnigme(guildId, jour, taille) {
+    const empreinte = crypto.createHash("sha256").update(`enigme:${mots.selJeux()}:${guildId}:${jour}`).digest()
+    return empreinte.readUInt32BE(0) % taille
+}
+
 function enigmeDuJour(guildId, jour = jourParis()) {
     const liste = enigmes()
-    const [annee, mois, j] = jour.split("-").map(Number)
-    const numero = Math.floor(Date.UTC(annee, mois - 1, j) / 86400000)
-    let decalage = 0
-    for (const c of String(guildId)) decalage = (decalage * 31 + c.charCodeAt(0)) % 100003
-    return liste[(numero + decalage) % liste.length]
+    let indice = indiceEnigme(guildId, jour, liste.length)
+    if (liste.length > 1 && indice === indiceEnigme(guildId, mots.jourPrecedent(jour), liste.length)) indice = (indice + 1) % liste.length
+    return liste[indice]
 }
 
 // La réponse peut être donnée dans l'une ou l'autre langue
@@ -188,7 +223,7 @@ function repondreEnigme(member, reponse, jour = jourParis()) {
 }
 
 module.exports = {
-    THEMES, DIFFICULTES, GAINS_QUIZ, DUREE_QUIZ_MS, GAINS_ENIGME, GAIN_ENIGME_DEFAUT, ESSAIS_ENIGME,
+    THEMES, DIFFICULTES, GAINS_QUIZ, DUREE_QUIZ_MS, MAX_QUIZ_JOUR, etatQuizJour, GAINS_ENIGME, GAIN_ENIGME_DEFAUT, ESSAIS_ENIGME,
     banque, enigmes, tirerQuestion, questionLocalisee, melanger, demarrerQuiz, repondreQuiz, conclureQuiz,
     normaliser, enigmeDuJour, reponseCorrecte, gainEnigme, etatEnigme, nombreTrouveurs, tenterEnigme, repondreEnigme
 }

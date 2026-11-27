@@ -8,6 +8,7 @@ const db = require('../Fonctions/db')
 const economie = require('../Fonctions/economie')
 const { controler } = require('../Fonctions/garde')
 const { setSalonFamille } = require('../Fonctions/logs')
+const { erreurDiscord } = require('./aides')
 
 const solde = require('../Commandes/Communaute/Economie/solde')
 const payer = require('../Commandes/Communaute/Economie/payer')
@@ -23,7 +24,26 @@ const envoyes = []
 const salonLogs = {
     isTextBased: () => true, permissionsFor: () => ({ has: () => true }), send: async m => envoyes.push(m)
 }
-const guild = { id: G, members: { me: {} }, channels: { cache: new Map([["999999999999999999", salonLogs]]) } }
+// Annuaire du faux serveur : members.fetch relit le membre ; relectures = surcharges (un membre, ou une erreur à lever)
+const annuaire = new Map()
+const relectures = new Map()
+const guild = {
+    id: G,
+    members: {
+        me: {},
+        async fetch({ user }) {
+            if (relectures.has(user)) {
+                const valeur = relectures.get(user)
+                if (valeur instanceof Error) throw valeur
+                return valeur
+            }
+            const m = annuaire.get(user)
+            if (!m) throw erreurDiscord(Discord.RESTJSONErrorCodes.UnknownMember)
+            return m
+        }
+    },
+    channels: { cache: new Map([["999999999999999999", salonLogs]]) }
+}
 
 function membre(id, { recent = false, bot = false } = {}) {
     const user = { id, bot, toString: () => `<@${id}>` }
@@ -31,6 +51,7 @@ function membre(id, { recent = false, bot = false } = {}) {
 }
 const id = n => String(200000000000000000n + BigInt(n))
 const alice = membre(id(1)), bob = membre(id(2)), robot = membre(id(3), { bot: true }), nouveau = membre(id(4), { recent: true })
+for (const m of [alice, bob, robot, nouveau]) annuaire.set(m.id, m)
 
 function options(valeurs, membres = {}) {
     return {
@@ -153,6 +174,58 @@ test("/payer : confirmation au-delà de 500 (annulation, expiration, validation)
     assert.strictEqual(economie.compte(G, bob.id).balance, avantB + 491, "501 moins 10 de frais")
     assert.strictEqual(valide.suivis.length, 1, "annonce publique après confirmation")
     assert.strictEqual(valide.suivis[0].flags, undefined)
+})
+
+test("/payer : après confirmation, les deux membres sont relus (sanction, gel, départ)", async () => {
+    donner(alice, 2000)
+    const avantA = economie.compte(G, alice.id).balance, avantB = economie.compte(G, bob.id).balance
+    const lancer = async () => {
+        const i = interaction(alice, { clics: [clic("payer-oui-i1", alice)] })
+        await payer.run(null, i, options({ montant: 501 }, { membre: bob }))
+        return i
+    }
+
+    // Le destinataire a été exclu pendant la confirmation : refus générique, qui ne dit pas pourquoi
+    relectures.set(bob.id, { ...bob, communicationDisabledUntilTimestamp: Date.now() + 60000 })
+    const exclu = await lancer()
+    assert.match(exclu.editions[0].content, /ne peut pas recevoir/)
+    assert.ok(!/gel|sanction/i.test(exclu.editions[0].content), "ne dévoile ni gel ni sanction")
+    assert.strictEqual(exclu.suivis.length, 0)
+
+    // L'auteur lui-même sanctionné entre-temps : refusé
+    relectures.clear()
+    relectures.set(alice.id, { ...alice, communicationDisabledUntilTimestamp: Date.now() + 60000 })
+    const auteur = await lancer()
+    assert.match(auteur.editions[0].content, /sanctionné/)
+
+    // Destinataire parti, puis relecture impossible : rien ne bouge
+    relectures.clear()
+    relectures.set(bob.id, erreurDiscord(Discord.RESTJSONErrorCodes.UnknownMember))
+    assert.match((await lancer()).editions[0].content, /pas sur le serveur/)
+    relectures.set(bob.id, new Error("Discord indisponible"))
+    assert.match((await lancer()).editions[0].content, /pas sur le serveur/)
+    assert.strictEqual(economie.compte(G, alice.id).balance, avantA)
+    assert.strictEqual(economie.compte(G, bob.id).balance, avantB)
+
+    // Relecture normale : le paiement passe avec les membres relus
+    relectures.clear()
+    const normal = await lancer()
+    assert.strictEqual(normal.suivis.length, 1)
+    assert.strictEqual(economie.compte(G, alice.id).balance, avantA - 501)
+    assert.strictEqual(economie.compte(G, bob.id).balance, avantB + 491)
+})
+
+test("/payer : un destinataire gelé reçoit le même refus qu'un destinataire sanctionné", async () => {
+    donner(alice, 100)
+    economie.geler(G, bob.id, true)
+    const gele = interaction(alice)
+    await payer.run(null, gele, options({ montant: 10 }, { membre: bob }))
+    economie.geler(G, bob.id, false)
+    const sanctionne = interaction(alice)
+    await payer.run(null, sanctionne, options({ montant: 10 }, { membre: { ...bob, communicationDisabledUntilTimestamp: Date.now() + 60000 } }))
+    assert.strictEqual(gele.reponses[0].content, sanctionne.reponses[0].content)
+    assert.ok(gele.reponses[0].flags, "refus éphémère")
+    assert.ok(!/gel|sanction/i.test(gele.reponses[0].content))
 })
 
 test("/classement monnaie : la place du membre est affichée même hors de la page", async () => {

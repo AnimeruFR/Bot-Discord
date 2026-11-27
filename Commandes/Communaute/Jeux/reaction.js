@@ -39,11 +39,17 @@ function rendreCourse(cible, partie, fin = null) {
     return { content: [t(cible, "duels.reaction.titre", { joueurs }), consigne].join("\n"), components: [new Discord.ActionRowBuilder().addComponents(bouton)] }
 }
 
-// Lance la course avec les joueurs inscrits (ceux qui ont une autre partie entre-temps sont retirés)
-async function demarrerCourse(table) {
+// Lance la course avec les joueurs inscrits. Ceux qui ont une autre partie entre-temps, ou qui ne peuvent plus jouer
+// (sanction, compte gelé), sont retirés. Si le message ne peut pas être modifié, la course est annulée.
+// attenteMs : attente avant le vert (tests), tirée au hasard par défaut.
+async function demarrerCourse(table, { attenteMs = duels.attenteAleatoire() } = {}) {
     tables.delete(table.id)
     const { interaction } = table
-    let joueurs = [...table.joueurs]
+    let joueurs = []
+    for (const id of table.joueurs) {
+        const membre = await interaction.guild?.members?.fetch(id).catch(() => null)
+        if (membre && !economie.peutJouer(membre)) joueurs.push(id)
+    }
     let creation = null
     while (joueurs.length >= JOUEURS_MIN) {
         const essai = parties.creerPartie({
@@ -55,12 +61,30 @@ async function demarrerCourse(table) {
     }
     if (!creation) return interaction.editReply({ content: t(interaction, "duels.reaction.annulee", { min: JOUEURS_MIN }), components: [] }).catch(() => {})
 
-    const message = await interaction.editReply(rendreCourse(interaction, creation.partie))
-    parties.lierMessage(creation.partie.id, message.id, table.channelId)
+    // Pas de message : pas de course (les joueurs ne verraient aucun bouton)
+    const partieId = creation.partie.id
+    const annuler = async err => {
+        console.warn(`Course ${partieId} annulée : message non modifié (${err.message})`)
+        await parties.terminerPartie(partieId, { status: "annulee" }).catch(() => {})
+    }
+    let message
+    try {
+        message = await interaction.editReply(rendreCourse(interaction, creation.partie))
+    } catch (err) {
+        return annuler(err)
+    }
+    parties.lierMessage(partieId, message.id, table.channelId)
     const minuteur = setTimeout(async () => {
-        const vert = duels.passerAuVert(creation.partie.id)
-        if (vert.ok) await interaction.editReply(rendreCourse(interaction, vert.partie)).catch(err => console.warn(`Course ${creation.partie.id} : bouton non modifié (${err.message})`))
-    }, duels.attenteAleatoire())
+        const vert = duels.passerAuVert(partieId)
+        if (!vert.ok) return
+        try {
+            await interaction.editReply(rendreCourse(interaction, vert.partie))
+        } catch (err) {
+            return annuler(err)
+        }
+        // Le délai se mesure à partir du moment où le vert est affiché
+        duels.recalerVert(partieId)
+    }, attenteMs)
     minuteur.unref()
 }
 
@@ -97,13 +121,13 @@ async function surBouton(bot, interaction) {
     if (resultat.elimine) {
         await refuser(interaction, t(interaction, "duels.reaction.trop_tot"))
         if (!resultat.tousElimines) return
-        await duels.terminerDuel(partie.id, interaction.guild, {})
+        await duels.conclureDuel(partie.id, interaction.guild, {})
         return duels.majMessage(interaction, resultat.partie, rendreCourse(interaction, resultat.partie, [t(interaction, "duels.reaction.personne")]))
     }
     // Premier clic après le vert : victoire (un seul gagnant, majPartie a ordonné les clics)
     await interaction.deferUpdate()
     const gagnant = interaction.user.id
-    const fin = await duels.terminerDuel(partie.id, interaction.guild, { gagnants: [gagnant], montants: { [gagnant]: duels.GAIN_REACTION } })
+    const fin = await duels.conclureDuel(partie.id, interaction.guild, { gagnants: [gagnant], montants: { [gagnant]: duels.GAIN_REACTION } })
     const lignes = [t(interaction, "duels.reaction.victoire", { user: mention(gagnant), ms: resultat.delaiMs }), ...(fin.ok ? duels.lignesRecompenses(interaction, partie.guildId, fin) : [])]
     await interaction.editReply(rendreCourse(interaction, resultat.partie, lignes))
 }

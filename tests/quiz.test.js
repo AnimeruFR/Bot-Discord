@@ -2,7 +2,11 @@ process.env.DATABASE_PATH = ":memory:"
 
 const { test } = require('node:test')
 const assert = require('node:assert')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
 const economie = require('../Fonctions/economie')
+const mots = require('../Fonctions/mots')
 const parties = require('../Fonctions/parties')
 const quiz = require('../Fonctions/quiz')
 const evenements = require('../Fonctions/evenements')
@@ -234,17 +238,57 @@ test("énigmes : normalisation des réponses (casse, accents, articles, ponctuat
     assert.ok(!quiz.reponseCorrecte(e, "   "))
 })
 
-test("énigme du jour : stable dans la journée, change d'un jour à l'autre", () => {
+test("énigme du jour : stable dans la journée, jamais deux jours de suite la même, pas la même partout", () => {
     const G = "100000000000000021"
     const a = quiz.enigmeDuJour(G, "2026-11-26")
     assert.strictEqual(quiz.enigmeDuJour(G, "2026-11-26").id, a.id)
-    const suite = Array.from({ length: 40 }, (_, k) => quiz.enigmeDuJour(G, `2026-12-${String(k % 28 + 1).padStart(2, "0")}`).id)
-    assert.ok(new Set(suite).size > 20)
-    assert.notStrictEqual(quiz.enigmeDuJour(G, "2026-11-27").id, a.id, "le lendemain, une autre énigme")
-    // 40 jours consécutifs : toutes les énigmes passent une fois
-    const cycle = new Set()
-    for (let d = 0; d < quiz.enigmes().length; d++) cycle.add(quiz.enigmeDuJour(G, new Date(Date.UTC(2027, 0, 1 + d)).toISOString().slice(0, 10)).id)
-    assert.strictEqual(cycle.size, quiz.enigmes().length)
+    const jours = Array.from({ length: 60 }, (_, k) => new Date(Date.UTC(2027, 0, 1 + k)).toISOString().slice(0, 10))
+    const suite = jours.map(jour => quiz.enigmeDuJour(G, jour).id)
+    assert.ok(new Set(suite).size > 25, "les jours donnent des énigmes variées")
+    for (let k = 1; k < suite.length; k++) assert.notStrictEqual(suite[k], suite[k - 1], "pas deux fois de suite la même")
+    const autre = jours.map(jour => quiz.enigmeDuJour("100000000000000099", jour).id)
+    assert.notDeepStrictEqual(autre, suite, "pas la même suite sur tous les serveurs")
+})
+
+test("énigme du jour et mot du jour : imprévisibles sans le sel secret", () => {
+    const G = "100000000000000023", jours = Array.from({ length: 20 }, (_, k) => `2027-02-${String(k + 1).padStart(2, "0")}`)
+    const ancien = process.env.JEUX_SEL
+    try {
+        process.env.JEUX_SEL = "sel-un"
+        const enigmesUn = jours.map(jour => quiz.enigmeDuJour(G, jour).id), motsUn = jours.map(jour => mots.motDuJour(G, jour, "fr"))
+        assert.deepStrictEqual(jours.map(jour => quiz.enigmeDuJour(G, jour).id), enigmesUn, "même sel : même résultat")
+        process.env.JEUX_SEL = "sel-deux"
+        assert.notDeepStrictEqual(jours.map(jour => quiz.enigmeDuJour(G, jour).id), enigmesUn, "autre sel : autres énigmes")
+        assert.notDeepStrictEqual(jours.map(jour => mots.motDuJour(G, jour, "fr")), motsUn, "autre sel : autres mots")
+    } finally {
+        if (ancien === undefined) delete process.env.JEUX_SEL
+        else process.env.JEUX_SEL = ancien
+    }
+})
+
+test("sel des jeux : créé au hasard à côté de la base, relu ensuite, jamais écrasé ; variable d'environnement prioritaire", () => {
+    const dossier = fs.mkdtempSync(path.join(os.tmpdir(), "sel-jeux-"))
+    try {
+        const fichier = path.join(dossier, "sel-jeux.txt")
+        const sel = mots.lireOuCreerSel(fichier)
+        assert.match(sel, /^[0-9a-f]{64}$/)
+        assert.strictEqual(fs.readFileSync(fichier, "utf8").trim(), sel)
+        assert.strictEqual(mots.lireOuCreerSel(fichier), sel, "relu, pas régénéré")
+    } finally {
+        fs.rmSync(dossier, { recursive: true, force: true })
+    }
+    // Base en mémoire : sel en mémoire, stable pendant le processus, aucun fichier créé
+    const ancien = process.env.JEUX_SEL
+    delete process.env.JEUX_SEL
+    try {
+        assert.match(mots.selJeux(), /^[0-9a-f]{64}$/)
+        assert.strictEqual(mots.selJeux(), mots.selJeux())
+        process.env.JEUX_SEL = "force"
+        assert.strictEqual(mots.selJeux(), "force")
+    } finally {
+        if (ancien === undefined) delete process.env.JEUX_SEL
+        else process.env.JEUX_SEL = ancien
+    }
 })
 
 function reponseJuste(guildId, jour) {
@@ -335,4 +379,89 @@ test("/enigme : voir répond en éphémère, répondre ouvre le formulaire daté
     await commandeEnigme.composants[0].gestionnaire(null, ancien)
     assert.ok(ancien.envoyees[0].flags)
     assert.strictEqual(quiz.etatEnigme(G, m.id).essais, 0)
+})
+
+// --- Limites du jour : questions déjà vues, 15 quiz récompensés ------------------------------------------------------
+
+async function jouerQuiz(m, options = {}) {
+    const debut = quiz.demarrerQuiz(m, { langue: "fr", hasard: () => 0, ...options })
+    if (!debut.ok) return debut
+    const reponse = quiz.repondreQuiz(debut.partie.id, positionDe(debut, true))
+    return { ...debut, fin: await quiz.conclureQuiz(m, debut.partie.id, reponse) }
+}
+
+test("quiz : une question déjà vue aujourd'hui n'est jamais reposée au même membre", async () => {
+    const G = "100000000000000031"
+    const m = membre(G), autre = membre(G)
+    // hasard toujours à 0 : sans exclusion, ce serait toujours la même question
+    const ids = []
+    for (let n = 0; n < 5; n++) {
+        const r = await jouerQuiz(m, { theme: "sciences", difficulte: "facile" })
+        assert.ok(r.ok, `quiz ${n + 1}`)
+        ids.push(r.partie.state.qid)
+    }
+    assert.strictEqual(new Set(ids).size, 5, "cinq questions différentes")
+    assert.deepStrictEqual(quiz.etatQuizJour(G, m.id).vues.sort(), [...ids].sort())
+    // Les 5 questions sciences/facile sont toutes vues
+    const plus = quiz.demarrerQuiz(m, { theme: "sciences", difficulte: "facile", hasard: () => 0 })
+    assert.deepStrictEqual([plus.ok, plus.refus], [false, "toutes_vues"])
+    assert.strictEqual(parties.partieEnCours(G, m.id), null, "aucune partie créée par le refus")
+    // Un autre thème reste possible ; un autre membre a ses propres questions vues ; le lendemain, tout est de nouveau permis
+    assert.ok(quiz.demarrerQuiz(m, { theme: "histoire", difficulte: "facile", hasard: () => 0 }).ok)
+    await parties.terminerPartie(parties.partieEnCours(G, m.id).id, { status: "annulee" })
+    assert.strictEqual((await jouerQuiz(autre, { theme: "sciences", difficulte: "facile" })).partie.state.qid, ids[0])
+    const demain = new Date(Date.now() + 36 * 3600 * 1000).toISOString().slice(0, 10)
+    assert.ok(quiz.demarrerQuiz(m, { theme: "sciences", difficulte: "facile", hasard: () => 0, jour: demain }).ok)
+    await parties.terminerPartie(parties.partieEnCours(G, m.id).id, { status: "annulee" })
+    // Combinaison sans question : refus distinct
+    assert.strictEqual(quiz.demarrerQuiz(m, { theme: "inconnu", hasard: () => 0 }).refus, "aucune_question")
+})
+
+test("quiz : une question laissée expirer compte comme vue", async () => {
+    const G = "100000000000000032"
+    const m = membre(G)
+    const debut = quiz.demarrerQuiz(m, { theme: "arts", difficulte: "moyen", hasard: () => 0 })
+    await parties.terminerPartie(debut.partie.id, { status: "expiree" })
+    const suite = quiz.demarrerQuiz(m, { theme: "arts", difficulte: "moyen", hasard: () => 0 })
+    assert.notStrictEqual(suite.partie.state.qid, debut.partie.state.qid)
+    await parties.terminerPartie(suite.partie.id, { status: "annulee" })
+})
+
+test("quiz : au plus 15 quiz récompensés par jour et par membre", async () => {
+    const G = "100000000000000033"
+    const m = membre(G)
+    economie.definirReglages(G, { plafondJour: 2000 })
+    let bonnes = 0
+    for (const theme of quiz.THEMES) {
+        for (const difficulte of quiz.DIFFICULTES) {
+            for (let n = 0; n < 5 && bonnes < quiz.MAX_QUIZ_JOUR; n++) {
+                const r = await jouerQuiz(m, { theme, difficulte })
+                if (r.ok && r.fin.bonne) bonnes++
+            }
+        }
+    }
+    assert.strictEqual(bonnes, 15)
+    assert.strictEqual(quiz.etatQuizJour(G, m.id).recompenses, 15)
+    const seizieme = quiz.demarrerQuiz(m, { hasard: () => 0.5 })
+    assert.deepStrictEqual([seizieme.ok, seizieme.refus], [false, "limite_jour"])
+    // Un autre membre n'est pas touché
+    const autre = quiz.demarrerQuiz(membre(G), { hasard: () => 0.5 })
+    assert.ok(autre.ok)
+    await parties.terminerPartie(autre.partie.id, { status: "annulee" })
+    // Le message de refus de la commande
+    const i = interactionCommande(m)
+    await commandeQuiz.run(null, i, i.options)
+    assert.match(i.envoyees[0].content, /15 quiz/)
+})
+
+test("quiz : un gain refusé par l'économie ne compte pas dans la limite du jour", async () => {
+    const G = "100000000000000034"
+    const m = membre(G)
+    const debut = quiz.demarrerQuiz(m, { hasard: () => 0 })
+    const reponse = quiz.repondreQuiz(debut.partie.id, positionDe(debut, true))
+    economie.geler(G, m.id, true)
+    const fin = await quiz.conclureQuiz(m, debut.partie.id, reponse)
+    assert.ok(fin.refusEco)
+    assert.strictEqual(quiz.etatQuizJour(G, m.id).recompenses, 0)
+    economie.geler(G, m.id, false)
 })

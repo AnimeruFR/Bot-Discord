@@ -1,8 +1,8 @@
 const Discord = require('discord.js')
 const mots = require('../../../Fonctions/mots')
 const economie = require('../../../Fonctions/economie')
+const duels = require('../../../Fonctions/duels')
 const parties = require('../../../Fonctions/parties')
-const { emettre } = require('../../../Fonctions/evenements')
 const { refuser } = require('../../../Fonctions/erreurs')
 const { t } = require('../../../Fonctions/i18n')
 
@@ -48,17 +48,26 @@ function rendu(partie, { fin = null } = {}) {
     return { content: lignes.join("\n"), components: fin ? [] : menus(partie) }
 }
 
+// Récompense d'un pendu trouvé : 20 pour l'hôte, plus 5 pour chaque autre membre ayant trouvé une lettre juste.
+// Au plus 10 pendus récompensés par jour et par membre (compteur « pendu » de Fonctions/duels.js).
+function montantsPendu(etat) {
+    const montants = { [etat.hote]: mots.GAIN_PENDU }
+    for (const userId of etat.justes ?? []) if (userId !== etat.hote) montants[userId] = mots.GAIN_PENDU_PARTICIPANT
+    return montants
+}
+
 // Clic d'un joueur : la lettre est jouée, ou refusée en éphémère (sans coûter d'erreur)
 async function gerer(bot, interaction) {
     const [, idTexte] = interaction.customId.split(":")
     const partie = parties.lirePartie(Number(idTexte))
     if (!partie || partie.game !== "pendu") return refuser(interaction, t(interaction, "partie.terminee"))
     const userId = interaction.user.id
+    const ouvert = partie.state.mode === "ouvert"
 
-    // Mode ouvert : les joueurs arrivent à la volée, or verifierClic exige d'être dans partie.players (fixé à la création).
-    // On le lui fait donc vérifier avec le clic ajouté à la liste (état de la partie et expiration), et les participants
-    // sont notés dans state.participants.
-    const aVerifier = partie.state.mode === "ouvert" ? { ...partie, players: [...partie.players, userId] } : partie
+    // Mode ouvert : les joueurs arrivent à la volée, or verifierClic exige d'être dans partie.players. On le lui fait donc
+    // vérifier avec le clic ajouté à la liste (état de la partie et expiration) ; le joueur n'est vraiment ajouté
+    // (parties.ajouterJoueur) qu'une fois la lettre jugée valable.
+    const aVerifier = ouvert ? { ...partie, players: [...new Set([...partie.players, userId])] } : partie
     const refusClic = parties.verifierClic(interaction, aVerifier)
     if (refusClic === "partie.pas_joueur") return refuser(interaction, t(interaction, "mots.pendu.refus_solo", { user: partie.state.hote }))
     if (refusClic) return refuser(interaction, t(interaction, refusClic))
@@ -73,10 +82,23 @@ async function gerer(bot, interaction) {
         return refuser(interaction, t(interaction, "mots.pendu.deja_jouee", { lettre }))
     }
 
+    // Un participant devient joueur de la partie : il ne peut plus en lancer ni en rejoindre une autre (une partie à la fois),
+    // et inversement s'il en a déjà une en cours
+    if (ouvert && !partie.players.includes(userId)) {
+        const ajout = parties.ajouterJoueur(partie.id, userId, { max: MAX_PARTICIPANTS })
+        if (!ajout.ok) {
+            const cle = { complete: "mots.pendu.complet", deja_en_partie: "partie.deja_en_partie" }[ajout.refus] ?? "partie.terminee"
+            return refuser(interaction, t(interaction, cle, { max: MAX_PARTICIPANTS }))
+        }
+    }
+
     let coup = null
     const maj = parties.majPartie(partie.id, etat => {
         coup = mots.jouerLettre(etat, lettre)
-        if (coup.ok && !etat.participants.includes(userId) && etat.participants.length < MAX_PARTICIPANTS) etat.participants.push(userId)
+        if (!coup.ok) return
+        etat.justes ??= []
+        if (!etat.participants.includes(userId)) etat.participants.push(userId)
+        if (coup.bonne && !etat.justes.includes(userId)) etat.justes.push(userId)
     }, { prolongerMs: mots.DUREE_PENDU })
     if (!maj.ok) return refuser(interaction, t(interaction, "partie.terminee"))
     if (!coup.ok) return refuser(interaction, t(interaction, "mots.pendu.deja_jouee", { lettre }))
@@ -84,25 +106,19 @@ async function gerer(bot, interaction) {
     const etat = maj.partie.state
     if (!coup.gagne && !coup.perdu) return interaction.update(rendu(maj.partie))
 
-    // Fin de partie : la partie ne se termine qu'une fois, le gain n'est versé qu'à celui qui a trouvé le mot
-    const fin = await parties.terminerPartie(partie.id, { status: "finie", gagnants: coup.gagne ? [userId] : [] })
-    if (!fin.ok) return refuser(interaction, t(interaction, "partie.terminee"))
-    for (const autre of etat.participants) {
-        if (!partie.players.includes(autre)) emettre("partie:jouee", { guildId: partie.guildId, userId: autre, game: "pendu" })
-    }
+    // Fin de partie : la partie ne se termine qu'une fois ; les récompenses passent par le moteur de parties (crédit actif,
+    // plafond du jour) et par la limite de 10 pendus récompensés par jour
     const langue = etat.langue
-    if (!coup.gagne) return interaction.update(rendu(maj.partie, { fin: t(langue, "mots.pendu.perdu", { mot: etat.mot }) }))
+    const montants = coup.gagne ? montantsPendu(etat) : {}
+    await interaction.deferUpdate()
+    const fin = coup.gagne
+        ? await duels.conclureDuel(partie.id, interaction.guild, { gagnants: Object.keys(montants), montants, compteur: "pendu" })
+        : await parties.terminerPartie(partie.id, { status: "finie", gagnants: [] })
+    if (!fin.ok) return interaction.followUp({ content: t(interaction, "partie.terminee"), flags: Discord.MessageFlags.Ephemeral }).catch(() => {})
+    if (!coup.gagne) return interaction.editReply(rendu(maj.partie, { fin: t(langue, "mots.pendu.perdu", { mot: etat.mot }) }))
 
-    const credit = economie.crediter(interaction.member, mots.GAIN_PENDU, { source: "pendu", actif: true })
-    let texte = t(langue, "mots.pendu.gagne_sans_gain", { mot: etat.mot, user: userId })
-    if (credit.ok && credit.credite > 0) {
-        texte = t(langue, "mots.pendu.gagne", { mot: etat.mot, user: userId, gain: economie.formater(partie.guildId, credit.credite) })
-    } else if (credit.ok && credit.plafonne) {
-        texte += "\n" + t(langue, "eco.plafonne", { monnaie: economie.monnaie(partie.guildId).nom })
-    } else if (!credit.ok) {
-        texte += "\n" + t(langue, `eco.refus.${credit.refus}`, { monnaie: economie.monnaie(partie.guildId).nom })
-    }
-    return interaction.update(rendu(maj.partie, { fin: texte }))
+    const lignes = [t(langue, "mots.pendu.trouve", { mot: etat.mot }), ...duels.lignesRecompenses(langue, partie.guildId, fin, { cleLimite: "mots.pendu.limite_jour", max: duels.MAX_PENDUS_JOUR })]
+    return interaction.editReply(rendu(maj.partie, { fin: lignes.join("\n") }))
 }
 
 module.exports = {
@@ -138,7 +154,7 @@ module.exports = {
         const userId = interaction.user.id
         const etat = {
             mot: mots.motPendu(langue), langue, mode: args.getString("mode") === "ouvert" ? "ouvert" : "solo",
-            hote: userId, participants: [userId], trouvees: [], ratees: []
+            hote: userId, participants: [userId], justes: [], trouvees: [], ratees: []
         }
         const creation = parties.creerPartie({
             guildId: interaction.guildId, game: "pendu", channelId: interaction.channelId, players: [userId], state: etat, dureeMs: mots.DUREE_PENDU

@@ -61,5 +61,12 @@
   "duels.drops.voir_aucun": "Aucun salon n'est configuré : il n'y a pas de coffre sur ce serveur. Choisissez des salons avec /drops.",
   "duels.drops.salons_ok": "✅ Des coffres pourront apparaître dans : {salons}.",
   "duels.drops.salons_aucun": "✅ Aucun salon choisi : les coffres sont désactivés sur ce serveur.",
-  "duels.drops.salon_bot": "Je ne peux pas voir ou écrire dans {salon} : donnez-moi ces permissions avant de le choisir."
+  "duels.drops.salon_bot": "Je ne peux pas voir ou écrire dans {salon} : donnez-moi ces permissions avant de le choisir.",
+  "duels.abandonner": "Abandonner",
+  "duels.forfait.abandon": "🏳️ {perdant} abandonne : {gagnant} remporte la partie.",
+  "duels.forfait.temps": "⌛ {perdant} n'a pas joué à temps : {gagnant} remporte la partie.",
+  "duels.limite_adversaire": "{user} a déjà eu {max} duels récompensés contre {adversaire} aujourd'hui : pas de récompense cette fois.",
+  "duels.echec_credit": "⚠️ La récompense de {user} n'a pas pu être versée.",
+  "duels.erreur_recompenses": "⚠️ Les récompenses n'ont pas pu être versées pour cette partie.",
+  "duels.drop.ferme": "Ce coffre est fermé : il date d'avant un redémarrage du bot ou il s'est refermé."
 }

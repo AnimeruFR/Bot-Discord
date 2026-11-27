@@ -10,8 +10,7 @@
   "eco.refus.plafond_envoi": "Vous avez atteint la limite d'envoi du jour (2 000 {monnaie}). Réessayez demain.",
   "eco.refus.plafond_reception": "Ce membre a atteint la limite de réception du jour (5 000 {monnaie}). Réessayez demain.",
   "eco.refus.montant_trop_petit": "Montant trop petit : après les frais, le destinataire ne recevrait aucun {monnaie}.",
-  "eco.refus.destinataire_gele": "Le compte de {monnaie} de ce membre est gelé.",
-  "eco.refus.destinataire_sanctionne": "Ce membre est sanctionné : il ne peut pas recevoir de {monnaie} pour l'instant.",
+  "eco.refus.destinataire_indisponible": "Ce membre ne peut pas recevoir de {monnaie} pour le moment.",
   "eco.refus.destinataire_plafond_solde": "Ce membre a atteint le solde maximum de {monnaie}.",
   "eco.plafonne": "Vous avez atteint le plafond de gains du jour : les jeux restent jouables, mais ne rapportent plus de {monnaie} jusqu'à demain."
 }

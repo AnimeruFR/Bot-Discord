@@ -178,7 +178,8 @@ test("salons exclus (salon, catégorie, fil), module coupé, bots", async () => 
     db.setModule(G, "communaute.niveaux", false)
     assert.strictEqual(await xp.gagnerXp(m2, { maintenant: t0 }), null)
     db.setModule(G, "communaute.niveaux", true)
-    assert.ok(await xp.gagnerXp(m2, { maintenant: t0 }))
+    assert.strictEqual(await xp.gagnerXp(m2, { maintenant: t0 + 30 * 1000 }), null, "le refus est retenu pour la minute")
+    assert.ok(await xp.gagnerXp(m2, { maintenant: t0 + MINUTE }))
 
     // Bot : rien
     const { message: m3 } = contexte(G, "301")
@@ -584,4 +585,114 @@ test("/niveaux : réglages, paliers refusés pour un rôle dangereux", async () 
     assert.match(voir.content, /remplace/)
     await lancer({ action: "retirer_palier", niveau: 3 })
     assert.deepStrictEqual(paliers.listerPaliers(G), [])
+})
+
+// --- Critique du lot 3B : filtre des refus, cache des réglages, paliers, messageCreate ---------------------------
+
+test("XP : les refus (sanction, module) sont retenus une minute, un salon exclu ne bloque pas les autres salons", async () => {
+    const G = "910000000000000030"
+    const { guild, member } = contexte(G, "40", { timeout: Date.now() + 3600 * 1000 })
+    const salon = creerSalon("sx")
+    const t0 = MERCREDI
+    assert.strictEqual(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: t0 }), null)
+    // La sanction est levée : le refus reste mémorisé jusqu'à la minute suivante, sans retoucher la base
+    member.communicationDisabledUntilTimestamp = null
+    assert.strictEqual(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: t0 + 30 * 1000 }), null, "refus retenu")
+    assert.ok(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: t0 + MINUTE }))
+
+    // Salon exclu : le refus est propre à ce salon
+    xp.definirExclusion(G, "ex", true)
+    const exclu = creerSalon("ex"), libre = creerSalon("libre")
+    const m2 = creerMembre(guild, "41")
+    assert.strictEqual(await xp.gagnerXp(creerMessage(guild, m2, exclu), { maintenant: t0 }), null)
+    assert.strictEqual(await xp.gagnerXp(creerMessage(guild, m2, exclu), { maintenant: t0 + 1000 }), null)
+    assert.ok(await xp.gagnerXp(creerMessage(guild, m2, libre), { maintenant: t0 + 2000 }), "autre salon : gain immédiat")
+})
+
+test("XP : réglages en cache 60 s par serveur, invalidés par les écritures", async () => {
+    const G = "910000000000000031"
+    const { guild, member } = contexte(G, "50")
+    const salon = creerSalon("cs")
+    guild.channels.cache.set(salon.id, salon)
+    assert.ok(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: MERCREDI }), "réglages lus et mis en cache")
+    // Écriture directe en base, sans passer par xp.js : le cache ne la voit pas encore
+    db.sqlRun("INSERT INTO xp_config (guild_id, excluded_channels) VALUES (?, ?) ON CONFLICT (guild_id) DO UPDATE SET excluded_channels = excluded.excluded_channels",
+        [G, JSON.stringify(["cs"])])
+    assert.ok(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: MERCREDI + MINUTE }), "encore en cache")
+    xp.invaliderReglages(G)
+    assert.strictEqual(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: MERCREDI + 2 * MINUTE }), null, "cache vidé : salon exclu")
+    // Une écriture par l'API (définir*) invalide tout de suite
+    xp.definirExclusion(G, "cs", false)
+    assert.ok(await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: MERCREDI + 3 * MINUTE }))
+    xp.definirBonus(G, "salon", "cs", 2)
+    const r = await xp.gagnerXp(creerMessage(guild, member, salon), { maintenant: MERCREDI + 4 * MINUTE, alea: aleaMin })
+    assert.strictEqual(r.multiplicateur, 2, "bonus pris en compte sans attendre")
+    paliers.definirMode(G, "remplace")
+    assert.strictEqual(xp.lireConfig(G).mode, "remplace")
+})
+
+test("paliers : une erreur de crédit n'empêche pas de donner les rôles", async () => {
+    const G = "910000000000000032", { guild, member } = contexte(G)
+    creerRole(guild, "r1", 5)
+    paliers.definirPalier(G, { niveau: 1, roleId: "r1", recompense: 50 })
+    Object.defineProperty(member, "communicationDisabledUntilTimestamp", { get() { throw new Error("panne") } })
+    const erreurs = console.error
+    console.error = () => {}
+    try {
+        const bilan = await paliers.appliquerPaliers(member, 0, 1)
+        assert.deepStrictEqual(bilan.roles, ["r1"])
+        assert.strictEqual(bilan.recompense, 0)
+    } finally {
+        console.error = erreurs
+    }
+})
+
+test("paliers : mode remplace, palier le plus haut inutilisable = meilleur palier utilisable", async () => {
+    const G = "910000000000000033", { guild, member } = contexte(G)
+    creerRole(guild, "bas", 5)
+    creerRole(guild, "milieu", 5)
+    creerRole(guild, "haut", 5, [Flags.Administrator])
+    for (const [niveau, roleId] of [[2, "bas"], [5, "milieu"], [9, "haut"]]) paliers.definirPalier(G, { niveau, roleId })
+    paliers.definirMode(G, "remplace")
+    const bilan = await paliers.appliquerPaliers(member, 0, 10)
+    assert.deepStrictEqual(bilan.roles, ["milieu"], "le rôle dangereux est sauté, le palier 5 est donné")
+    assert.deepStrictEqual([...member.roles.cache.keys()], ["milieu"])
+})
+
+test("messageCreate : XP et drops partent en même temps, une panne n'arrête pas l'autre", async () => {
+    const chemin = require.resolve('../Events/messageCreate')
+    const cheminXp = require.resolve('../Fonctions/xp'), cheminDrops = require.resolve('../Fonctions/drops')
+    const sauvegarde = [require.cache[cheminXp], require.cache[cheminDrops]]
+    const journal = []
+    let finirXp
+    const attenteXp = new Promise(resolve => { finirXp = resolve })
+    const fausse = (chemin, exports) => { require.cache[chemin] = { id: chemin, filename: chemin, loaded: true, exports } }
+    fausse(cheminXp, { gagnerXp: async () => { journal.push("xp début"); await attenteXp; journal.push("xp fin") } })
+    fausse(cheminDrops, { peutEtreDrop: async () => { journal.push("drop"); throw new Error("panne de drop") } })
+    delete require.cache[chemin]
+    const erreurs = console.error
+    const messages = []
+    console.error = m => messages.push(m)
+    try {
+        const evenement = require('../Events/messageCreate')
+        const message = { guild: { id: "1" }, author: { bot: false } }
+        const fini = evenement({}, message)
+        await new Promise(r => setImmediate(r))
+        assert.deepStrictEqual(journal, ["xp début", "drop"], "le drop n'attend pas la fin de l'XP")
+        finirXp()
+        await fini
+        assert.deepStrictEqual(journal, ["xp début", "drop", "xp fin"])
+        assert.ok(messages.some(m => /drop/.test(m)), "la panne est journalisée")
+        // Bots et messages privés : rien
+        journal.length = 0
+        await evenement({}, { guild: { id: "1" }, author: { bot: true } })
+        await evenement({}, { guild: null, author: { bot: false } })
+        assert.deepStrictEqual(journal, [])
+    } finally {
+        console.error = erreurs
+        delete require.cache[chemin]
+        require.cache[cheminXp] = sauvegarde[0]
+        if (sauvegarde[1]) require.cache[cheminDrops] = sauvegarde[1]
+        else delete require.cache[cheminDrops]
+    }
 })

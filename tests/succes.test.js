@@ -4,7 +4,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const db = require('../Fonctions/db')
 const economie = require('../Fonctions/economie')
-const { emettre } = require('../Fonctions/evenements')
+const { emettre, jourParis } = require('../Fonctions/evenements')
 const succes = require('../Fonctions/succes')
 const quetes = require('../Fonctions/quetes')
 
@@ -123,7 +123,11 @@ test("semaine de Paris au format AAAA-Wnn", () => {
 function toutTerminer(userId, t) {
     for (const q of quetes.quetesDuMembre(G, userId, { instant: t })) {
         const def = [...quetes.catalogue.jour, ...quetes.catalogue.semaine].find(d => d.id === q.id)
-        for (let i = 0; i < q.goal + 2; i++) quetes.avancer(def.evenement, { guildId: G, userId }, { instant: t })
+        // Un partenaire différent à chaque fois (anti-farm) et un montant suffisant
+        for (let i = 0; i < q.goal + 2; i++) {
+            const autre = `9000000000000000${i}`
+            quetes.avancer(def.evenement, { guildId: G, userId, to: autre, from: autre, amount: 100, players: [userId, autre] }, { instant: t })
+        }
     }
 }
 
@@ -179,4 +183,145 @@ test("quêtes : compte gelé = récompense refusée et pas perdue", () => {
     assert.ok(quetes.quetesDuMembre(G, U, { instant: t }).every(q => !q.claimed), "rien marqué comme réclamé")
     economie.geler(G, U, false)
     assert.strictEqual(quetes.reclamer(m, { instant: t }).reclamees.length, 4)
+})
+
+// --- Anti-farm, récompenses rejouables, réclamation de la veille (critique du lot 3B) ---------------------------
+
+// Remplace les quêtes du jour (ou de la semaine) d'un membre par une seule quête connue
+function forcerQuete(userId, t, id, type = "jour") {
+    const def = quetes.catalogue[type].find(q => q.id === id)
+    const period = type === "jour" ? jourParis(t) : quetes.semaineParis(t)
+    db.sqlRun("DELETE FROM quetes WHERE guild_id = ? AND user_id = ? AND period = ?", [G, userId, period])
+    db.sqlRun("INSERT INTO quetes (guild_id, user_id, period, quest, progress, goal) VALUES (?, ?, ?, ?, 0, ?)", [G, userId, period, id, def.objectif])
+}
+const progression = (userId, t, id) => quetes.quetesDuMembre(G, userId, { instant: t }).find(q => q.id === id).progress
+
+test("anti-farm quêtes : deux comptes qui se donnent la rep chaque jour ne valident la quête qu'une fois par paire", () => {
+    const A = "200000000000000020", B = "200000000000000021", C = "200000000000000022"
+    // Quête de la semaine (5 réputations données) : la paire A -> B ne compte qu'une fois pour toute la semaine
+    forcerQuete(A, instant(9), "s_rep_5", "semaine")
+    for (const j of [9, 10, 11, 12, 13, 14, 15]) {
+        quetes.avancer("rep:donnee", { guildId: G, userId: A, to: B }, { instant: instant(j) })
+        quetes.avancer("rep:donnee", { guildId: G, userId: B, to: A }, { instant: instant(j) })
+    }
+    assert.strictEqual(progression(A, instant(15), "s_rep_5"), 1, "7 jours de rep avec le même compte : 1 seul cran")
+    quetes.avancer("rep:donnee", { guildId: G, userId: A, to: C }, { instant: instant(15) })
+    assert.strictEqual(progression(A, instant(15), "s_rep_5"), 2, "un autre partenaire compte")
+
+    // Quête du jour : une fois par paire et par jour ; le lendemain la paire compte de nouveau
+    forcerQuete(A, instant(16), "j_gagner_2")
+    for (let i = 0; i < 3; i++) quetes.avancer("partie:gagnee", { guildId: G, userId: A, players: [A, B] }, { instant: instant(16) })
+    assert.strictEqual(progression(A, instant(16), "j_gagner_2"), 1, "3 victoires contre le même adversaire : 1 cran")
+    quetes.avancer("partie:gagnee", { guildId: G, userId: A, players: [A, C] }, { instant: instant(16) })
+    assert.strictEqual(progression(A, instant(16), "j_gagner_2"), 2)
+    forcerQuete(A, instant(17), "j_gagner_2")
+    quetes.avancer("partie:gagnee", { guildId: G, userId: A, players: [A, B] }, { instant: instant(17) })
+    assert.strictEqual(progression(A, instant(17), "j_gagner_2"), 1, "le jour suivant, la paire recompte")
+
+    // Sans liste de joueurs (jeu solo, ancienne émission) : pas d'adversaire, la victoire compte
+    forcerQuete(A, instant(18), "j_gagner_2")
+    quetes.avancer("partie:gagnee", { guildId: G, userId: A }, { instant: instant(18) })
+    quetes.avancer("partie:gagnee", { guildId: G, userId: A, players: [A] }, { instant: instant(18) })
+    assert.strictEqual(progression(A, instant(18), "j_gagner_2"), 2)
+    // Réputation sans partenaire connu : ne compte pas
+    forcerQuete(A, instant(18), "j_rep_donner")
+    quetes.avancer("rep:donnee", { guildId: G, userId: A }, { instant: instant(18) })
+    assert.strictEqual(progression(A, instant(18), "j_rep_donner"), 0)
+})
+
+test("quête de paiement : montant minimal de 50", () => {
+    const A = "200000000000000023", t = instant(10)
+    forcerQuete(A, t, "j_paiement")
+    quetes.avancer("paiement", { guildId: G, userId: A, to: "200000000000000024", amount: 49 }, { instant: t })
+    assert.strictEqual(progression(A, t, "j_paiement"), 0, "49 : trop peu")
+    quetes.avancer("paiement", { guildId: G, userId: A, to: "200000000000000024", amount: 50 }, { instant: t })
+    assert.strictEqual(progression(A, t, "j_paiement"), 1)
+})
+
+test("anti-farm succès : un partenaire ne compte qu'une fois par jour pour rep, paiements et victoires", async () => {
+    const A = "200000000000000025", B = "200000000000000026", C = "200000000000000027"
+    membre(A)
+    const j1 = instant(10), j2 = instant(11)
+    const vers = (evenement, donnees, t) => succes.enregistrer(evenement, { guildId: G, userId: A, ...donnees }, { instant: t })
+    for (let i = 0; i < 3; i++) await vers("rep:donnee", { to: B }, j1)
+    await vers("rep:recue", { from: B }, j1)
+    await vers("rep:recue", { from: B }, j1)
+    for (let i = 0; i < 3; i++) await vers("paiement", { to: B, amount: 400 }, j1)
+    for (let i = 0; i < 3; i++) await vers("partie:gagnee", { players: [A, B] }, j1)
+    let stats = succes.lireStats(G, A)
+    assert.deepStrictEqual([stats.rep_donnees, stats.rep_recues, stats.paiements, stats.monnaie_donnee, stats.parties_gagnees], [1, 1, 1, 400, 1])
+
+    await vers("rep:donnee", { to: C }, j1)
+    await vers("partie:gagnee", { players: [A, C] }, j1)
+    await vers("rep:donnee", { to: B }, j2)
+    stats = succes.lireStats(G, A)
+    assert.deepStrictEqual([stats.rep_donnees, stats.parties_gagnees], [3, 2], "autre partenaire, puis lendemain : ça compte")
+
+    await vers("rep:donnee", {}, j2)
+    await vers("partie:gagnee", {}, j2)
+    await vers("partie:gagnee", { players: [A] }, j2)
+    stats = succes.lireStats(G, A)
+    assert.strictEqual(stats.rep_donnees, 3, "rep sans partenaire : ignorée")
+    assert.strictEqual(stats.parties_gagnees, 4, "victoire sans adversaire connu : comptée")
+    assert.ok(Object.keys(stats).every(c => !c.startsWith("paire:")), "la trace des paires n'est pas un compteur")
+    const traces = db.sqlAll("SELECT stat FROM stats_joueur WHERE user_id = ? AND stat LIKE 'paire:succes:rep:donnee:%'", [A])
+    assert.ok(traces.length > 0 && traces.every(l => l.stat.includes(jourParis(j2))), "les traces des jours passés sont effacées")
+})
+
+test("succès : récompense en attente (membre absent, compte gelé) retentée au prochain événement et à l'affichage", async () => {
+    const U = "200000000000000030"
+    // Membre absent du serveur : succès obtenu, rewarded = 0, rien de versé
+    await succes.enregistrer("drop:ramasse", { guildId: G, userId: U })
+    const ligne = () => db.sqlAll("SELECT rewarded FROM succes WHERE user_id = ? AND achievement = 'premier_drop'", [U])[0]
+    assert.strictEqual(ligne().rewarded, 0)
+    assert.strictEqual(solde(U), 0)
+    // Le membre est là, compte gelé : refus, toujours en attente
+    membre(U)
+    economie.geler(G, U, true)
+    await succes.enregistrer("drop:ramasse", { guildId: G, userId: U })
+    assert.strictEqual(ligne().rewarded, 0)
+    assert.strictEqual(solde(U), 0)
+    // Dégel : le prochain événement verse, une seule fois
+    economie.geler(G, U, false)
+    await succes.enregistrer("drop:ramasse", { guildId: G, userId: U })
+    assert.strictEqual(ligne().rewarded, 1)
+    const montant = solde(U)
+    assert.ok(montant > 0)
+    await succes.enregistrer("drop:ramasse", { guildId: G, userId: U })
+    assert.strictEqual(solde(U), montant)
+
+    // Affichage de la liste : retente aussi
+    const V = "200000000000000031"
+    membre(V)
+    economie.geler(G, V, true)
+    await succes.enregistrer("drop:ramasse", { guildId: G, userId: V })
+    economie.geler(G, V, false)
+    succes.liste(G, V)
+    await new Promise(r => setTimeout(r, 20))
+    assert.strictEqual(solde(V), montant)
+    assert.strictEqual(db.sqlAll("SELECT rewarded FROM succes WHERE user_id = ?", [V])[0].rewarded, 1)
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM eco_journal WHERE user_id = ? AND source = 'succes'", [V])[0].n, 1)
+})
+
+test("quêtes : une quête terminée hier se réclame encore aujourd'hui, pas deux jours après", () => {
+    const U = "200000000000000032", m = membre(U)
+    const hier = instant(10)
+    forcerQuete(U, hier, "j_daily")
+    quetes.avancer("daily", { guildId: G, userId: U }, { instant: hier })
+    assert.strictEqual(quetes.precedentesAReclamer(G, U, { instant: instant(11) }).length, 1)
+    assert.strictEqual(quetes.precedentesAReclamer(G, U, { instant: instant(12) }).length, 0, "avant-hier : trop tard")
+    const r = quetes.reclamer(m, { instant: instant(11) })
+    assert.deepStrictEqual(r.reclamees.map(q => q.id), ["j_daily"])
+    assert.strictEqual(quetes.reclamer(m, { instant: instant(11) }).reclamees.length, 0, "une seule fois")
+})
+
+test("quêtes : si crediter lève une exception, la quête reste réclamable", () => {
+    const U = "200000000000000033", t = instant(10)
+    const m = { id: U, guild: { id: G }, user: { bot: false }, joinedTimestamp: 1000 }
+    Object.defineProperty(m, "communicationDisabledUntilTimestamp", { get() { throw new Error("panne") } })
+    forcerQuete(U, t, "j_daily")
+    quetes.avancer("daily", { guildId: G, userId: U }, { instant: t })
+    assert.throws(() => quetes.reclamer(m, { instant: t }), /panne/)
+    assert.strictEqual(quetes.quetesDuMembre(G, U, { instant: t }).find(q => q.id === "j_daily").claimed, false)
+    assert.strictEqual(quetes.reclamer(membre(U), { instant: t }).reclamees.length, 1)
 })

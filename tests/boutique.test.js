@@ -293,6 +293,105 @@ test("remboursement si le rôle ne peut pas être donné", async () => {
     assert.strictEqual((await boutique.acheter(joueur, a.id)).ok, true, "l'article reste achetable ensuite")
 })
 
+// Silence console.error pendant fn (les échecs de livraison sont journalisés)
+async function sansLogs(fn) {
+    const erreurs = console.error
+    console.error = () => {}
+    try {
+        return await fn()
+    } finally {
+        console.error = erreurs
+    }
+}
+
+test("remboursement : malgré un gel ou une sanction pendant l'achat, et le stock est rendu", async () => {
+    const { guild, admin } = fauxServeur("930000000000000010")
+    const a = boutique.ajouterArticle(guild, admin, { type: "role", role: faussRole(guild, "vip"), prix: 300, stock: 3 }).article
+    const joueur = fauxMembre(guild, "j1", { jours: 1 })
+    donner(joueur, 1000)
+    // Pendant la livraison : compte gelé, sanction, et Discord refuse le rôle
+    joueur.roles.add = async () => {
+        eco.geler(guild.id, "j1", true)
+        joueur.communicationDisabledUntilTimestamp = Date.now() + HEURE
+        throw new Error("Missing Permissions")
+    }
+    const r = await sansLogs(() => boutique.acheter(joueur, a.id))
+    assert.deepStrictEqual([r.ok, r.refus, r.rembourse], [false, "role_impossible", true])
+    assert.strictEqual(solde(joueur), 1000, "intégralement rendu, même gelé et sanctionné")
+    assert.strictEqual(ligneArticle(guild.id, a.id).stock, 3)
+    assert.ok(eco.verifierCoherence(guild.id, "j1"))
+})
+
+test("remboursement impossible : le stock est quand même rendu", async () => {
+    const { guild, admin } = fauxServeur("930000000000000011")
+    const a = boutique.ajouterArticle(guild, admin, { type: "role", role: faussRole(guild, "vip"), prix: 300, stock: 2 }).article
+    const joueur = fauxMembre(guild, "j1")
+    donner(joueur, 1000)
+    joueur.echecAjout = true
+    const original = eco.rembourser
+    eco.rembourser = () => { throw new Error("base indisponible") }
+    let r
+    try {
+        r = await sansLogs(() => boutique.acheter(joueur, a.id))
+    } finally {
+        eco.rembourser = original
+    }
+    assert.deepStrictEqual([r.ok, r.refus, r.rembourse], [false, "role_impossible", false])
+    assert.strictEqual(ligneArticle(guild.id, a.id).stock, 2, "stock rendu")
+    assert.strictEqual(solde(joueur), 700, "monnaie non rendue : le staff est prévenu")
+})
+
+test("livraison ambiguë : le rôle est bien là malgré l'erreur, pas de remboursement", async () => {
+    const { guild, admin } = fauxServeur("930000000000000012")
+    const temp = boutique.ajouterArticle(guild, admin, { type: "role_temp", role: faussRole(guild, "temp"), prix: 200, dureeS: 3600, stock: 5 }).article
+    const joueur = fauxMembre(guild, "j1")
+    donner(joueur, 1000)
+    const roleTemp = guild.roles.cache.get("temp")
+    // Le rôle est donné, mais la réponse de Discord est perdue
+    joueur.roles.add = async role => {
+        joueur.roles.cache.set(role.id, role)
+        throw new Error("ETIMEDOUT")
+    }
+    const evenements = []
+    retirerEcouteurs()
+    ecouter("achat", d => evenements.push(d))
+    const r = await sansLogs(() => boutique.acheter(joueur, temp.id))
+    retirerEcouteurs()
+    assert.strictEqual(r.ok, true)
+    assert.ok(joueur.roles.cache.has(roleTemp.id))
+    assert.strictEqual(solde(joueur), 800, "pas de remboursement")
+    assert.strictEqual(ligneArticle(guild.id, temp.id).stock, 4, "l'exemplaire est bien vendu")
+    const lignes = db.sqlAll("SELECT * FROM shop_roles_temp WHERE guild_id = ?", [guild.id])
+    assert.strictEqual(lignes.length, 1, "la ligne du rôle temporaire est gardée")
+    assert.strictEqual(lignes[0].expires_at, r.expireA)
+    assert.strictEqual(evenements.length, 1)
+    assert.ok(!eco.journal(guild.id, "j1").some(l => l.source === "remboursement"))
+    db.sqlRun("DELETE FROM shop_roles_temp WHERE guild_id = ?", [guild.id]) // les tests suivants comptent les lignes
+})
+
+test("livraison : relecture impossible, ni remboursement ni ligne supprimée ; membre parti, remboursé", async () => {
+    const { guild, admin } = fauxServeur("930000000000000013")
+    const temp = boutique.ajouterArticle(guild, admin, { type: "role_temp", role: faussRole(guild, "temp"), prix: 200, dureeS: 3600, stock: 5 }).article
+    const joueur = fauxMembre(guild, "j1")
+    donner(joueur, 1000)
+    joueur.echecAjout = true
+    const fetchOriginal = guild.members.fetch
+    guild.members.fetch = async () => { throw new Error("Discord indisponible") }
+    const inconnu = await sansLogs(() => boutique.acheter(joueur, temp.id))
+    assert.deepStrictEqual([inconnu.ok, inconnu.refus, inconnu.rembourse], [false, "role_impossible", false])
+    assert.strictEqual(solde(joueur), 800)
+    assert.strictEqual(db.sqlAll("SELECT * FROM shop_roles_temp WHERE guild_id = ?", [guild.id]).length, 1, "ligne gardée : le rôle sera retiré si besoin")
+
+    // Membre parti pendant l'achat : le rôle n'a pas pu être donné, remboursement
+    guild.members.fetch = fetchOriginal
+    db.sqlRun("DELETE FROM shop_roles_temp WHERE guild_id = ?", [guild.id])
+    guild.membres.delete("j1")
+    const parti = await sansLogs(() => boutique.acheter(joueur, temp.id))
+    assert.deepStrictEqual([parti.ok, parti.rembourse], [false, true])
+    assert.strictEqual(solde(joueur), 800, "les 200 de la tentative sont rendus")
+    assert.strictEqual(db.sqlAll("SELECT * FROM shop_roles_temp WHERE guild_id = ?", [guild.id]).length, 0)
+})
+
 test("rôle temporaire : retiré à l'échéance, pas avant", async () => {
     const { guild, admin } = fauxServeur("910000000000000007")
     const bot = { guilds: { cache: new Discord.Collection([[guild.id, guild]]) } }

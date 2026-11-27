@@ -7,6 +7,7 @@ const eco = require('../Fonctions/economie')
 const metiers = require('../Fonctions/metiers')
 const daily = require('../Commandes/Communaute/Economie/daily')
 const { ecouter, retirerEcouteurs } = require('../Fonctions/evenements')
+const { dateDeParis } = require('../Fonctions/dates')
 
 const HEURE = 3600 * 1000
 const JOUR = 24 * HEURE
@@ -36,10 +37,10 @@ test("daily : 100 le premier jour, un seul par jour (double clic compris)", asyn
 
 test("daily : série +1 par jour, plafond à 10 (235), hors plafond actif", () => {
     const m = membre("910000000000000002", "2")
-    const debut = Date.now()
+    const debut = dateDeParis(2026, 6, 1, 12, 0)
     const montants = []
     for (let i = 0; i < 12; i++) {
-        const r = daily.reclamer(m, debut + i * (JOUR + HEURE))
+        const r = daily.reclamer(m, debut + i * JOUR)
         assert.ok(r.ok, `jour ${i + 1}`)
         assert.strictEqual(r.serie, i + 1)
         montants.push(r.credite)
@@ -52,16 +53,47 @@ test("daily : série +1 par jour, plafond à 10 (235), hors plafond actif", () =
     assert.ok(!compteur, "le daily ne compte pas dans le plafond du jour")
 })
 
-test("daily : série perdue après 48 h, conservée à 47 h", () => {
+test("daily : la série suit les jours calendaires de Paris, pas un délai en heures", () => {
     const m = membre("910000000000000003", "3")
-    const t0 = Date.now()
-    daily.reclamer(m, t0)
-    const deuxieme = daily.reclamer(m, t0 + 47 * HEURE)
-    assert.strictEqual(deuxieme.serie, 2, "47 h : la série continue")
-    const perdu = daily.reclamer(m, t0 + 47 * HEURE + 49 * HEURE)
-    assert.strictEqual(perdu.serie, 1, "49 h : la série repart")
-    assert.strictEqual(perdu.credite, 100)
+    const paris = (jour, h, min) => dateDeParis(2026, 6, jour, h, min)
+    assert.strictEqual(daily.reclamer(m, paris(1, 23, 30)).serie, 1)
+    // 40 minutes plus tard mais le lendemain : la série continue
+    assert.strictEqual(daily.reclamer(m, paris(2, 0, 10)).serie, 2)
+    // Presque 48 h plus tard mais deux jours calendaires après : la série repart
+    const perdu = daily.reclamer(m, paris(4, 0, 5))
+    assert.strictEqual(perdu.serie, 1)
     assert.ok(perdu.perdue)
+    assert.strictEqual(perdu.credite, 100)
+    // Le lendemain, même 47 h après : elle continue
+    assert.strictEqual(daily.reclamer(m, paris(5, 23, 55)).serie, 2)
+    // Deuxième claim le même jour de Paris : refusé, la série ne bouge pas
+    assert.strictEqual(daily.reclamer(m, paris(5, 23, 59)).refus, "deja")
+    assert.strictEqual(eco.compte(m.guild.id, m.id).streak, 2)
+})
+
+test("daily : la série traverse les changements d'heure (jour de 23 h et de 25 h)", () => {
+    const m = membre("910000000000000013", "13")
+    const dates = [[2026, 3, 28], [2026, 3, 29], [2026, 3, 30], [2026, 10, 24], [2026, 10, 25], [2026, 10, 26]]
+    const series = dates.map(([a, mo, j]) => daily.reclamer(m, dateDeParis(a, mo, j, 23, 30)).serie)
+    assert.deepStrictEqual(series, [1, 2, 3, 1, 2, 3], "mars : 3 jours de suite ; octobre : coupure normale après mars")
+})
+
+test("daily : une exception du crédit annule la série et le daily reste disponible", () => {
+    const m = membre("910000000000000014", "14")
+    const t0 = dateDeParis(2026, 6, 1, 12, 0)
+    daily.reclamer(m, t0)
+    const original = eco.crediter
+    eco.crediter = () => { throw new Error("base verrouillée") }
+    try {
+        assert.throws(() => daily.reclamer(m, t0 + JOUR), /base verrouillée/)
+    } finally {
+        eco.crediter = original
+    }
+    const compte = eco.compte(m.guild.id, m.id)
+    assert.deepStrictEqual([compte.streak, compte.lastDailyAt], [1, t0], "comme avant la tentative")
+    const apres = daily.reclamer(m, t0 + JOUR + HEURE)
+    assert.strictEqual(apres.serie, 2, "le daily se réclame ensuite normalement")
+    assert.ok(eco.verifierCoherence(m.guild.id, m.id))
 })
 
 test("daily : refusé si sanctionné, et la série n'avance pas", () => {
@@ -111,6 +143,36 @@ test("travail : délai d'une heure revérifié en base, annulé si le gain est r
     assert.strictEqual(metiers.travailler(g).refus, "gele")
     assert.strictEqual(metiers.lireMetier(G, "12").lastWorkAt, null)
     assert.strictEqual(metiers.travauxDuJour(G, "12"), 0)
+})
+
+test("travail : une exception du crédit annule le délai et le compteur de travaux", () => {
+    const m = membre(G, "21")
+    metiers.choisirMetier(m, "forgeron")
+    const original = eco.crediter
+    eco.crediter = () => { throw new Error("base verrouillée") }
+    try {
+        assert.throws(() => metiers.travailler(m), /base verrouillée/)
+    } finally {
+        eco.crediter = original
+    }
+    assert.strictEqual(metiers.lireMetier(G, "21").lastWorkAt, null, "délai non pris")
+    assert.strictEqual(metiers.travauxDuJour(G, "21"), 0, "travail non compté")
+    assert.ok(metiers.travailler(m).ok, "réessai possible tout de suite")
+})
+
+test("travail : plafond du jour atteint (0 gagné), compté mais sans XP de métier", () => {
+    const m = membre(G, "22")
+    metiers.choisirMetier(m, "forgeron")
+    eco.crediter(m, 5000, { source: "test", actif: true, sansReduction: true }) // remplit le plafond du jour
+    sansDelai(m)
+    const r = metiers.travailler(m, { hasard: () => 0 })
+    assert.strictEqual(r.ok, true)
+    assert.strictEqual(r.credite, 0)
+    assert.strictEqual(r.plafonne, true)
+    assert.strictEqual(metiers.lireMetier(G, "22").xp, 0, "pas d'XP")
+    assert.strictEqual(r.monte, false)
+    assert.strictEqual(metiers.travauxDuJour(G, "22"), 1, "le travail est quand même compté")
+    assert.strictEqual(r.restants, metiers.TRAVAUX_PAR_JOUR - 1)
 })
 
 test("travail : 8 travaux par jour, le 9e ne rapporte rien mais l'explique", () => {
@@ -184,6 +246,26 @@ test("travail : changer de métier coûte 1 000, refusé sans solde, repart au n
     assert.strictEqual(apres.xp, 0)
     assert.strictEqual(eco.compte(G, "15").balance, avant + 500)
     assert.ok(eco.verifierCoherence(G, "15"))
+})
+
+test("travail : changement de métier, si l'écriture échoue la somme est rendue", () => {
+    const m = membre(G, "23")
+    metiers.choisirMetier(m, "forgeron")
+    eco.crediter(m, 1500, { source: "test", sansReduction: true })
+    const original = db.sqlRun
+    db.sqlRun = (sql, ...reste) => {
+        if (sql.startsWith("UPDATE eco_metiers SET job = ?")) throw new Error("disque plein")
+        return original(sql, ...reste)
+    }
+    try {
+        assert.throws(() => metiers.choisirMetier(m, "horloger"), /disque plein/)
+    } finally {
+        db.sqlRun = original
+    }
+    assert.strictEqual(metiers.lireMetier(G, "23").job, "forgeron", "métier inchangé")
+    assert.strictEqual(eco.compte(G, "23").balance, 1500, "somme rendue")
+    assert.ok(eco.verifierCoherence(G, "23"))
+    assert.strictEqual(metiers.choisirMetier(m, "horloger").ok, true, "ensuite le changement passe")
 })
 
 test("travail : un membre sanctionné ne travaille pas et ne change pas de métier", () => {

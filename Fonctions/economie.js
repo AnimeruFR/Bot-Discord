@@ -170,6 +170,20 @@ function crediter(member, montant, { source, actif = false, details = null, othe
     })
 }
 
+// Rend une somme prélevée (achat dont la livraison a échoué, changement de métier raté) : aucun contrôle de droits
+// (gel, sanction, module), ni plafond du jour, ni réduction « nouveau membre » : le membre retrouve ce qu'il a payé.
+// Seul le solde maximum s'applique : au-delà, le crédit est rogné (rogne: true) et le journal ne garde que ce qui est entré.
+function rembourser(guildId, userId, montant, { source = "remboursement", details = null, otherId = null } = {}) {
+    verifierMontant(montant)
+    verifierSource(source)
+    return db.transaction(() => {
+        const { balance } = ligneCompte(guildId, userId)
+        const credite = Math.max(0, Math.min(montant, SOLDE_MAX - balance))
+        if (credite > 0) mouvement(guildId, userId, credite, balance + credite, { source, otherId, details })
+        return { ok: true, credite, solde: balance + credite, rogne: credite < montant }
+    })
+}
+
 function debiter(guildId, userId, montant, { source, details = null, otherId = null } = {}) {
     verifierMontant(montant)
     verifierSource(source)
@@ -200,7 +214,8 @@ function transferer(de, vers, montant, { source = "paiement", fraisPourcent = 2 
         const refusDe = peutJouer(de)
         if (refusDe) return { ok: false, refus: refusDe }
         const refusVers = peutJouer(vers)
-        if (refusVers) return { ok: false, refus: refusVers === "module" ? "module" : `destinataire_${refusVers}` }
+        // Un seul refus pour le destinataire : on ne dévoile pas un gel ou une sanction décidés par le staff
+        if (refusVers) return { ok: false, refus: "destinataire_indisponible" }
         if (estNouveau(de) || estNouveau(vers)) return { ok: false, refus: "compte_recent" }
         if (compteurs(guildId, de.id).sent + montant > ENVOI_MAX_JOUR) return { ok: false, refus: "plafond_envoi" }
         if (compteurs(guildId, vers.id).received + recu > RECEPTION_MAX_JOUR) return { ok: false, refus: "plafond_reception" }
@@ -269,6 +284,6 @@ function verifierCoherence(guildId, userId) {
 
 module.exports = {
     SOLDE_MAX, ENVOI_MAX_JOUR, RECEPTION_MAX_JOUR,
-    monnaie, formater, reglages, definirReglages, compte, peutJouer, crediter, debiter, transferer,
+    monnaie, formater, reglages, definirReglages, compte, peutJouer, crediter, rembourser, debiter, transferer,
     journal, geler, reinitialiser, classement, rang, verifierCoherence
 }

@@ -17,6 +17,7 @@ const lireMode = guildId => db.sqlAll("SELECT tier_mode FROM xp_config WHERE gui
 function definirMode(guildId, mode) {
     if (!MODES.includes(mode)) throw new RangeError(`mode : ${MODES.join(" ou ")}`)
     db.sqlRun("INSERT INTO xp_config (guild_id, tier_mode) VALUES (?, ?) ON CONFLICT (guild_id) DO UPDATE SET tier_mode = excluded.tier_mode", [guildId, mode])
+    require('./xp').invaliderReglages(guildId) // chargé ici : xp.js dépend de ce fichier
 }
 
 // Du niveau le plus bas au plus haut
@@ -71,10 +72,15 @@ async function appliquerPaliers(member, ancien, nouveau) {
     const franchis = paliers.filter(p => p.niveau > ancien && p.niveau <= nouveau)
     if (!franchis.length) return bilan
 
-    // Récompenses : monnaie normale (hors plafond du jour, avec la réduction des comptes récents)
+    // Récompenses : monnaie normale (hors plafond du jour, avec la réduction des comptes récents).
+    // Une erreur ou un refus d'économie ne doit jamais empêcher de donner les rôles, plus bas.
     for (const p of franchis.filter(p => p.recompense > 0)) {
-        const r = economie.crediter(member, p.recompense, { source: "palier", actif: false, details: { niveau: p.niveau } })
-        if (r.ok) bilan.recompense += r.credite
+        try {
+            const r = economie.crediter(member, p.recompense, { source: "palier", actif: false, details: { niveau: p.niveau } })
+            if (r.ok) bilan.recompense += r.credite
+        } catch (err) {
+            console.error("Palier, récompense non versée :", err.message)
+        }
     }
 
     const donne = (role, raison) => member.roles.add(role, raison).then(() => bilan.roles.push(role.id))
@@ -82,13 +88,19 @@ async function appliquerPaliers(member, ancien, nouveau) {
     const raison = `Palier de niveau ${nouveau}`
 
     if (lireMode(guild.id) === "remplace") {
-        // Le palier le plus haut atteint (pas seulement parmi les nouveaux : un palier sans rôle ne retire pas le précédent)
-        const cible = [...paliers].reverse().find(p => p.niveau <= nouveau && p.roleId)
-        const roleCible = cible && franchis.includes(cible) ? roleUtilisable(guild, cible.roleId) : null
+        // Le palier le plus haut atteint (pas seulement parmi les nouveaux : un palier sans rôle ne retire pas le précédent).
+        // S'il vient d'être franchi mais que son rôle est inutilisable, on se rabat sur le meilleur palier atteint dont le rôle l'est.
+        const atteints = [...paliers].reverse().filter(p => p.niveau <= nouveau && p.roleId)
+        if (!atteints.length || !franchis.includes(atteints[0])) return bilan
+        let roleCible = null
+        for (const p of atteints) {
+            roleCible = roleUtilisable(guild, p.roleId)
+            if (roleCible) break
+        }
         if (!roleCible) return bilan
         // Le nouveau rôle d'abord : s'il échoue, le membre garde l'ancien
         try {
-            await donne(roleCible, raison)
+            if (!member.roles.cache.has(roleCible.id)) await donne(roleCible, raison)
         } catch (err) {
             console.error("Palier, rôle non donné :", err.message)
             return bilan

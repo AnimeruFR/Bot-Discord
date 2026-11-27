@@ -9,7 +9,8 @@ const { t } = require('./i18n')
 // Duels et jeux à plusieurs (idées #51, #52, #55). Règles : docs/ECONOMIE.md (duels sans mise).
 //   - un duel commence par une invitation que l'adversaire accepte par un bouton (60 s) ;
 //   - 15 ✦ au gagnant, 5 au perdant (5 chacun en cas d'égalité), course de réaction : 10 au gagnant ;
-//   - au plus 10 parties récompensées par jour et par membre, tous jeux de ce fichier confondus ;
+//   - au plus 10 parties récompensées par jour et par membre, tous jeux de ce fichier confondus, et 3 contre le même adversaire ;
+//   - abandon ou temps écoulé : défaite de celui qui part, l'autre touche sa récompense ;
 //   - les récompenses passent par terminerPartie({ recompenses }), donc par crediter actif (plafond du jour).
 // La logique des jeux est ici sous forme de fonctions pures sur l'état (testables sans Discord) ;
 // les commandes de Commandes/Communaute/Jeux ne font que l'affichage.
@@ -19,6 +20,8 @@ const GAIN_PERDANT = 5
 const GAIN_EGALITE = 5
 const GAIN_REACTION = 10
 const MAX_RECOMPENSES_JOUR = 10
+const MAX_DUELS_ADVERSAIRE = 3 // duels récompensés par jour contre le même adversaire
+const MAX_PENDUS_JOUR = 10 // pendus récompensés par jour et par membre
 const DELAI_INVITATION_MS = 60 * 1000
 const DELAI_MANCHE_MS = 60 * 1000
 const DELAI_COUP_MS = 60 * 1000
@@ -188,42 +191,69 @@ function appliquerCoup(partieId, transformation, prolongerMs = null) {
 
 // --- Récompenses -----------------------------------------------------------------------------------------------
 
+// Limites du jour par membre. Chaque compteur est une ligne de stats_joueur : AAAAMMJJ * 100 + nombre.
+// « duel » : tous les jeux de ce fichier ; « pendu » : le pendu (voir Commandes/Communaute/Jeux/pendu.js).
+const COMPTEURS = {
+    duel: { stat: STAT_JOUR, max: MAX_RECOMPENSES_JOUR },
+    pendu: { stat: "pendus_recompenses_jour", max: MAX_PENDUS_JOUR }
+}
+// Duels récompensés contre un même adversaire dans la journée : une ligne par adversaire
+const statContre = adversaire => `duels_contre:${adversaire}`
+
 function numeroJour(maintenant) {
     return Number(jourParis(maintenant).replaceAll("-", ""))
 }
 
-function lireCompteurJour(guildId, userId, maintenant = Date.now()) {
-    const ligne = db.sqlAll("SELECT value FROM stats_joueur WHERE guild_id = ? AND user_id = ? AND stat = ?", [guildId, userId, STAT_JOUR])[0]
+function lireCompteurJour(guildId, userId, maintenant = Date.now(), stat = STAT_JOUR) {
+    const ligne = db.sqlAll("SELECT value FROM stats_joueur WHERE guild_id = ? AND user_id = ? AND stat = ?", [guildId, userId, stat])[0]
     const jour = numeroJour(maintenant)
     return ligne && Math.floor(ligne.value / 100) === jour ? ligne.value % 100 : 0
 }
 
-function ecrireCompteurJour(guildId, userId, nombre, maintenant) {
+function ecrireCompteurJour(guildId, userId, nombre, maintenant, stat = STAT_JOUR) {
     db.sqlRun(`INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, ?)
-        ON CONFLICT (guild_id, user_id, stat) DO UPDATE SET value = excluded.value`, [guildId, userId, STAT_JOUR, numeroJour(maintenant) * 100 + nombre])
+        ON CONFLICT (guild_id, user_id, stat) DO UPDATE SET value = excluded.value`, [guildId, userId, stat, numeroJour(maintenant) * 100 + nombre])
 }
 
 // Réserve une place de récompense du jour à chaque membre de montants ({ userId: montant }), dans une transaction.
-// Renvoie { accordees: { userId: montant }, limitees: [userId] } : les limitées ont déjà 10 parties récompensées aujourd'hui.
-function reserverRecompenses(guildId, montants, maintenant = Date.now()) {
+// compteur : "duel" ou "pendu". contre : { userId: adversaireId } pour un duel à deux (3 duels récompensés par jour au plus
+// contre le même adversaire). Renvoie { accordees: { userId: montant }, limitees, limiteesAdversaire } : les limitées ont
+// atteint la limite du jour, les autres ont déjà eu 3 duels récompensés contre cet adversaire.
+function reserverRecompenses(guildId, montants, maintenant = Date.now(), { compteur = "duel", contre = null } = {}) {
+    const { stat, max } = COMPTEURS[compteur]
     return db.transaction(() => {
-        const accordees = {}, limitees = []
+        const accordees = {}, limitees = [], limiteesAdversaire = []
         for (const [userId, montant] of Object.entries(montants)) {
-            const deja = lireCompteurJour(guildId, userId, maintenant)
-            if (deja >= MAX_RECOMPENSES_JOUR) {
+            const deja = lireCompteurJour(guildId, userId, maintenant, stat)
+            if (deja >= max) {
                 limitees.push(userId)
                 continue
             }
-            ecrireCompteurJour(guildId, userId, deja + 1, maintenant)
+            const adversaire = contre?.[userId]
+            const dejaContre = adversaire ? lireCompteurJour(guildId, userId, maintenant, statContre(adversaire)) : 0
+            if (adversaire && dejaContre >= MAX_DUELS_ADVERSAIRE) {
+                limiteesAdversaire.push(userId)
+                continue
+            }
+            ecrireCompteurJour(guildId, userId, deja + 1, maintenant, stat)
+            if (adversaire) ecrireCompteurJour(guildId, userId, dejaContre + 1, maintenant, statContre(adversaire))
             accordees[userId] = montant
         }
-        return { accordees, limitees }
+        return { accordees, limitees, limiteesAdversaire }
     })
 }
 
-function annulerReservation(guildId, userIds, maintenant = Date.now()) {
+// Rend la place réservée (crédit échoué, partie déjà terminée)
+function annulerReservation(guildId, userIds, maintenant = Date.now(), { compteur = "duel", contre = null } = {}) {
+    const { stat } = COMPTEURS[compteur]
     db.transaction(() => {
-        for (const userId of userIds) ecrireCompteurJour(guildId, userId, Math.max(0, lireCompteurJour(guildId, userId, maintenant) - 1), maintenant)
+        for (const userId of userIds) {
+            ecrireCompteurJour(guildId, userId, Math.max(0, lireCompteurJour(guildId, userId, maintenant, stat) - 1), maintenant, stat)
+            const adversaire = contre?.[userId]
+            if (!adversaire) continue
+            const reste = Math.max(0, lireCompteurJour(guildId, userId, maintenant, statContre(adversaire)) - 1)
+            ecrireCompteurJour(guildId, userId, reste, maintenant, statContre(adversaire))
+        }
     })
 }
 
@@ -234,9 +264,11 @@ function plafondAtteint(guildId, userId) {
     return (ligne?.active_earned ?? 0) >= plafondJour
 }
 
-// Termine la partie et verse les récompenses. montants : { userId: montant } avant limite du jour.
-// Un membre sanctionné, gelé ou parti n'est ni récompensé ni compté. Renvoie { ok, accordees, limitees, plafonnes }.
-async function terminerDuel(partieId, guild, { gagnants = [], montants = {} } = {}) {
+// Termine la partie et verse les récompenses. montants : { userId: montant } avant limites du jour.
+// Un membre sanctionné, gelé ou parti n'est ni récompensé ni compté. Une place du jour n'est gardée que si le crédit a réussi :
+// sinon elle est rendue et l'échec est journalisé par terminerPartie (membre et jeu).
+// Renvoie { ok, partie, accordees (payées), limitees, limiteesAdversaire, plafonnes, echecs }.
+async function terminerDuel(partieId, guild, { gagnants = [], montants = {}, compteur = "duel" } = {}) {
     const partie = parties.lirePartie(partieId)
     if (!partie) return { ok: false, refus: "introuvable" }
     const eligibles = {}
@@ -244,26 +276,132 @@ async function terminerDuel(partieId, guild, { gagnants = [], montants = {} } = 
         const membre = await guild.members.fetch(userId).catch(() => null)
         if (membre && !economie.peutJouer(membre)) eligibles[userId] = montant
     }
-    const { accordees, limitees } = reserverRecompenses(partie.guildId, eligibles)
-    const fin = await parties.terminerPartie(partieId, { status: "finie", gagnants, recompenses: accordees })
+    // Duel à deux : le même adversaire ne rapporte que 3 récompenses par jour
+    const [premier, second] = partie.players
+    const contre = compteur === "duel" && partie.players.length === 2 ? { [premier]: second, [second]: premier } : null
+    const { accordees, limitees, limiteesAdversaire } = reserverRecompenses(partie.guildId, eligibles, Date.now(), { compteur, contre })
+    let fin
+    try {
+        fin = await parties.terminerPartie(partieId, { status: "finie", gagnants, recompenses: accordees })
+    } catch (err) {
+        annulerReservation(partie.guildId, Object.keys(accordees), Date.now(), { compteur, contre })
+        throw err
+    }
     if (!fin.ok) {
-        annulerReservation(partie.guildId, Object.keys(accordees))
+        annulerReservation(partie.guildId, Object.keys(accordees), Date.now(), { compteur, contre })
         return { ok: false, refus: fin.refus }
     }
-    const plafonnes = Object.keys(accordees).filter(userId => plafondAtteint(partie.guildId, userId))
-    return { ok: true, partie: fin.partie, accordees, limitees, plafonnes }
+    const echecs = Object.keys(accordees).filter(userId => !fin.versements?.[userId]?.ok)
+    if (echecs.length) {
+        annulerReservation(partie.guildId, echecs, Date.now(), { compteur, contre })
+        for (const userId of echecs) delete accordees[userId]
+    }
+    let plafonnes = []
+    try {
+        plafonnes = Object.keys(accordees).filter(userId => plafondAtteint(partie.guildId, userId))
+    } catch (err) {
+        console.error(`Partie ${partieId} : plafond du jour non vérifié :`, err.message)
+    }
+    return { ok: true, partie: fin.partie, accordees, limitees, limiteesAdversaire, plafonnes, echecs }
 }
 
-// Lignes à ajouter au message de fin : récompenses, limite du jour, plafond de gains
-function lignesRecompenses(cible, guildId, fin) {
+// Comme terminerDuel, sans jamais lever d'erreur : si la fin échoue, la partie est terminée sans récompense (jamais bloquée)
+// et le résultat porte erreur: true pour le dire dans le message.
+async function conclureDuel(partieId, guild, options = {}) {
+    try {
+        return await terminerDuel(partieId, guild, options)
+    } catch (err) {
+        console.error(`Fin de la partie ${partieId} en échec, terminée sans récompense :`, err.message)
+        await parties.terminerPartie(partieId, { status: "finie", gagnants: options.gagnants ?? [] }).catch(() => {})
+        return { ok: true, partie: parties.lirePartie(partieId), accordees: {}, limitees: [], limiteesAdversaire: [], plafonnes: [], echecs: [], erreur: true }
+    }
+}
+
+// Lignes à ajouter au message de fin : récompenses, limites du jour, plafond de gains.
+// cleLimite : texte de la limite du jour (duels par défaut), max : valeur affichée.
+function lignesRecompenses(cible, guildId, fin, { cleLimite = "duels.limite_jour", max = MAX_RECOMPENSES_JOUR } = {}) {
     const lignes = []
     for (const [userId, montant] of Object.entries(fin.accordees ?? {})) {
         lignes.push(t(cible, "duels.gain", { user: `<@${userId}>`, gain: economie.formater(guildId, montant) }))
     }
-    for (const userId of fin.limitees ?? []) lignes.push(t(cible, "duels.limite_jour", { user: `<@${userId}>`, max: MAX_RECOMPENSES_JOUR }))
+    for (const userId of fin.limitees ?? []) lignes.push(t(cible, cleLimite, { user: `<@${userId}>`, max }))
+    for (const userId of fin.limiteesAdversaire ?? []) {
+        const adversaire = fin.partie?.players?.find(joueur => joueur !== userId)
+        lignes.push(t(cible, "duels.limite_adversaire", { user: `<@${userId}>`, adversaire: `<@${adversaire}>`, max: MAX_DUELS_ADVERSAIRE }))
+    }
+    for (const userId of fin.echecs ?? []) lignes.push(t(cible, "duels.echec_credit", { user: `<@${userId}>` }))
     for (const userId of fin.plafonnes ?? []) lignes.push(`<@${userId}> : ${t(cible, "eco.plafonne", { monnaie: economie.monnaie(guildId).nom })}`)
+    if (fin.erreur) lignes.push(t(cible, "duels.erreur_recompenses"))
     return lignes
 }
+
+// --- Forfait : abandon ou temps écoulé -------------------------------------------------------------------------
+
+// Rendu du message de chaque jeu (rendre(cible, partie, lignes) dans les commandes) : sert à afficher la fin d'un duel
+// terminé par le temps écoulé, depuis le planificateur d'expiration qui ne connaît pas les commandes.
+const rendus = {}
+const definirRendu = (game, fn) => { rendus[game] = fn }
+
+// Le joueur perd, l'autre gagne ses récompenses (15 contre 5). motif : "abandon" ou "temps".
+// Refus : introuvable, terminee, pas_joueur. L'état est écrit avant la fin (gagnant, forfait) pour que le message le montre.
+async function terminerParForfait(partieId, perdantId, guild, { motif = "abandon" } = {}) {
+    const perdant = String(perdantId)
+    const maj = parties.majPartie(partieId, (etat, partie) => {
+        if (etat.termine || !partie.players.includes(perdant)) return
+        const suite = "tour" in etat ? { tour: null } : {}
+        return { ...etat, ...suite, termine: true, gagnant: partie.players.find(joueur => joueur !== perdant) ?? null, forfait: perdant, motif }
+    }, { autoriserExpiree: true })
+    if (!maj.ok) return { ok: false, refus: maj.refus }
+    // Quelqu'un d'autre a terminé ou abandonné avant nous : c'est lui qui conclut
+    if (maj.partie.state.forfait !== perdant) return { ok: false, refus: maj.partie.players.includes(perdant) ? "terminee" : "pas_joueur" }
+    const gagnant = maj.partie.state.gagnant
+    const fin = await conclureDuel(partieId, guild, { gagnants: gagnant ? [gagnant] : [], montants: montantsDuel(maj.partie, gagnant) })
+    return { ok: fin.ok, refus: fin.refus, partie: fin.partie ?? maj.partie, fin }
+}
+
+// null si le joueur peut abandonner (partie en cours, qu'il joue), sinon la clé de traduction du refus
+function verifierAbandon(interaction, partie) {
+    if (!partie || partie.status !== "en_cours" || partie.expiresAt <= Date.now()) return "partie.terminee"
+    return partie.players.includes(String(interaction.user.id)) ? null : "partie.pas_joueur"
+}
+
+// Clic sur « Abandonner » : l'adversaire gagne et touche ses récompenses. rendre(cible, partie, lignes) : message de la commande.
+async function abandonnerPartie(interaction, partie, rendre) {
+    const refus = verifierAbandon(interaction, partie)
+    if (refus) return refuser(interaction, t(interaction, refus))
+    await interaction.deferUpdate()
+    const resultat = await terminerParForfait(partie.id, interaction.user.id, interaction.guild, { motif: "abandon" })
+    if (!resultat.ok) return interaction.followUp({ content: t(interaction, "partie.terminee"), flags: Discord.MessageFlags.Ephemeral }).catch(() => {})
+    await interaction.editReply(rendre(interaction, resultat.partie, lignesDuel(interaction, resultat)))
+        .catch(err => console.warn(`Partie ${partie.id} : message non modifié (${err.message})`))
+}
+
+// Joueur qui perd au temps écoulé : celui dont c'était le tour (morpion) ou le seul qui n'a pas choisi (pfc). null si personne.
+function perdantAuTemps(partie) {
+    const etat = partie.state
+    if (etat.termine) return null
+    if (partie.game === "morpion") return etat.tour ? String(etat.tour) : null
+    if (partie.game === "pfc") {
+        const absents = partie.players.filter(joueur => !etat.choix?.[joueur])
+        return absents.length === 1 ? absents[0] : null
+    }
+    return null
+}
+
+const lignesDuel = (guild, resultat) => resultat.fin?.ok ? lignesRecompenses(guild, resultat.partie.guildId, resultat.fin) : []
+
+// Expiration d'un duel (branchée sur parties.definirExpiration) : défaite de celui qui ne joue plus, récompense à l'autre.
+// Si personne n'a joué, ou si le serveur n'est plus accessible : null, la partie expire sans résultat.
+async function expirerDuel(partie, bot) {
+    const guild = bot?.guilds?.cache?.get(partie.guildId)
+    const perdant = perdantAuTemps(partie)
+    if (!guild || !perdant) return null
+    const resultat = await terminerParForfait(partie.id, perdant, guild, { motif: "temps" })
+    if (!resultat.ok) return { fait: false }
+    const rendu = rendus[partie.game]
+    return { fait: true, partie: resultat.partie, contenu: rendu ? rendu(guild, resultat.partie, lignesDuel(guild, resultat)) : null }
+}
+for (const jeu of ["morpion", "pfc"]) parties.definirExpiration(jeu, expirerDuel)
 
 // --- Pierre-feuille-ciseaux (#51) ------------------------------------------------------------------------------
 
@@ -366,15 +504,20 @@ function transformerClicReaction(etat, partie, userId, maintenant) {
     return { etat: { ...etat, phase: "fini", gagnant: userId }, gagne: true, delaiMs: maintenant - (etat.vertAt ?? maintenant) }
 }
 
+// Le bouton est devenu vert : une fois le message modifié, le délai se mesure à partir de cet instant
+const recalerVert = (partieId, maintenant = Date.now()) =>
+    appliquerCoup(partieId, (etat, partie) => partie.status === "en_cours" && etat.phase === "vert" && !etat.gagnant ? { etat: { ...etat, vertAt: maintenant } } : { refus: "terminee" })
+
 const cliquerReaction = (partieId, userId, maintenant = Date.now()) =>
     appliquerCoup(partieId, (etat, partie) => transformerClicReaction(etat, partie, String(userId), maintenant))
 
 module.exports = {
-    GAIN_GAGNANT, GAIN_PERDANT, GAIN_EGALITE, GAIN_REACTION, MAX_RECOMPENSES_JOUR, DELAI_INVITATION_MS, DELAI_MANCHE_MS, DELAI_COUP_MS,
-    DELAI_CLIC_MS, MANCHES_MAX, COUPS_PFC, LIGNES_MORPION,
+    GAIN_GAGNANT, GAIN_PERDANT, GAIN_EGALITE, GAIN_REACTION, MAX_RECOMPENSES_JOUR, MAX_DUELS_ADVERSAIRE, MAX_PENDUS_JOUR, DELAI_INVITATION_MS,
+    DELAI_MANCHE_MS, DELAI_COUP_MS, DELAI_CLIC_MS, MANCHES_MAX, COUPS_PFC, LIGNES_MORPION,
     verifierDefi, texteRefus, refusOccupation, inviter, repondreInvitation, ouvrirPartie, idBouton, lireIdBouton, majMessage, texteRefusCoup,
-    appliquerCoup, reserverRecompenses, lireCompteurJour, plafondAtteint, terminerDuel, lignesRecompenses, montantsDuel,
+    appliquerCoup, reserverRecompenses, annulerReservation, lireCompteurJour, plafondAtteint, terminerDuel, conclureDuel, lignesRecompenses, montantsDuel,
+    definirRendu, terminerParForfait, abandonnerPartie, verifierAbandon, perdantAuTemps, expirerDuel,
     comparerPfc, etatInitialPfc, choisirPfc,
     etatInitialMorpion, ligneGagnante, jouerMorpion,
-    etatInitialReaction, attenteAleatoire, passerAuVert, cliquerReaction
+    etatInitialReaction, attenteAleatoire, passerAuVert, recalerVert, cliquerReaction
 }

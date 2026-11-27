@@ -147,3 +147,90 @@ test("parties (expiration au démarrage, boutons, vérification des clics)", asy
     assert.throws(() => parties.customId(1, "a", "b".repeat(100)), /trop long/)
     assert.throws(() => parties.customId(1, "a:b"), /interdit/)
 })
+
+// --- Lot 3C : joueurs dans les événements, résultat des versements, expiration propre à un jeu, ajout de joueur ------
+
+const G2 = "555555555555555592"
+
+test("parties : les événements portent la liste des joueurs, les versements disent qui a été payé", async (t) => {
+    const evts = []
+    evenements.ecouter("partie:jouee", d => evts.push(["jouee", d]))
+    evenements.ecouter("partie:gagnee", d => evts.push(["gagnee", d]))
+    const log = console.error
+    const erreurs = []
+    console.error = (...args) => erreurs.push(args.join(" "))
+    t.after(() => { console.error = log; evenements.retirerEcouteurs(); parties.configurerRecompenses(null) })
+    // A est payé (retour sans résultat), B est refusé par l'économie, C fait lever une erreur
+    parties.configurerRecompenses(async (guild, userId) => {
+        if (userId === B) return { ok: false, refus: "gele" }
+        if (userId === C) throw new Error("panne")
+    })
+    const p = parties.creerPartie({ guildId: G2, game: "morpion", players: [A, B, C] }).partie
+    const fin = await parties.terminerPartie(p.id, { gagnants: [A], recompenses: { [A]: 15, [B]: 5, [C]: 5 } })
+    assert.deepStrictEqual(Object.fromEntries(Object.entries(fin.versements).map(([u, v]) => [u, v.ok])), { [A]: true, [B]: false, [C]: false })
+    assert.strictEqual(erreurs.length, 2)
+    assert.ok(erreurs.every(e => e.includes("jeu morpion") && e.includes(`partie ${p.id}`)), "le jeu est dans le journal")
+    assert.ok(erreurs.some(e => e.includes(`membre ${B}`)) && erreurs.some(e => e.includes(`membre ${C}`)), "le membre est dans le journal")
+    assert.strictEqual(evts.length, 4)
+    for (const [, donnees] of evts) assert.deepStrictEqual(donnees.players, [A, B, C])
+})
+
+test("parties : majPartie refuse une partie dépassée, sauf autoriserExpiree ; ajouterJoueur (partie ouverte)", () => {
+    const p = parties.creerPartie({ guildId: G2, game: "pendu", players: [D], state: {}, dureeMs: -1000 }).partie
+    assert.strictEqual(parties.majPartie(p.id, s => s).refus, "terminee")
+    assert.ok(parties.majPartie(p.id, s => ({ ...s, vu: true }), { autoriserExpiree: true }).ok)
+    assert.strictEqual(parties.lirePartie(p.id).state.vu, true)
+
+    const o = parties.creerPartie({ guildId: G2, game: "pendu", players: ["300000000000000001"], state: {} }).partie
+    const E = "300000000000000002", F = "300000000000000003", H = "300000000000000004"
+    assert.deepStrictEqual(parties.ajouterJoueur(o.id, E).partie.players, ["300000000000000001", E])
+    assert.strictEqual(parties.partieEnCours(G2, E).id, o.id, "le participant est maintenant « en partie »")
+    assert.ok(parties.ajouterJoueur(o.id, E).deja, "déjà joueur : rien à faire")
+    // Une partie à la fois : F est déjà dans une autre partie
+    const autre = parties.creerPartie({ guildId: G2, game: "pfc", players: [F, H] }).partie
+    assert.deepStrictEqual([parties.ajouterJoueur(o.id, F).refus, parties.ajouterJoueur(o.id, F).partieId], ["deja_en_partie", autre.id])
+    assert.strictEqual(parties.lirePartie(o.id).players.length, 2)
+    // Partie pleine, partie terminée, partie inconnue
+    assert.strictEqual(parties.ajouterJoueur(o.id, "300000000000000005", { max: 2 }).refus, "complete")
+    assert.strictEqual(parties.ajouterJoueur(99999, E).refus, "introuvable")
+    assert.strictEqual(parties.ajouterJoueur(p.id, "300000000000000006").refus, "terminee", "partie dépassée")
+})
+
+test("parties : expiration propre à un jeu (définirExpiration), repli sans résultat si elle échoue", async (t) => {
+    t.after(() => parties.definirExpiration("jeu-test", null))
+    const editions = []
+    const bot = { channels: { fetch: async () => ({ messages: { fetch: async () => ({ edit: async contenu => editions.push(contenu) }) } }) } }
+    await parties.expirerParties(null) // parties dépassées laissées par les tests précédents
+    const nouvelle = () => {
+        const p = parties.creerPartie({ guildId: G2, game: "jeu-test", players: [`4000000000000000${Math.floor(Math.random() * 90 + 10)}`], dureeMs: -1000 }).partie
+        parties.lierMessage(p.id, "1", "2")
+        return p
+    }
+    // Le jeu gère l'expiration : il termine la partie et fournit le message final
+    const gerees = []
+    parties.definirExpiration("jeu-test", async partie => {
+        gerees.push(partie.id)
+        const fin = await parties.terminerPartie(partie.id, { status: "finie", gagnants: [partie.players[0]] })
+        return { fait: true, partie: fin.partie, contenu: { content: "résultat", components: [] } }
+    })
+    const p1 = nouvelle()
+    assert.strictEqual(await parties.expirerParties(bot), 1)
+    assert.deepStrictEqual([gerees, parties.lirePartie(p1.id).status, editions], [[p1.id], "finie", [{ content: "résultat", components: [] }]])
+
+    // Le gestionnaire plante : la partie expire sans résultat (jamais bloquée)
+    const log = console.error
+    console.error = () => {}
+    parties.definirExpiration("jeu-test", async () => { throw new Error("boum") })
+    const p2 = nouvelle()
+    editions.length = 0
+    assert.strictEqual(await parties.expirerParties(bot), 1)
+    console.error = log
+    assert.strictEqual(parties.lirePartie(p2.id).status, "expiree")
+    assert.match(editions[0].content, /Partie expirée/)
+
+    // Terminée ailleurs entre-temps (fait: false) : laissée telle quelle
+    parties.definirExpiration("jeu-test", async partie => { await parties.terminerPartie(partie.id, { status: "finie" }); return { fait: false } })
+    const p3 = nouvelle()
+    assert.strictEqual(await parties.expirerParties(bot), 0)
+    assert.strictEqual(parties.lirePartie(p3.id).status, "finie")
+})

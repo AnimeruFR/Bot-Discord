@@ -45,7 +45,7 @@ test("monnaie, formatage et réglages", () => {
 
     // Textes des refus : présents dans les deux langues avec la monnaie
     for (const refus of ["module", "gele", "sanctionne", "plafond_solde", "solde", "soi_meme", "bot", "compte_recent", "plafond_envoi",
-        "plafond_reception", "montant_trop_petit", "destinataire_gele", "destinataire_sanctionne", "destinataire_plafond_solde"]) {
+        "plafond_reception", "montant_trop_petit", "destinataire_indisponible", "destinataire_plafond_solde"]) {
         for (const langue of ["fr", "en"]) assert.notStrictEqual(t(langue, `eco.refus.${refus}`, { monnaie: "Éclats" }), `eco.refus.${refus}`)
     }
 })
@@ -213,22 +213,68 @@ test("transferts : frais, plafonds, refus", () => {
     // Gelé
     eco.geler(G, "5", true)
     assert.deepStrictEqual(eco.transferer(e, d, 10), { ok: false, refus: "gele" })
-    assert.deepStrictEqual(eco.transferer(d, e, 10), { ok: false, refus: "destinataire_gele" })
+    assert.deepStrictEqual(eco.transferer(d, e, 10), { ok: false, refus: "destinataire_indisponible" })
     eco.geler(G, "5", false)
     // Sanctionné : timeout en cours (un timeout passé ne compte plus)
     assert.deepStrictEqual(eco.transferer({ ...e, communicationDisabledUntilTimestamp: Date.now() + 60000 }, d, 10), { ok: false, refus: "sanctionne" })
-    assert.deepStrictEqual(eco.transferer(d, { ...e, communicationDisabledUntilTimestamp: Date.now() + 60000 }, 10), { ok: false, refus: "destinataire_sanctionne" })
+    assert.deepStrictEqual(eco.transferer(d, { ...e, communicationDisabledUntilTimestamp: Date.now() + 60000 }, 10), { ok: false, refus: "destinataire_indisponible" })
     assert.strictEqual(eco.transferer({ ...e, communicationDisabledUntilTimestamp: Date.now() - 1000 }, d, 10).ok, true)
     // Sanctionné : quarantaine
     db.sqlRun("INSERT INTO quarantines (guild_id, user_id, roles, moderator_id, reason, created_at) VALUES (?, ?, '[]', '9', 'test', ?)", [G, "5", Date.now()])
     assert.deepStrictEqual(eco.transferer(e, d, 10), { ok: false, refus: "sanctionne" })
-    assert.deepStrictEqual(eco.transferer(d, e, 10), { ok: false, refus: "destinataire_sanctionne" })
+    assert.deepStrictEqual(eco.transferer(d, e, 10), { ok: false, refus: "destinataire_indisponible" })
     assert.deepStrictEqual(eco.crediter(e, 10, { source: "daily" }), { ok: false, refus: "sanctionne" }, "rien reçu en quarantaine")
     db.sqlRun("DELETE FROM quarantines WHERE guild_id = ?", [G])
 
     assert.strictEqual(paiements.length, 7, "un événement par transfert réussi")
     retirerEcouteurs()
     for (const id of ["1", "2", "3", "4", "5", "7"]) assert.ok(eco.verifierCoherence(G, id))
+})
+
+test("transfert : un destinataire gelé, sanctionné ou hors module reçoit le même refus générique", () => {
+    const G = "900000000000000020", d = membre(G, "1"), e = membre(G, "2")
+    donner(d, 500)
+    eco.geler(G, "2", true)
+    const gele = eco.transferer(d, e, 10)
+    eco.geler(G, "2", false)
+    const sanctionne = eco.transferer(d, { ...e, communicationDisabledUntilTimestamp: Date.now() + 60000 }, 10)
+    assert.deepStrictEqual(gele, { ok: false, refus: "destinataire_indisponible" })
+    assert.deepStrictEqual(sanctionne, gele, "rien ne distingue un gel d'une sanction")
+    assert.strictEqual(eco.compte(G, "1").balance, 500, "rien n'a bougé")
+})
+
+test("rembourser : sans contrôle de droits, hors plafond du jour, sans réduction, rogné au solde maximum", () => {
+    const G = "900000000000000021"
+    // Membre récent, gelé et sanctionné : le remboursement passe quand même, entier
+    const m = membre(G, "1", { jours: 1, timeout: Date.now() + 60000 })
+    donner(membre(G, "1"), 1000)
+    eco.debiter(G, "1", 400, { source: "boutique" })
+    eco.geler(G, "1", true)
+    db.setModule(G, "communaute.economie", false)
+    assert.strictEqual(eco.peutJouer(m), "module")
+    const r = eco.rembourser(G, "1", 400, { details: { article: 7 } })
+    assert.deepStrictEqual(r, { ok: true, credite: 400, solde: 1000, rogne: false })
+    const [ligne] = eco.journal(G, "1", { limite: 1 })
+    assert.deepStrictEqual([ligne.delta, ligne.source, ligne.details], [400, "remboursement", '{"article":7}'])
+    assert.strictEqual(compteur(G, "1")?.active_earned ?? 0, 0, "le plafond du jour n'est pas touché")
+
+    // Plafond du jour déjà atteint : le remboursement n'est pas limité
+    const H = "900000000000000022", p = membre(H, "1")
+    eco.crediter(p, 5000, { source: "jeu", actif: true, sansReduction: true })
+    assert.strictEqual(compteur(H, "1").active_earned, 800)
+    eco.debiter(H, "1", 300, { source: "boutique" })
+    assert.strictEqual(eco.rembourser(H, "1", 300).credite, 300)
+
+    // Solde maximum : crédit rogné
+    const I = "900000000000000023"
+    for (const montant of [250000, 250000, 250000, 249000]) donner(membre(I, "1"), montant)
+    assert.strictEqual(eco.compte(I, "1").balance, 999000)
+    const rogne = eco.rembourser(I, "1", 5000)
+    assert.deepStrictEqual(rogne, { ok: true, credite: 1000, solde: 1000000, rogne: true })
+    assert.ok(eco.verifierCoherence(I, "1"))
+    assert.deepStrictEqual(eco.rembourser(I, "1", 50), { ok: true, credite: 0, solde: 1000000, rogne: true })
+    assert.strictEqual(eco.journal(I, "1").length, 5, "4 crédits + le remboursement rogné ; rien d'écrit quand rien n'entre")
+    assert.throws(() => eco.rembourser(I, "1", 0), RangeError)
 })
 
 test("remise à zéro par le staff", () => {

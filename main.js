@@ -34,7 +34,9 @@ loadEvents(bot)
 // les succès et les quêtes s'abonnent au bus d'événements en se chargeant
 configurerRecompenses(async (guild, userId, montant, { source }) => {
     const member = await guild.members?.fetch(userId).catch(() => null)
-    if (member) crediter(member, montant, { source, actif: true })
+    // Le résultat sert aux jeux : un refus (plafond, sanction) ne consomme pas leurs compteurs du jour
+    if (!member) return { ok: false, refus: "introuvable" }
+    return crediter(member, montant, { source, actif: true })
 })
 require('./Fonctions/succes').configurerClient(bot)
 require('./Fonctions/quetes')

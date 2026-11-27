@@ -13,9 +13,13 @@ const { t } = require('./i18n')
 //   - au plus 1 drop toutes les 20 minutes par salon ;
 //   - le premier qui clique gagne 25 à 100 ✦ (gain « actif » : plafond du jour et réduction des nouveaux comptes) ;
 //   - le coffre se referme au bout de 2 minutes. Il n'est gardé qu'en mémoire (collecteur sur le message) : un
-//     redémarrage du bot referme les coffres ouverts, sans rien de perdu.
+//     redémarrage du bot referme les coffres ouverts, sans rien de perdu. Le bouton des coffres d'avant le redémarrage
+//     (identifiant « drop: ») est repris par une route persistante qui répond « coffre fermé » (coffreFerme) ;
+//     les nouveaux coffres ont un autre identifiant (« coffre: »), pour ne pas passer par cette route.
 // Événement émis : "drop:ramasse" ({ guildId, userId, channelId, amount }).
 
+const ID_COFFRE = "coffre:ouvrir"
+const PREFIXE_ANCIEN_COFFRE = "drop:"
 const CHANCE_PAR_MINUTE = 1 / 60
 const INTERVALLE_MIN_MS = 20 * 60 * 1000
 const DUREE_COFFRE_MS = 2 * 60 * 1000
@@ -59,7 +63,7 @@ function etatSalon(channelId) {
     let etat = activite.get(channelId)
     if (!etat) {
         if (activite.size >= MAX_ENTREES) activite.delete(activite.keys().next().value)
-        etat = { minute: null, dernierDrop: 0 }
+        etat = { minute: null, dernierDrop: 0, enCours: false }
         activite.set(channelId, etat)
     }
     return etat
@@ -78,15 +82,24 @@ async function peutEtreDrop(message, { aleatoire = Math.random, maintenant = Dat
     const minute = Math.floor(maintenant / 60000)
     if (etat.minute === minute) return false
     etat.minute = minute
-    if (maintenant - etat.dernierDrop < INTERVALLE_MIN_MS) return false
+    if (etat.enCours || maintenant - etat.dernierDrop < INTERVALLE_MIN_MS) return false
     if (aleatoire() >= CHANCE_PAR_MINUTE) return false
+    // Le délai de 20 minutes ne démarre qu'une fois le coffre réellement posté : un envoi raté ne bloque pas le salon
+    etat.enCours = true
+    try {
+        await poserCoffre(message.channel, guild, { montant: montantAleatoire(aleatoire) })
+    } catch (err) {
+        console.warn(`Drop : coffre non posté dans ${message.channel.id} (${err.message})`)
+        return false
+    } finally {
+        etat.enCours = false
+    }
     etat.dernierDrop = maintenant
-    await poserCoffre(message.channel, guild, { montant: montantAleatoire(aleatoire) })
     return true
 }
 
 async function poserCoffre(salon, guild, { montant }) {
-    const bouton = new Discord.ButtonBuilder().setCustomId("drop:coffre").setLabel(t(guild, "duels.drop.bouton")).setEmoji("🎁").setStyle(Discord.ButtonStyle.Success)
+    const bouton = new Discord.ButtonBuilder().setCustomId(ID_COFFRE).setLabel(t(guild, "duels.drop.bouton")).setEmoji("🎁").setStyle(Discord.ButtonStyle.Success)
     const message = await salon.send({
         content: t(guild, "duels.drop.apparait", { min: GAIN_MIN, max: GAIN_MAX, monnaie: economie.monnaie(guild.id).emoji, minutes: DUREE_COFFRE_MS / 60000 }),
         components: [new Discord.ActionRowBuilder().addComponents(bouton)]
@@ -139,7 +152,13 @@ async function ramasserCoffre(coffre, interaction) {
     return true
 }
 
+// Bouton d'un coffre posé avant un redémarrage : plus personne ne l'écoute, on l'explique et on retire le bouton
+async function coffreFerme(bot, interaction) {
+    await refuser(interaction, t(interaction, "duels.drop.ferme"))
+    await interaction.message?.edit?.({ content: t(interaction, "duels.drop.expire"), components: [] }).catch(() => {})
+}
+
 module.exports = {
-    peutEtreDrop, poserCoffre, ramasserCoffre, salonsDrops, definirSalonsDrops, montantAleatoire,
+    ID_COFFRE, PREFIXE_ANCIEN_COFFRE, coffreFerme, peutEtreDrop, poserCoffre, ramasserCoffre, salonsDrops, definirSalonsDrops, montantAleatoire,
     GAIN_MIN, GAIN_MAX, INTERVALLE_MIN_MS, DUREE_COFFRE_MS, MAX_SALONS
 }

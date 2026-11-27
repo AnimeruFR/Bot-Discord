@@ -5,7 +5,7 @@
   "daily.demain": "Demain, la série rapportera {gain}.",
   "daily.serie_max": "Série maximale atteinte : gardez-la en revenant chaque jour.",
   "daily.prochain": "Prochain daily {quand}.",
-  "daily.serie_perdue": "Votre série a été interrompue (plus de 48 h sans daily) : elle repart à 1.",
+  "daily.serie_perdue": "Votre série a été interrompue (un jour sans daily) : elle repart à 1.",
   "travail.metier.forgeron": "Forgeron",
   "travail.metier.cartographe": "Cartographe",
   "travail.metier.herboriste": "Herboriste",

@@ -17,6 +17,16 @@ function configurerRecompenses(fn) {
     crediter = typeof fn === "function" ? fn : null
 }
 
+// Expiration propre à un jeu : les duels donnent la défaite à celui qui ne joue plus (voir Fonctions/duels.js).
+// fn(partie, bot) renvoie { fait: true, partie, contenu } (contenu : nouveau message), { fait: false } si la partie vient
+// d'être terminée ailleurs, ou rien : la partie expire alors sans résultat, comme les jeux solo.
+const expirations = {}
+
+function definirExpiration(game, fn) {
+    if (typeof fn === "function") expirations[game] = fn
+    else delete expirations[game]
+}
+
 function lignePartie(ligne) {
     if (!ligne) return null
     return {
@@ -68,14 +78,33 @@ function lierMessage(id, messageId, channelId = null) {
     return sqlRun("UPDATE parties SET message_id = ?, channel_id = COALESCE(?, channel_id) WHERE id = ?", [String(messageId), channelId, id]) > 0
 }
 
-// transformer(state, partie) est synchrone : il renvoie le nouvel état (ou modifie state et ne renvoie rien).
-// Lecture et écriture se font dans une transaction : deux clics simultanés s'appliquent l'un après l'autre.
-function majPartie(id, transformer, { prolongerMs = null } = {}) {
+// Ajoute un joueur à une partie ouverte (pendu) : il compte alors comme joueur, donc une seule partie à la fois pour lui.
+// max : nombre de joueurs au plus. Refus : introuvable, terminee, complete, deja_en_partie.
+function ajouterJoueur(id, userId, { max = null } = {}) {
     return transaction(() => {
         const partie = lirePartie(id)
         if (!partie) return { ok: false, refus: "introuvable" }
         const maintenant = Date.now()
         if (partie.status !== "en_cours" || partie.expiresAt <= maintenant) return { ok: false, refus: "terminee" }
+        const joueur = String(userId)
+        if (partie.players.includes(joueur)) return { ok: true, partie, deja: true }
+        if (max && partie.players.length >= max) return { ok: false, refus: "complete" }
+        const existante = partieEnCours(partie.guildId, joueur, maintenant)
+        if (existante) return { ok: false, refus: "deja_en_partie", partieId: existante.id }
+        sqlRun("UPDATE parties SET players = ?, updated_at = ? WHERE id = ?", [JSON.stringify([...partie.players, joueur]), maintenant, id])
+        return { ok: true, partie: lirePartie(id) }
+    })
+}
+
+// transformer(state, partie) est synchrone : il renvoie le nouvel état (ou modifie state et ne renvoie rien).
+// Lecture et écriture se font dans une transaction : deux clics simultanés s'appliquent l'un après l'autre.
+// autoriserExpiree : accepte une partie dont la date est dépassée mais pas encore terminée (fin par forfait au temps écoulé).
+function majPartie(id, transformer, { prolongerMs = null, autoriserExpiree = false } = {}) {
+    return transaction(() => {
+        const partie = lirePartie(id)
+        if (!partie) return { ok: false, refus: "introuvable" }
+        const maintenant = Date.now()
+        if (partie.status !== "en_cours" || (partie.expiresAt <= maintenant && !autoriserExpiree)) return { ok: false, refus: "terminee" }
         const resultat = transformer(partie.state, partie)
         const etat = resultat === undefined ? partie.state : resultat
         const expiresAt = prolongerMs ? maintenant + prolongerMs : partie.expiresAt
@@ -90,20 +119,31 @@ async function terminerPartie(id, { status = "finie", gagnants = [], recompenses
     const changements = sqlRun("UPDATE parties SET status = ?, updated_at = ? WHERE id = ? AND status = 'en_cours'", [status, Date.now(), id])
     if (!changements) return { ok: false, refus: lirePartie(id) ? "deja_terminee" : "introuvable" }
     const partie = lirePartie(id)
+    // versements : pour chaque membre payé, { ok } (ou { ok: false, refus | erreur }). Le crédit configuré peut renvoyer
+    // le résultat de l'économie ({ ok: false, refus }) : un refus est un échec, journalisé avec le membre et le jeu.
+    const versements = {}
     if (status === "finie") {
         const guild = botCourant?.guilds?.cache?.get(partie.guildId) ?? { id: partie.guildId }
         for (const [userId, montant] of Object.entries(recompenses)) {
             if (!crediter || !(montant > 0)) continue
             try {
-                await crediter(guild, userId, montant, { source: `partie:${partie.game}` })
+                const resultat = await crediter(guild, userId, montant, { source: `partie:${partie.game}` })
+                if (resultat?.ok === false) {
+                    versements[userId] = { ok: false, refus: resultat.refus }
+                    console.error(`Récompense en échec (partie ${id}, jeu ${partie.game}, membre ${userId}) : refus « ${resultat.refus} »`)
+                } else {
+                    versements[userId] = { ok: true, credite: resultat?.credite }
+                }
             } catch (err) {
-                console.error(`Récompense de la partie ${id} en échec (${userId}) :`, err.message)
+                versements[userId] = { ok: false, erreur: err.message }
+                console.error(`Récompense en échec (partie ${id}, jeu ${partie.game}, membre ${userId}) :`, err.message)
             }
         }
-        for (const userId of partie.players) emettre("partie:jouee", { guildId: partie.guildId, userId, game: partie.game })
-        for (const userId of new Set(gagnants.map(String))) emettre("partie:gagnee", { guildId: partie.guildId, userId, game: partie.game })
+        // players : tous les joueurs de la partie, pour l'anti-farm des succès et des quêtes (qui a joué contre qui)
+        for (const userId of partie.players) emettre("partie:jouee", { guildId: partie.guildId, userId, game: partie.game, players: partie.players })
+        for (const userId of new Set(gagnants.map(String))) emettre("partie:gagnee", { guildId: partie.guildId, userId, game: partie.game, players: partie.players })
     }
-    return { ok: true, partie }
+    return { ok: true, partie, versements }
 }
 
 // Le joueur qui abandonne perd : les autres joueurs gagnent, sans récompense
@@ -144,21 +184,39 @@ function lireCustomId(id) {
     return { partieId: Number(morceaux[1]), action: morceaux[2], args: morceaux.slice(3) }
 }
 
-// Expire les parties dont la date est dépassée (sans récompense) et retire les boutons de leur message
+// Expire les parties dont la date est dépassée et retire les boutons de leur message. Un jeu à deux peut avoir sa propre
+// expiration (definirExpiration) : c'est alors une défaite pour celui qui ne joue plus. Sinon : sans récompense.
 async function expirerParties(bot, maintenant = Date.now()) {
-    const lignes = sqlAll("SELECT id FROM parties WHERE status = 'en_cours' AND expires_at <= ?", [maintenant])
+    const lignes = sqlAll("SELECT id, game FROM parties WHERE status = 'en_cours' AND expires_at <= ?", [maintenant])
     let total = 0
-    for (const { id } of lignes) {
-        const resultat = await terminerPartie(id, { status: "expiree" })
-        if (!resultat.ok) continue
+    for (const { id, game } of lignes) {
+        let issue = null
+        if (expirations[game]) {
+            try {
+                issue = await expirations[game](lirePartie(id), bot)
+            } catch (err) {
+                console.error(`Expiration de la partie ${id} (${game}) en échec :`, err.message)
+            }
+        }
+        if (issue?.fait === false) {
+            // Terminée ailleurs (ou en cours de fin depuis moins d'une minute) : on la laisse. Restée en_cours plus longtemps
+            // (fin interrompue), elle expire sans résultat pour ne pas être reprise à chaque passage.
+            const actuelle = lirePartie(id)
+            if (!actuelle || actuelle.status !== "en_cours" || Date.now() - actuelle.updatedAt < 60 * 1000) continue
+        }
+        let partie = issue?.partie
+        if (!issue?.fait) {
+            const resultat = await terminerPartie(id, { status: "expiree" })
+            if (!resultat.ok) continue
+            partie = resultat.partie
+        }
         total++
-        const { partie } = resultat
         if (!bot || !partie.channelId || !partie.messageId) continue
         try {
             const salon = await bot.channels.fetch(partie.channelId)
             const message = await salon?.messages?.fetch(partie.messageId)
             const guild = bot.guilds?.cache?.get(partie.guildId)
-            await message?.edit({ content: t(guild ? langueDe(guild) : "fr", "partie.expiree"), components: [] })
+            await message?.edit(issue?.contenu ?? { content: t(guild ? langueDe(guild) : "fr", "partie.expiree"), components: [] })
         } catch (err) {
             // Message supprimé ou salon inaccessible : la partie est de toute façon terminée
             console.warn(`Partie ${id} : message non modifié (${err.message})`)
@@ -175,7 +233,7 @@ function startPartiesSchedule(bot) {
 }
 
 module.exports = {
-    startPartiesSchedule, expirerParties, configurerRecompenses,
-    creerPartie, lirePartie, majPartie, lierMessage, terminerPartie, abandonner, verifierClic, partieEnCours,
+    startPartiesSchedule, expirerParties, configurerRecompenses, definirExpiration,
+    creerPartie, lirePartie, majPartie, ajouterJoueur, lierMessage, terminerPartie, abandonner, verifierClic, partieEnCours,
     customId, lireCustomId, DUREE_DEFAUT
 }

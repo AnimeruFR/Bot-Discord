@@ -25,15 +25,18 @@ function rendre(cible, partie, fin = []) {
         }))
     }
     if (etat.termine) {
-        lignes.push(etat.gagnant
-            ? t(cible, "duels.pfc.victoire", { user: mention(etat.gagnant), sa: etat.scores[etat.gagnant], sb: etat.scores[etat.gagnant === a ? b : a] })
-            : t(cible, "duels.pfc.egalite", { n: etat.jouees }), ...fin)
+        let conclusion
+        if (etat.forfait) conclusion = t(cible, `duels.forfait.${etat.motif}`, { perdant: mention(etat.forfait), gagnant: mention(etat.gagnant) })
+        else if (etat.gagnant) conclusion = t(cible, "duels.pfc.victoire", { user: mention(etat.gagnant), sa: etat.scores[etat.gagnant], sb: etat.scores[etat.gagnant === a ? b : a] })
+        else conclusion = t(cible, "duels.pfc.egalite", { n: etat.jouees })
+        lignes.push(conclusion, ...fin)
         return { content: lignes.join("\n"), components: [] }
     }
     const statut = id => etat.choix[id] ? "✅" : "⏳"
     lignes.push(t(cible, "duels.pfc.attente", { n: etat.jouees + 1, a: mention(a), b: mention(b), ea: statut(a), eb: statut(b) }))
     const bouton = new Discord.ButtonBuilder().setCustomId(duels.idBouton(PREFIXE, partie.id, "jouer")).setLabel(t(cible, "duels.pfc.jouer")).setStyle(Discord.ButtonStyle.Primary)
-    return { content: lignes.join("\n"), components: [new Discord.ActionRowBuilder().addComponents(bouton)] }
+    const abandon = new Discord.ButtonBuilder().setCustomId(duels.idBouton(PREFIXE, partie.id, "ab")).setLabel(t(cible, "duels.abandonner")).setEmoji("🏳️").setStyle(Discord.ButtonStyle.Secondary)
+    return { content: lignes.join("\n"), components: [new Discord.ActionRowBuilder().addComponents(bouton, abandon)] }
 }
 
 // Les trois coups, dans une réponse éphémère propre à chaque joueur
@@ -51,7 +54,8 @@ async function demarrer(interaction, auteur, adversaire) {
 
 // Fin du duel : récompenses, puis message final (le message public est modifié depuis le clic éphémère)
 async function conclure(interaction, partie) {
-    const fin = await duels.terminerDuel(partie.id, interaction.guild, { gagnants: partie.state.gagnant ? [partie.state.gagnant] : [], montants: duels.montantsDuel(partie, partie.state.gagnant) })
+    // Si la fin échoue, la partie est terminée sans récompense et le message le dit (jamais de partie bloquée)
+    const fin = await duels.conclureDuel(partie.id, interaction.guild, { gagnants: partie.state.gagnant ? [partie.state.gagnant] : [], montants: duels.montantsDuel(partie, partie.state.gagnant) })
     const lignes = fin.ok ? duels.lignesRecompenses(interaction, partie.guildId, fin) : []
     await duels.majMessage(interaction, partie, rendre(interaction, partie, lignes))
 }
@@ -62,6 +66,8 @@ async function surBouton(bot, interaction) {
     if (!id) return
     const partie = parties.lirePartie(id.partieId)
     if (partie?.game !== "pfc") return refuser(interaction, t(interaction, "partie.terminee"))
+    // Abandonner : possible à tout moment
+    if (id.action === "ab") return duels.abandonnerPartie(interaction, partie, rendre)
     const refus = parties.verifierClic(interaction, partie)
     if (refus) return refuser(interaction, t(interaction, refus))
     const userId = interaction.user.id
@@ -79,6 +85,8 @@ async function surBouton(bot, interaction) {
     if (resultat.termine) return conclure(interaction, resultat.partie)
     await duels.majMessage(interaction, resultat.partie, rendre(interaction, resultat.partie))
 }
+
+duels.definirRendu("pfc", rendre)
 
 module.exports = {
     name: "pfc",

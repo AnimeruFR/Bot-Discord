@@ -162,11 +162,12 @@ function reserverStock(a) {
 const rendreStock = a =>
     db.sqlRun("UPDATE shop_items SET stock = stock + 1 WHERE guild_id = ? AND id = ? AND stock IS NOT NULL", [a.guildId, a.id])
 
-// Rend la monnaie : hors plafond du jour et sans réduction « nouveau membre ». true si elle est revenue.
+// Rend la monnaie (eco.rembourser : sans contrôle de droits, hors plafond du jour, sans réduction « nouveau membre »).
+// true si tout est revenu ; si le solde maximum a rogné le crédit, c'est écrit dans les logs et le résultat est false.
 function rembourser(member, a, motif) {
     try {
-        const r = eco.crediter(member, a.prix, { source: "remboursement", actif: false, sansReduction: true, details: { article: a.id, motif } })
-        if (r.ok && r.credite === a.prix) return true
+        const r = eco.rembourser(member.guild.id, member.id, a.prix, { source: "remboursement", details: { article: a.id, motif } })
+        if (r.credite === a.prix) return true
         console.error(`Remboursement incomplet (serveur ${member.guild.id}, membre ${member.id}, article ${a.id}) :`, JSON.stringify(r))
     } catch (err) {
         console.error(`Remboursement impossible (serveur ${member.guild.id}, membre ${member.id}, article ${a.id}) :`, err.message)
@@ -174,10 +175,23 @@ function rembourser(member, a, motif) {
     return false
 }
 
+// Après un échec de roles.add, le rôle a pu être donné quand même (réponse perdue). Relit le membre :
+// "possede" (rôle bien là), "absent" (rôle pas donné, ou membre parti), "inconnu" (relecture impossible).
+async function etatLivraison(guild, userId, roleId) {
+    try {
+        const frais = await fetchMember(guild, userId)
+        return frais?.roles.cache.has(roleId) ? "possede" : "absent"
+    } catch (err) {
+        console.error(`Relecture du membre impossible (serveur ${guild.id}, membre ${userId}) :`, err.message)
+        return "inconnu"
+    }
+}
+
 // Achat d'un article par un membre. Renvoie { ok: true, article, solde, expireA } ou { ok: false, refus, roleId?, rembourse? } :
 //   refus de l'économie (REFUS_ECONOMIE), ou inconnu, rupture, prix_change, deja_possede, en_cours, inventaire_plein,
 //   un motif de refusRole (rôle devenu dangereux ou trop haut), ou role_impossible (Discord a refusé : monnaie rendue).
 // Ordre : refus sans effet, stock pris, débit, livraison. Si la livraison échoue, la monnaie et le stock sont rendus.
+// Livraison ambiguë (échec de roles.add mais le rôle est bien là, ou relecture impossible) : pas de remboursement.
 // (Le débit prend sa propre transaction et SQLite n'accepte pas les transactions imbriquées : le stock est donc pris
 // juste avant, par une requête atomique, et rendu si le débit est refusé.)
 async function acheter(member, id) {
@@ -232,9 +246,16 @@ async function acheter(member, id) {
             }
         } catch (err) {
             console.error(`Livraison impossible (serveur ${guild.id}, membre ${member.id}, article ${a.id}) :`, err.message)
+            const etat = estRole ? await etatLivraison(guild, member.id, role.id) : "absent"
+            if (etat === "possede") {
+                // Le rôle est livré malgré l'erreur : l'achat vaut, la ligne du rôle temporaire reste pour le retrait
+                emettre("achat", { guildId: guild.id, userId: member.id, itemId: a.id, type: a.type, price: a.prix })
+                return { ok: true, article: a, solde: debit.solde, expireA }
+            }
+            if (etat === "inconnu") return { ok: false, refus: "role_impossible", rembourse: false }
             if (expireA) db.sqlRun("DELETE FROM shop_roles_temp WHERE guild_id = ? AND user_id = ? AND role_id = ?", [guild.id, member.id, role.id])
             const rembourse = rembourser(member, a, "livraison")
-            if (rembourse) rendreStock(a)
+            rendreStock(a)
             return { ok: false, refus: "role_impossible", rembourse }
         }
 

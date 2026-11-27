@@ -16,7 +16,7 @@ Les montants sont pour un joueur qui n'a pas de sanction en cours. Pendant ses *
 
 | Source | Montant | Fréquence / limite | Dans le plafond quotidien ? |
 |---|---|---|---|
-| `/daily` | 100 + 15 × (jours de série − 1), série comptée jusqu'à 10 jours, soit 235 au maximum | 1 par jour ; la série se perd après 48 h sans daily | Non |
+| `/daily` | 100 + 15 × (jours de série − 1), série comptée jusqu'à 10 jours, soit 235 au maximum | 1 par jour (jour calendaire de Paris) ; la série continue seulement si le dernier daily date de la veille | Non |
 | `/travail` | 30 à 60, + 3 par niveau de métier (niveau 10 max) | 1 par heure, 8 comptés par jour | Oui |
 | Activité écrite | 1 ✦ par gain d'XP | 1 gain par minute au plus | Oui (100 par jour au plus) |
 | Jeux solo (quiz, mot du jour, pendu, énigme) | 10 à 40 selon la difficulté | Cooldown par jeu | Oui |

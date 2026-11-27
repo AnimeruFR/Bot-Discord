@@ -1,6 +1,6 @@
 const crypto = require('crypto')
 const db = require('./db')
-const { ecouter, jourParis } = require('./evenements')
+const { ecouter, jourParis, peutCompter } = require('./evenements')
 const { moduleActif } = require('./modules')
 const { crediter } = require('./economie')
 const catalogue = require('../data-statique/quetes.json')
@@ -12,6 +12,10 @@ const catalogue = require('../data-statique/quetes.json')
 // demain. Les lignes de la table quetes sont créées à la première lecture ou au premier événement de la période, et
 // c'est ensuite la table qui fait foi (modifier le catalogue ne change pas les quêtes déjà tirées).
 // Récompense : crediter(..., { actif: false, sansReduction: false }), versée une seule fois (claimed).
+// Anti-farm : réputation, paiement et victoires ne font avancer une quête qu'une fois par partenaire et par période
+// (jour pour une quête du jour, semaine pour celle de la semaine), voir peutCompter dans Fonctions/evenements.js.
+// Une quête peut aussi exiger un montant minimal (champ montantMin du catalogue : 50 pour le paiement).
+// À la réclamation, la période précédente (hier, semaine dernière) reste acceptée : une quête finie tard ne se perd pas.
 
 const MODULE = "communaute.niveaux"
 const NOMBRE_JOUR = 3
@@ -67,6 +71,11 @@ function lignesPeriode(guildId, userId, period, reserve, n) {
     return lignes
 }
 
+const versQuete = (l, type) => ({
+    id: l.quest, type, period: l.period, progress: l.progress, goal: l.goal, claimed: l.claimed === 1,
+    terminee: l.progress >= l.goal, recompense: parId.get(l.quest).recompense, nom: parId.get(l.quest).nom
+})
+
 // Quêtes du jour puis de la semaine du membre, avec le détail du catalogue (quêtes retirées du catalogue ignorées)
 function quetesDuMembre(guildId, userId, { instant = Date.now() } = {}) {
     const jour = jourParis(instant), semaine = semaineParis(instant)
@@ -74,40 +83,62 @@ function quetesDuMembre(guildId, userId, { instant = Date.now() } = {}) {
         ...lignesPeriode(guildId, userId, jour, catalogue.jour, NOMBRE_JOUR).map(l => ({ ...l, type: "jour" })),
         ...lignesPeriode(guildId, userId, semaine, catalogue.semaine, NOMBRE_SEMAINE).map(l => ({ ...l, type: "semaine" }))
     ]
-    return lignes.filter(l => parId.has(l.quest)).map(l => ({
-        id: l.quest, type: l.type, period: l.period, progress: l.progress, goal: l.goal, claimed: l.claimed === 1,
-        terminee: l.progress >= l.goal, recompense: parId.get(l.quest).recompense, nom: parId.get(l.quest).nom
-    }))
+    return lignes.filter(l => parId.has(l.quest)).map(l => versQuete(l, l.type))
+}
+
+// Quêtes terminées mais pas réclamées de la période précédente (hier, semaine dernière) : lecture seule, rien n'est créé
+function precedentesAReclamer(guildId, userId, { instant = Date.now() } = {}) {
+    const [annee, mois, jour] = jourParis(instant).split("-").map(Number)
+    const veille = jourParis(Date.UTC(annee, mois - 1, jour - 1, 12))
+    const semainePassee = semaineParis(Date.UTC(annee, mois - 1, jour - 7, 12))
+    return db.sqlAll(`SELECT * FROM quetes WHERE guild_id = ? AND user_id = ? AND period IN (?, ?) AND claimed = 0 AND progress >= goal ORDER BY period, quest`,
+        [guildId, userId, veille, semainePassee]).filter(l => parId.has(l.quest)).map(l => versQuete(l, l.period === veille ? "jour" : "semaine"))
 }
 
 // Un événement fait avancer d'un cran les quêtes en cours qui l'attendent (jamais au-delà de l'objectif)
-function avancer(evenement, { guildId, userId } = {}, { instant = Date.now() } = {}) {
+function avancer(evenement, donnees, { instant = Date.now() } = {}) {
+    const { guildId, userId } = donnees ?? {}
     if (!guildId || !userId || !EVENEMENTS.includes(evenement) || !moduleActif(guildId, MODULE)) return
+    const compte = {} // une seule vérification de partenaire par type de quête (jour, semaine) pour cet événement
     for (const q of quetesDuMembre(guildId, userId, { instant })) {
-        if (parId.get(q.id).evenement !== evenement || q.claimed) continue
+        const def = parId.get(q.id)
+        if (def.evenement !== evenement || q.claimed) continue
+        if (def.montantMin && !(donnees.amount >= def.montantMin)) continue
+        compte[q.type] ??= peutCompter(guildId, userId, evenement, donnees, `quete:${q.type}:${evenement}`, q.period)
+        if (!compte[q.type]) continue
         db.sqlRun("UPDATE quetes SET progress = MIN(goal, progress + 1) WHERE guild_id = ? AND user_id = ? AND period = ? AND quest = ? AND claimed = 0",
             [guildId, userId, q.period, q.id])
     }
 }
 
-// Verse les récompenses des quêtes terminées et pas encore réclamées. Le marquage « claimed » est un UPDATE
-// conditionnel dans une transaction : deux réclamations simultanées ne peuvent pas payer deux fois. Si crediter
-// refuse (compte gelé...), le marquage est annulé pour que le membre puisse réclamer plus tard.
+// Verse les récompenses des quêtes terminées et pas encore réclamées (période en cours, et précédente). Le marquage
+// « claimed » est un UPDATE conditionnel dans une transaction : deux réclamations simultanées ne peuvent pas payer deux fois.
+// Si crediter refuse (compte gelé...) ou lève une exception, le marquage est annulé pour que le membre puisse réclamer plus tard.
 // Renvoie { reclamees: [{ id, montant }], total, refus, rien }
 function reclamer(membre, { instant = Date.now() } = {}) {
     const guildId = membre.guild.id, userId = membre.id
     const resultat = { reclamees: [], total: 0, refus: null, rien: false }
-    const aReclamer = quetesDuMembre(guildId, userId, { instant }).filter(q => q.terminee && !q.claimed)
+    const aReclamer = [
+        ...precedentesAReclamer(guildId, userId, { instant }),
+        ...quetesDuMembre(guildId, userId, { instant }).filter(q => q.terminee && !q.claimed)
+    ]
     if (!aReclamer.length) return { ...resultat, rien: true }
 
+    const annuler = q => db.sqlRun("UPDATE quetes SET claimed = 0 WHERE guild_id = ? AND user_id = ? AND period = ? AND quest = ?", [guildId, userId, q.period, q.id])
     for (const q of aReclamer) {
         const marquee = db.transaction(() => db.sqlRun(
             "UPDATE quetes SET claimed = 1 WHERE guild_id = ? AND user_id = ? AND period = ? AND quest = ? AND claimed = 0 AND progress >= goal",
             [guildId, userId, q.period, q.id]) === 1)
         if (!marquee) continue
-        const paiement = crediter(membre, q.recompense, { source: "quete", actif: false, sansReduction: false, details: { quete: q.id, period: q.period } })
+        let paiement
+        try {
+            paiement = crediter(membre, q.recompense, { source: "quete", actif: false, sansReduction: false, details: { quete: q.id, period: q.period } })
+        } catch (err) {
+            annuler(q) // exception : la quête reste réclamable
+            throw err
+        }
         if (!paiement.ok) {
-            db.sqlRun("UPDATE quetes SET claimed = 0 WHERE guild_id = ? AND user_id = ? AND period = ? AND quest = ?", [guildId, userId, q.period, q.id])
+            annuler(q)
             resultat.refus = paiement.refus
             break
         }
@@ -119,4 +150,4 @@ function reclamer(membre, { instant = Date.now() } = {}) {
 
 for (const evenement of EVENEMENTS) ecouter(evenement, donnees => avancer(evenement, donnees))
 
-module.exports = { quetesDuMembre, avancer, reclamer, semaineParis, catalogue, NOMBRE_JOUR }
+module.exports = { quetesDuMembre, precedentesAReclamer, avancer, reclamer, semaineParis, catalogue, NOMBRE_JOUR }

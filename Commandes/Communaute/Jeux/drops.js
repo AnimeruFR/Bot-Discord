@@ -13,6 +13,8 @@ module.exports = {
     description: "Choisir les salons où des coffres apparaissent dans la conversation",
     permission: Discord.PermissionFlagsBits.ManageGuild,
     dm: false,
+    // Les coffres d'avant un redémarrage n'ont plus de collecteur : leur bouton répond « coffre fermé »
+    composants: [{ prefixe: drops.PREFIXE_ANCIEN_COFFRE, types: ["bouton"], public: true, gestionnaire: drops.coffreFerme }],
     options: [
         {
             type: "string",

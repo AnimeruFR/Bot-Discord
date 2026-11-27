@@ -164,10 +164,11 @@
       "id": "j_paiement",
       "evenement": "paiement",
       "objectif": 1,
+      "montantMin": 50,
       "recompense": 40,
       "nom": {
-        "fr": "Envoyer de la monnaie à un membre",
-        "en": "Send currency to a member"
+        "fr": "Envoyer au moins 50 de monnaie à un membre",
+        "en": "Send at least 50 currency to a member"
       }
     }
   ],

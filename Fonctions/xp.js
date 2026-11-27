@@ -9,6 +9,10 @@ const paliers = require('./paliers')
 //
 // Écriture directe, sans tampon : un membre ne gagne qu'une fois par minute. Un filtre en mémoire écarte les messages
 // suivants sans toucher à la base ; il reste donc au plus une petite transaction par minute et par membre.
+// Le filtre retient aussi les refus (salon exclu, module coupé, sanction) : un membre refusé n'est pas réexaminé
+// avant la minute suivante. Il est purgé par un minuteur, pas par les messages.
+// Les réglages du serveur (config et bonus) sont lus une fois par message et gardés 60 s en mémoire par serveur ;
+// toute écriture (definir*, et paliers.definirMode) les invalide aussitôt.
 // (Un tampon de 30 s ferait perdre des gains en cas de plantage, pour un gain de performance négligeable ici.)
 //
 // Le premium ne donne JAMAIS de bonus d'XP : rien dans ce fichier ne le lit.
@@ -23,6 +27,8 @@ const BOOST_MAX = 1.25
 const MAX_EXCLUS = 50
 const MAX_BONUS = 25         // par type (salons, rôles)
 const SANS_ANNONCE = "aucun" // valeur de levelup_channel_id quand les annonces sont coupées
+const DUREE_CACHE = 60 * 1000
+const TAILLE_FILTRE_MAX = 100000 // garde-fou : au-delà, le filtre est vidé
 
 // --- Niveaux ---------------------------------------------------------------------------------------------------
 
@@ -72,6 +78,27 @@ const COLONNES_CONFIG = ["excluded_channels", "weekend_double", "levelup_channel
 function ecrireConfig(guildId, colonne, valeur) {
     if (!COLONNES_CONFIG.includes(colonne)) throw new RangeError(`colonne inconnue : ${colonne}`)
     db.sqlRun(`INSERT INTO xp_config (guild_id, ${colonne}) VALUES (?, ?) ON CONFLICT (guild_id) DO UPDATE SET ${colonne} = excluded.${colonne}`, [guildId, valeur])
+    invaliderReglages(guildId)
+}
+
+// --- Cache des réglages (60 s par serveur) ---------------------------------------------------------------------
+
+const cacheReglages = new Map() // guildId -> { jusqua, config, salons, roles }
+
+// Config et bonus du serveur, lus au plus une fois par minute. À appeler après toute écriture dans xp_config ou xp_bonus.
+function invaliderReglages(guildId) {
+    if (guildId) cacheReglages.delete(guildId)
+    else cacheReglages.clear()
+}
+
+function reglages(guildId) {
+    const maintenant = Date.now()
+    let r = cacheReglages.get(guildId)
+    if (!r || r.jusqua <= maintenant) {
+        r = { jusqua: maintenant + DUREE_CACHE, config: lireConfig(guildId), salons: listerBonus(guildId, "salon"), roles: listerBonus(guildId, "role") }
+        cacheReglages.set(guildId, r)
+    }
+    return r
 }
 
 // Exclut ou réinclut un salon (ou une catégorie : ses salons et ses fils sont exclus avec). Renvoie false si rien n'a changé.
@@ -108,6 +135,7 @@ function definirBonus(guildId, kind, cible, multiplicateur) {
         db.sqlRun(`INSERT INTO xp_bonus (guild_id, kind, target, multiplier) VALUES (?, ?, ?, ?)
             ON CONFLICT (guild_id, kind, target) DO UPDATE SET multiplier = excluded.multiplier`, [guildId, kind, cible, multiplicateur])
     })
+    invaliderReglages(guildId)
 }
 
 // --- Bonus -----------------------------------------------------------------------------------------------------
@@ -137,19 +165,36 @@ function idsSalon(channel) {
 }
 
 // Plus grand bonus de salon, plus grand bonus de rôle, week-end ×2, boost perso : multipliés, puis plafonnés à ×2,5
-function multiplicateur(guildId, member, channel, instant = Date.now()) {
+// (réglages : ceux du cache du serveur, ou ceux que l'appelant vient déjà de lire)
+function multiplicateur(guildId, member, channel, instant = Date.now(), { config, salons, roles } = reglages(guildId)) {
     const ids = idsSalon(channel)
-    const salon = plusGrand(listerBonus(guildId, "salon"), cible => ids.includes(cible))
-    const role = plusGrand(listerBonus(guildId, "role"), cible => member.roles?.cache?.has(cible))
-    const weekend = lireConfig(guildId).weekend && estWeekend(instant) ? 2 : 1
+    const salon = plusGrand(salons, cible => ids.includes(cible))
+    const role = plusGrand(roles, cible => member.roles?.cache?.has(cible))
+    const weekend = config.weekend && estWeekend(instant) ? 2 : 1
     const perso = boost(guildId, member.id, instant)
     return { salon, role, weekend, boost: perso, total: Math.min(salon * role * weekend * perso, TOTAL_MAX) }
 }
 
 // --- Gain d'XP -------------------------------------------------------------------------------------------------
 
-// Clé « serveur:membre » -> instant du dernier essai (filtre en mémoire, la base fait foi)
+// Filtre en mémoire, la base fait foi. Clé « serveur:membre » -> instant du dernier gain ou du dernier refus (module,
+// sanction) ; clé « serveur:membre:salon » -> instant du dernier refus pour salon exclu (le membre peut gagner ailleurs).
 const derniersEssais = new Map()
+let minuteurPurge = null
+
+function memoriser(cle, instant) {
+    if (derniersEssais.size >= TAILLE_FILTRE_MAX) derniersEssais.clear()
+    derniersEssais.set(cle, instant)
+    if (!minuteurPurge) {
+        minuteurPurge = setInterval(() => {
+            const limite = Date.now() - INTERVALLE
+            for (const [cle, instant] of derniersEssais) if (instant < limite) derniersEssais.delete(cle)
+        }, INTERVALLE)
+        minuteurPurge.unref()
+    }
+}
+
+const recent = (cle, maintenant) => maintenant - (derniersEssais.get(cle) ?? 0) < INTERVALLE
 
 // Motif de refus (sanctionné, compte gelé) ou null. Si l'économie est coupée, peutJouer ne vérifie rien : on vérifie ici.
 function refusXp(member) {
@@ -168,18 +213,26 @@ async function gagnerXp(message, { maintenant = Date.now(), alea = Math.random }
     const guild = message.guild, member = message.member
     if (!guild || !member || message.author?.bot) return null
     const cle = `${guild.id}:${member.id}`
-    if (maintenant - (derniersEssais.get(cle) ?? 0) < INTERVALLE) return null
-    if (!moduleActif(guild.id, "communaute.niveaux")) return null
-    if (lireConfig(guild.id).exclus.some(id => idsSalon(message.channel ?? { id: message.channelId }).includes(id))) return null
-    const refus = refusXp(member)
-    if (refus && refus !== "module") return null
-
-    if (derniersEssais.size > 5000) {
-        for (const [k, instant] of derniersEssais) if (maintenant - instant >= INTERVALLE) derniersEssais.delete(k)
+    const salon = message.channel ?? { id: message.channelId }
+    const cleSalon = `${cle}:${salon.id}`
+    if (recent(cle, maintenant) || recent(cleSalon, maintenant)) return null
+    if (!moduleActif(guild.id, "communaute.niveaux")) {
+        memoriser(cle, maintenant)
+        return null
     }
-    derniersEssais.set(cle, maintenant)
+    const regl = reglages(guild.id) // lus une seule fois pour ce message
+    if (regl.config.exclus.some(id => idsSalon(salon).includes(id))) {
+        memoriser(cleSalon, maintenant)
+        return null
+    }
+    const refus = refusXp(member)
+    if (refus && refus !== "module") {
+        memoriser(cle, maintenant)
+        return null
+    }
+    memoriser(cle, maintenant)
 
-    const bonus = multiplicateur(guild.id, member, message.channel ?? { id: message.channelId }, maintenant)
+    const bonus = multiplicateur(guild.id, member, salon, maintenant, regl)
     const base = XP_MIN + Math.floor(alea() * (XP_MAX - XP_MIN + 1))
     const jour = jourParis(maintenant)
     const resultat = db.transaction(() => {
@@ -206,12 +259,12 @@ async function gagnerXp(message, { maintenant = Date.now(), alea = Math.random }
             console.error("XP, crédit de monnaie :", err.message)
         }
     }
-    if (resultat.niveau > resultat.ancienNiveau) await passageDeNiveau(message, resultat.ancienNiveau, resultat.niveau)
+    if (resultat.niveau > resultat.ancienNiveau) await passageDeNiveau(message, resultat.ancienNiveau, resultat.niveau, regl.config)
     return { ...resultat, multiplicateur: bonus.total }
 }
 
 // Paliers, annonce et événement. Une erreur Discord (rôle, salon) n'annule jamais le niveau déjà écrit.
-async function passageDeNiveau(message, ancien, niveau) {
+async function passageDeNiveau(message, ancien, niveau, config) {
     const guild = message.guild, member = message.member
     let bilan = { roles: [], retires: [], recompense: 0 }
     try {
@@ -220,16 +273,16 @@ async function passageDeNiveau(message, ancien, niveau) {
         console.error("XP, paliers :", err.message)
     }
     try {
-        await annoncer(message, niveau, bilan)
+        await annoncer(message, niveau, bilan, config)
     } catch (err) {
         console.error("XP, annonce de niveau :", err.message)
     }
     emettre("niveau", { guildId: guild.id, userId: member.id, level: niveau })
 }
 
-async function annoncer(message, niveau, bilan) {
+async function annoncer(message, niveau, bilan, config) {
     const guild = message.guild
-    const { salonAnnonce } = lireConfig(guild.id)
+    const { salonAnnonce } = config
     if (salonAnnonce === SANS_ANNONCE) return
     const canal = (salonAnnonce && guild.channels.cache.get(salonAnnonce)) || message.channel
     if (!canal?.send) return
@@ -259,5 +312,5 @@ module.exports = {
     XP_MIN, XP_MAX, INTERVALLE, PLAFOND_JOUR, BONUS_MAX, TOTAL_MAX, MAX_EXCLUS, MAX_BONUS, SANS_ANNONCE,
     xpPourNiveau, xpCumulee, niveauPourXp, progression, barre,
     lireConfig, definirExclusion, definirWeekend, definirSalonAnnonce, listerBonus, definirBonus,
-    estWeekend, multiplicateur, gagnerXp, profilXp
+    estWeekend, multiplicateur, gagnerXp, profilXp, invaliderReglages
 }

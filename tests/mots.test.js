@@ -126,15 +126,25 @@ test("mot du jour : victoire, gain selon les essais, série, grille sans le mot,
     evenements.retirerEcouteurs()
 })
 
+// Les récompenses des parties passent par le moteur de parties (comme dans main.js)
+function brancherRecompenses() {
+    parties.configurerRecompenses(async (guild, userId, montant, { source }) => eco.crediter(membre(guild.id, userId), montant, { source, actif: true }))
+}
+brancherRecompenses()
+
 // --- Commandes : faux objets Discord ---------------------------------------------------------------------------
 
 function interaction({ guildId, userId, customId = "x", values, champs, options = {} }) {
     const i = {
-        guildId, channelId: "333333333333333333", locale: "fr", user: { id: userId }, member: membre(guildId, userId),
+        guildId, guild: { id: guildId, members: { fetch: async id => membre(guildId, id) } },
+        channelId: "333333333333333333", locale: "fr", user: { id: userId }, member: membre(guildId, userId),
         customId, values, reponses: [], mises: [], modals: [],
         options: { getString: nom => options[nom] ?? null },
         reply: async r => { i.reponses.push(r) },
         update: async r => { i.mises.push(r) },
+        deferUpdate: async () => {},
+        editReply: async r => { i.mises.push(r) },
+        followUp: async r => { i.reponses.push(r) },
         showModal: async m => { i.modals.push(m) },
         fetchReply: async () => ({ id: "444444444444444444" }),
         isModalSubmit: () => champs !== undefined,
@@ -264,22 +274,84 @@ test("pendu : défaite à 7 erreurs, sans gain", async () => {
     evenements.retirerEcouteurs()
 })
 
-test("pendu : mode solo refuse un autre joueur, mode ouvert l'accepte (et seul le trouveur gagne)", async () => {
-    const G = "800000000000000007", H = "100000000000000007", AUTRE = "100000000000000008"
+test("pendu : mode solo refuse un autre joueur, mode ouvert l'accepte (hôte 20, +5 par membre ayant trouvé une lettre juste)", async () => {
+    const G = "800000000000000007", H = "100000000000000007", AUTRE = "100000000000000008", SPECTATEUR = "100000000000000009"
     const solo = await lancer(G, H, "solo")
     const refus = await jouer(solo.partie.id, G, AUTRE, "A")
     assert.ok(refus.reponses[0].flags && refus.reponses[0].content.includes(`<@${H}>`))
     assert.strictEqual(refus.mises.length, 0)
     assert.deepStrictEqual(parties.lirePartie(solo.partie.id).state.trouvees, [], "rien n'a été joué")
+    assert.deepStrictEqual(parties.lirePartie(solo.partie.id).players, [H], "un refus n'ajoute personne")
     await parties.terminerPartie(solo.partie.id, { status: "annulee" })
 
     const ouvert = await lancer(G, H, "ouvert", "ARBRES")
     const accepte = await jouer(ouvert.partie.id, G, AUTRE, "A")
     assert.strictEqual(accepte.mises.length, 1, "un autre joueur peut proposer une lettre")
+    assert.deepStrictEqual(parties.lirePartie(ouvert.partie.id).players, [H, AUTRE], "le participant devient joueur")
+    // Un participant qui ne propose qu'une mauvaise lettre n'est pas récompensé
+    await jouer(ouvert.partie.id, G, SPECTATEUR, "Z")
     for (const lettre of ["R", "B", "E"]) await jouer(ouvert.partie.id, G, H, lettre)
     const fin = await jouer(ouvert.partie.id, G, AUTRE, "S")
-    assert.ok(fin.mises[0].content.includes(`<@${AUTRE}>`))
-    assert.strictEqual(eco.compte(G, AUTRE).balance, mots.GAIN_PENDU, "le gain va à celui qui trouve")
-    assert.strictEqual(eco.compte(G, H).balance, 0)
-    assert.deepStrictEqual(parties.lirePartie(ouvert.partie.id).state.participants, [H, AUTRE])
+    assert.ok(fin.mises[0].content.includes("ARBRES"))
+    assert.ok(fin.mises[0].content.includes(`<@${H}> : +${mots.GAIN_PENDU}`) && fin.mises[0].content.includes(`<@${AUTRE}> : +${mots.GAIN_PENDU_PARTICIPANT}`))
+    assert.strictEqual(eco.compte(G, H).balance, mots.GAIN_PENDU, "l'hôte reçoit 20")
+    assert.strictEqual(eco.compte(G, AUTRE).balance, mots.GAIN_PENDU_PARTICIPANT, "+5 pour la lettre juste")
+    assert.strictEqual(eco.compte(G, SPECTATEUR).balance, 0, "aucune lettre juste : rien")
+    const etat = parties.lirePartie(ouvert.partie.id).state
+    assert.deepStrictEqual([etat.participants, etat.justes], [[H, AUTRE, SPECTATEUR], [AUTRE, H]])
+    assert.strictEqual(parties.partieEnCours(G, AUTRE), null, "partie terminée : les participants sont libres")
+})
+
+test("pendu ouvert : un participant ne peut plus lancer ni rejoindre une autre partie, et inversement", async () => {
+    const G = "800000000000000010", H = "100000000000000010", P = "100000000000000011", X = "100000000000000012"
+    const ouvert = await lancer(G, H, "ouvert", "ARBRES")
+    await jouer(ouvert.partie.id, G, P, "A")
+    // P est maintenant joueur : il ne peut pas lancer un autre pendu ni rejoindre une autre partie
+    const doublon = interaction({ guildId: G, userId: P, options: { action: "lancer" } })
+    await penduCommande.run(null, doublon, doublon.options)
+    assert.ok(doublon.reponses[0].flags && doublon.reponses[0].content.includes("partie"))
+    assert.strictEqual(parties.partieEnCours(G, P).id, ouvert.partie.id)
+    // X a déjà une partie en cours : il ne peut pas rejoindre le pendu ouvert, et rien n'est joué
+    const autre = await lancer(G, X, "solo")
+    const refus = await jouer(ouvert.partie.id, G, X, "E")
+    assert.strictEqual(refus.mises.length, 0)
+    assert.ok(refus.reponses[0].flags && refus.reponses[0].content.includes("partie"))
+    assert.deepStrictEqual(parties.lirePartie(ouvert.partie.id).players, [H, P])
+    assert.ok(!parties.lirePartie(ouvert.partie.id).state.trouvees.includes("E"))
+    await parties.terminerPartie(autre.partie.id, { status: "annulee" })
+    await parties.terminerPartie(ouvert.partie.id, { status: "annulee" })
+})
+
+test("pendu : au plus 10 pendus récompensés par jour et par membre", async () => {
+    const G = "800000000000000011", H = "100000000000000013"
+    for (let n = 1; n <= 10; n++) {
+        const { partie } = await lancer(G, H, "solo")
+        let dernier
+        for (const lettre of ["M", "A", "I", "S", "O", "N"]) dernier = await jouer(partie.id, G, H, lettre)
+        assert.ok(dernier.mises[0].content.includes(`<@${H}> : +${mots.GAIN_PENDU}`), `pendu ${n}`)
+    }
+    assert.strictEqual(eco.compte(G, H).balance, 200)
+    const { partie } = await lancer(G, H, "solo")
+    let dernier
+    for (const lettre of ["M", "A", "I", "S", "O", "N"]) dernier = await jouer(partie.id, G, H, lettre)
+    assert.match(dernier.mises[0].content, /10 pendus récompensés/)
+    assert.strictEqual(eco.compte(G, H).balance, 200, "le onzième ne rapporte rien")
+    assert.strictEqual(parties.lirePartie(partie.id).status, "finie")
+})
+
+test("pendu : un crédit en échec ne consomme pas la limite du jour", async () => {
+    const G = "800000000000000012", H = "100000000000000014"
+    const erreurConsole = console.error
+    console.error = () => {}
+    parties.configurerRecompenses(async () => ({ ok: false, refus: "gele" }))
+    try {
+        const { partie } = await lancer(G, H, "solo")
+        let dernier
+        for (const lettre of ["M", "A", "I", "S", "O", "N"]) dernier = await jouer(partie.id, G, H, lettre)
+        assert.match(dernier.mises[0].content, /pas pu être versée/)
+        assert.strictEqual(require('../Fonctions/duels').lireCompteurJour(G, H, Date.now(), "pendus_recompenses_jour"), 0)
+    } finally {
+        console.error = erreurConsole
+        brancherRecompenses()
+    }
 })

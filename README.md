@@ -205,6 +205,45 @@ Animation (`Communaute/Animation/`) :
 | `/annonce action …` | Gérer les messages | Annonces programmées (20 en attente, 60 jours max) |
 | `/bienvenue action …` | Gérer le serveur | Messages de bienvenue et d'au revoir |
 
+Économie (`Communaute/Economie/`) : une monnaie par serveur (« Éclats ✦ » par défaut), **sans aucune valeur réelle** : elle ne s'achète pas et ne se revend pas. Règles et chiffres dans [docs/ECONOMIE.md](docs/ECONOMIE.md).
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/daily` | aucune | Récompense du jour, de 100 à 235 ✦ selon la série (10 jours au plus) |
+| `/travail action [metier]` | aucune | 5 métiers originaux, 1 travail par heure, 8 par jour, niveaux 1 à 10 |
+| `/solde [membre]`, `/payer membre montant` | aucune | Solde, série, rang ; paiement avec 2 % de frais et limites par jour |
+| `/boutique action …` | aucune (gérer : Gérer le serveur) | Rôles (jamais un rôle de modération), rôles temporaires, couleurs, objets |
+| `/inventaire action [objet]` | aucune | Objets, boost d'XP personnel de 1 h (+25 %) |
+
+Niveaux (`Communaute/Niveaux/`) :
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/rang [membre]` | aucune | Niveau, progression, rang (15 à 25 XP par message, 1 fois par minute, 3 000 par jour) |
+| `/niveaux action …` | Gérer le serveur | Salons exclus, bonus par salon ou rôle (×2,5 au total au plus), double XP le week-end, rôles par niveau |
+| `/succes [membre]`, `/quetes [action]` | aucune | 43 succès, 3 quêtes par jour et 1 par semaine |
+
+Jeux (`Communaute/Jeux/`), sans mise d'argent ni casino :
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/quiz [theme] [difficulte]` | aucune | 120 questions originales FR/EN, 3 difficultés |
+| `/mot`, `/enigme` | aucune | Le Mot du jour (6 essais) et l'énigme du jour |
+| `/pendu [mode]` | aucune | Pendu solo ou ouvert au salon |
+| `/pfc`, `/morpion`, `/reaction` | aucune | Duels et course de réaction (15 ✦ au gagnant, 10 duels récompensés par jour) |
+| `/drops action …` | Gérer le serveur | Coffres qui apparaissent dans les salons actifs choisis |
+
+Social (`Communaute/Social/`) :
+
+| Commande | Permission requise | Rôle |
+|---|---|---|
+| `/profil [membre]` | aucune | Bio, niveau, réputation, badge |
+| `/rep membre` | aucune | Une réputation par jour |
+| `/anniversaire action …` | aucune (config : Gérer le serveur) | Jour et mois seulement, annonce et rôle du jour |
+| `/classement type` | aucune | Classements monnaie, niveau, jeux |
+
+Staff : `/eco action …` (Gérer le serveur, module Modération) pour le journal d'un portefeuille, le gel, la remise à zéro et les réglages (plafond du jour, multiplicateur, nom et emoji de la monnaie). L'XP au message demande l'intent **Guild Messages** (non privilégié, le bot ne lit pas le contenu des messages). Le mot et l'énigme du jour utilisent un sel secret (`JEUX_SEL` dans le `.env`, sinon généré dans le dossier de la base).
+
 ### ⚙️ Général – `Commandes/General/`
 
 | Commande | Permission requise | Rôle |

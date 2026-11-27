@@ -16,6 +16,8 @@ const nomMonnaie = guildId => economie.monnaie(guildId).nom
 function texteRefus(cible, refus, guildId) {
     if (refus === "deja_en_partie") return t(cible, "partie.deja_en_partie")
     if (refus === "aucune_question") return t(cible, "quiz.aucune_question")
+    if (refus === "toutes_vues") return t(cible, "quiz.toutes_vues")
+    if (refus === "limite_jour") return t(cible, "quiz.limite_jour", { max: quiz.MAX_QUIZ_JOUR })
     return t(cible, `eco.refus.${refus}`, { monnaie: nomMonnaie(guildId) })
 }
 

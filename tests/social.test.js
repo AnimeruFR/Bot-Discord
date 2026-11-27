@@ -214,3 +214,78 @@ test("commandes : sous-module social, permissions", () => {
         assert.strictEqual(c.permission, "Aucune")
     }
 })
+
+// --- Critique du lot 3B ----------------------------------------------------------------------------------------
+
+test("profil : les liens de la bio deviennent « [lien] »", () => {
+    const U = "600000000000000010"
+    const bio = profils.definirBio(G, U, "Mon site https://exemple.fr/une/page?x=1, discord.gg/abcdef et www.truc.com ; aussi HTTP://X.IO")
+    assert.strictEqual(bio, "Mon site [lien], [lien] et [lien] ; aussi [lien]")
+    assert.strictEqual(profils.lireProfil(G, U).bio, bio)
+    assert.strictEqual(profils.definirBio(G, U, "discord.com/invite/zzz"), "[lien]")
+    assert.strictEqual(profils.definirBio(G, U, "Pas de lien ici"), "Pas de lien ici")
+    // La limite de 200 caractères s'applique au texte après remplacement
+    assert.strictEqual(profils.definirBio(G, U, "https://" + "a".repeat(300)), "[lien]")
+})
+
+// Serveur dont le cache de rôle est incomplet : le fêté de la veille garde son rôle mais n'y figure pas
+function serveurCacheIncomplet(id) {
+    const appels = []
+    const hier = { id: "700000000000000001", user: { bot: false }, retire: false }
+    hier.roles = { cache: new Map([["ROLE", {}]]), remove: async () => { hier.retire = true }, add: async () => {} }
+    const aujourdhui = { id: "700000000000000002", user: { bot: false }, ajoute: false }
+    aujourdhui.roles = { cache: new Map(), remove: async () => {}, add: async () => { aujourdhui.ajoute = true } }
+    const membres = new Map([[hier.id, hier], [aujourdhui.id, aujourdhui]])
+    const role = { id: "ROLE", managed: false, comparePositionTo: () => -1, permissions: new Discord.PermissionsBitField(0n), members: new Map() }
+    const guild = {
+        id, ownerId: "OWNER",
+        members: {
+            me: { id: "OWNER", permissions: new Discord.PermissionsBitField(), roles: { highest: {} } },
+            fetch: async uid => { appels.push(uid); return uid ? membres.get(uid) : membres }
+        },
+        roles: { cache: new Map([["ROLE", role]]) },
+        channels: { cache: new Map() }
+    }
+    role.guild = guild
+    return { guild, role, appels, hier, aujourdhui }
+}
+
+test("anniversaire : retrait basé sur le cache complété par un fetch ciblé, jamais de fetch complet", async () => {
+    const G8 = "910000000000000008"
+    const s = serveurCacheIncomplet(G8)
+    anniv.definir(G8, s.hier.id, 9, 6)
+    anniv.definir(G8, s.aujourdhui.id, 10, 6)
+    anniv.ecrireConfig(G8, { role: "ROLE" })
+    await anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8))
+    assert.ok(s.hier.retire, "fêté de la veille, absent du cache du rôle : rôle retiré")
+    assert.ok(s.aujourdhui.ajoute)
+    assert.ok(s.appels.length > 0 && s.appels.every(Boolean), "aucun fetch du serveur entier")
+})
+
+test("anniversaire : le jour n'est noté qu'après le retrait des rôles de la veille", async () => {
+    const G9 = "910000000000000009"
+    const s = serveurCacheIncomplet(G9)
+    Object.defineProperty(s.role, "members", { get() { throw new Error("cache illisible") } })
+    anniv.definir(G9, s.aujourdhui.id, 10, 6)
+    anniv.ecrireConfig(G9, { role: "ROLE" })
+    await assert.rejects(anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8)), /cache illisible/)
+    assert.strictEqual(anniv.lireConfig(G9).last_run_day, null, "retrait en échec : jour non noté, le passage suivant réessaie")
+    Object.defineProperty(s.role, "members", { value: new Map(), configurable: true })
+    await anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8, 30))
+    assert.strictEqual(anniv.lireConfig(G9).last_run_day, "2027-06-10")
+    assert.ok(s.aujourdhui.ajoute)
+})
+
+test("anniversaire : les serveurs sont traités à la suite, avec une pause entre deux", async () => {
+    const un = fauxServeur("910000000000000010"), deux = fauxServeur("910000000000000011")
+    for (const [s, n] of [[un, 1], [deux, 2]]) {
+        anniv.ecrireConfig(s.guild.id, { salon: "SALON" })
+        anniv.definir(s.guild.id, s.ajouterMembre(`80000000000000000${n}`).id, 1, 1)
+    }
+    const bot = { guilds: { cache: new Map([[un.guild.id, un.guild], [deux.guild.id, deux.guild]]) } }
+    const reel = Date
+    const avant = reel.now()
+    await anniv.traiter(bot, { pauseServeurs: 40 })
+    assert.ok(reel.now() - avant >= 35, "une pause entre les deux serveurs")
+    await anniv.traiter(bot, { pauseServeurs: 0 })
+})

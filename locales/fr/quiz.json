@@ -32,5 +32,7 @@
   "enigme.rate": "Ce n'est pas la bonne réponse. Il vous reste {restants} essai(s).",
   "enigme.rate_dernier": "Ce n'est pas la bonne réponse, et vous n'avez plus d'essai aujourd'hui.",
   "enigme.trouvee": "🎉 <@{user}> a trouvé l'énigme du jour : n°{rang} sur ce serveur !",
-  "enigme.gain": "Vous gagnez {gain}."
+  "enigme.gain": "Vous gagnez {gain}.",
+  "quiz.limite_jour": "Vous avez déjà gagné {max} quiz aujourd'hui : revenez demain !",
+  "quiz.toutes_vues": "Vous avez déjà vu toutes les questions de ce thème et de cette difficulté aujourd'hui."
 }

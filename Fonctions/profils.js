@@ -18,6 +18,10 @@ const THEME_DEFAUT = "bleu"
 const ZWSP = String.fromCharCode(0x200b)
 const sansMention = texte => texte.replace(/[@<]/g, m => m + ZWSP)
 
+// Liens (http(s)://, www., invitations Discord) : remplacés dans la bio, pour qu'elle ne serve pas de panneau de publicité
+const LIEN = /(?:https?:\/\/|www\.|discord\.gg\/|discord(?:app)?\.com\/invite\/)(?:\S*[^\s.,;:!?)\]])?/gi
+const sansLien = texte => texte.replace(LIEN, "[lien]")
+
 // --- Profil ----------------------------------------------------------------------------------------------------
 
 const lireProfil = (guildId, userId) =>
@@ -30,9 +34,9 @@ function ecrireProfil(guildId, userId, colonne, valeur) {
         ON CONFLICT (guild_id, user_id) DO UPDATE SET ${colonne} = excluded.${colonne}`, [guildId, userId, valeur])
 }
 
-// Texte vide : bio effacée. Renvoie la bio enregistrée, ou null si elle est trop longue.
+// Texte vide : bio effacée. Les liens deviennent « [lien] ». Renvoie la bio enregistrée, ou null si elle est trop longue.
 function definirBio(guildId, userId, texte) {
-    const propre = (texte ?? "").trim()
+    const propre = sansLien((texte ?? "").trim())
     if ([...propre].length > BIO_MAX) return null
     ecrireProfil(guildId, userId, "bio", propre || null)
     return propre

@@ -2,6 +2,7 @@ const Discord = require('discord.js')
 const economie = require('../../../Fonctions/economie')
 const { t } = require('../../../Fonctions/i18n')
 const { refuser } = require('../../../Fonctions/erreurs')
+const { fetchMember } = require('../../../Fonctions/moderation')
 
 const EPHEMERAL = Discord.MessageFlags.Ephemeral
 const SEUIL_CONFIRMATION = 500
@@ -71,8 +72,15 @@ module.exports = {
         if (clic.customId.startsWith("payer-non")) return clic.update({ content: t(interaction, "portefeuille.payer.annule"), components: [] })
         await clic.deferUpdate()
 
-        // Le solde et les droits ont pu changer pendant la confirmation
-        const resultat = economie.transferer(interaction.member, cible, montant, { source: "paiement", fraisPourcent: FRAIS_POURCENT })
+        // Le solde, les droits et les rôles ont pu changer pendant la confirmation : on relit les deux membres
+        let envoyeur, destinataire
+        try {
+            [envoyeur, destinataire] = await Promise.all([fetchMember(interaction.guild, interaction.user.id), fetchMember(interaction.guild, cible.id)])
+        } catch {
+            return interaction.editReply({ content: t(interaction, "portefeuille.payer.introuvable"), components: [] })
+        }
+        if (!envoyeur || !destinataire) return interaction.editReply({ content: t(interaction, "portefeuille.payer.introuvable"), components: [] })
+        const resultat = economie.transferer(envoyeur, destinataire, montant, { source: "paiement", fraisPourcent: FRAIS_POURCENT })
         if (!resultat.ok) return interaction.editReply({ content: texteRefus(resultat.refus), components: [] })
         await interaction.editReply({ content: t(interaction, "portefeuille.payer.fait"), components: [] })
         return interaction.followUp({ content: annonce(interaction, cible, resultat), allowedMentions: { parse: [] } })

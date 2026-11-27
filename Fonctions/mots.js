@@ -6,6 +6,7 @@ const { emettre, jourParis } = require('./evenements')
 
 // Jeux de mots (idées #47 et #49) : « Le Mot du jour » et le pendu. Les listes sont dans data-statique/mots-<langue>.txt.
 
+const GAIN_PENDU_PARTICIPANT = 5 // pendu ouvert : par membre ayant trouvé une lettre juste (en plus des 20 de l'hôte)
 const LONGUEUR = 5
 const ESSAIS_MAX = 6
 const ERREURS_MAX = 7
@@ -42,12 +43,51 @@ function langueServeur(guildId) {
     return LANGUES.includes(imposee) ? imposee : "fr"
 }
 
+// --- Sel secret ---------------------------------------------------------------------------------------------------
+
+// Le mot du jour et l'énigme du jour se calculent depuis le serveur et le jour : sans secret, n'importe qui les calculerait
+// d'avance avec le code du dépôt. Le sel vient de JEUX_SEL ; sinon il est tiré au hasard une fois et gardé dans sel-jeux.txt,
+// à côté de la base (jamais dans le dépôt) ; en mémoire seulement si la base l'est (tests).
+const NOM_FICHIER_SEL = "sel-jeux.txt"
+const selsConnus = new Map() // chemin du fichier (ou ":memoire") -> sel
+
+// Lit le sel du fichier, ou le crée (écriture exclusive : deux processus ne se marchent pas dessus)
+function lireOuCreerSel(fichier) {
+    try {
+        const existant = fs.readFileSync(fichier, 'utf8').trim()
+        if (existant) return existant
+    } catch { /* pas encore de fichier */ }
+    const sel = crypto.randomBytes(32).toString("hex")
+    try {
+        fs.writeFileSync(fichier, sel, { flag: "wx", mode: 0o600 })
+        return sel
+    } catch {
+        return fs.readFileSync(fichier, 'utf8').trim() || sel
+    }
+}
+
+function selJeux() {
+    if (process.env.JEUX_SEL) return process.env.JEUX_SEL
+    const base = process.env.DATABASE_PATH || path.join(__dirname, '..', 'data', 'bot.db')
+    const cle = base === ":memory:" ? ":memoire" : path.join(path.dirname(path.resolve(base)), NOM_FICHIER_SEL)
+    if (!selsConnus.has(cle)) {
+        try {
+            selsConnus.set(cle, cle === ":memoire" ? crypto.randomBytes(32).toString("hex") : lireOuCreerSel(cle))
+        } catch (err) {
+            // Dossier non inscriptible : sel en mémoire (le mot change à chaque redémarrage plutôt que d'être prévisible)
+            console.error(`Sel des jeux : ${cle} illisible (${err.message}), sel temporaire.`)
+            selsConnus.set(cle, crypto.randomBytes(32).toString("hex"))
+        }
+    }
+    return selsConnus.get(cle)
+}
+
 // --- Le Mot du jour ---------------------------------------------------------------------------------------------
 
-// Le même mot pour tout le serveur et pour la journée : dérivé du serveur et du jour, sans rien stocker
+// Le même mot pour tout le serveur et pour la journée : dérivé du sel secret, du serveur et du jour, sans rien stocker
 function motDuJour(guildId, jour, langue) {
     const { cinq } = listes(langue)
-    const empreinte = crypto.createHash("sha256").update(`mot:${guildId}:${jour}`).digest()
+    const empreinte = crypto.createHash("sha256").update(`mot:${selJeux()}:${guildId}:${jour}`).digest()
     return cinq[empreinte.readUInt32BE(0) % cinq.length]
 }
 
@@ -191,8 +231,8 @@ function dessin(erreurs) {
 }
 
 module.exports = {
-    LONGUEUR, ESSAIS_MAX, ERREURS_MAX, GAIN_PENDU, DUREE_PENDU, GAINS_MOT,
-    normaliser, listes, langueServeur,
+    LONGUEUR, ESSAIS_MAX, ERREURS_MAX, GAIN_PENDU, GAIN_PENDU_PARTICIPANT, DUREE_PENDU, GAINS_MOT,
+    normaliser, listes, langueServeur, selJeux, lireOuCreerSel,
     motDuJour, evaluer, ligneEmojis, grille, gainMot, jourPrecedent, etatDuJour, serieActuelle, proposerEssai, recompenserMot,
     motPendu, masque, jouerLettre, gagnePendu, dessin
 }

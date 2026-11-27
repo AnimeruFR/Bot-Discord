@@ -61,5 +61,12 @@
   "duels.drops.voir_aucun": "No channel is configured: there are no chests on this server. Pick channels with /drops.",
   "duels.drops.salons_ok": "✅ Chests can now appear in: {salons}.",
   "duels.drops.salons_aucun": "✅ No channel chosen: chests are disabled on this server.",
-  "duels.drops.salon_bot": "I can't see or write in {salon}: give me those permissions before choosing it."
+  "duels.drops.salon_bot": "I can't see or write in {salon}: give me those permissions before choosing it.",
+  "duels.abandonner": "Give up",
+  "duels.forfait.abandon": "🏳️ {perdant} gives up: {gagnant} wins the game.",
+  "duels.forfait.temps": "⌛ {perdant} didn't play in time: {gagnant} wins the game.",
+  "duels.limite_adversaire": "{user} already had {max} rewarded duels against {adversaire} today: no reward this time.",
+  "duels.echec_credit": "⚠️ {user}'s reward could not be paid.",
+  "duels.erreur_recompenses": "⚠️ Rewards could not be paid for this game.",
+  "duels.drop.ferme": "This chest is closed: it dates from before a bot restart or it closed on its own."
 }
