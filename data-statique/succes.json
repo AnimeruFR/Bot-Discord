@@ -1,0 +1,733 @@
+[
+  {
+    "id": "premier_daily",
+    "nom": {
+      "fr": "Premier réveil",
+      "en": "First wake-up"
+    },
+    "description": {
+      "fr": "Récupérer votre première récompense quotidienne.",
+      "en": "Claim your first daily reward."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "daily_total",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "daily_7",
+    "nom": {
+      "fr": "Habitué du matin",
+      "en": "Morning regular"
+    },
+    "description": {
+      "fr": "Récupérer 7 récompenses quotidiennes.",
+      "en": "Claim 7 daily rewards."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "daily_total",
+      "seuil": 7
+    },
+    "recompense": 100
+  },
+  {
+    "id": "daily_30",
+    "nom": {
+      "fr": "Fidèle au poste",
+      "en": "Always on duty"
+    },
+    "description": {
+      "fr": "Récupérer 30 récompenses quotidiennes.",
+      "en": "Claim 30 daily rewards."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "daily_total",
+      "seuil": 30
+    },
+    "recompense": 300
+  },
+  {
+    "id": "daily_100",
+    "nom": {
+      "fr": "Centenaire",
+      "en": "Centurion"
+    },
+    "description": {
+      "fr": "Récupérer 100 récompenses quotidiennes.",
+      "en": "Claim 100 daily rewards."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "daily_total",
+      "seuil": 100
+    },
+    "recompense": 800
+  },
+  {
+    "id": "serie_3",
+    "nom": {
+      "fr": "Sur sa lancée",
+      "en": "On a roll"
+    },
+    "description": {
+      "fr": "Atteindre une série de 3 jours.",
+      "en": "Reach a 3-day streak."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "serie_max",
+      "seuil": 3
+    },
+    "recompense": 50
+  },
+  {
+    "id": "serie_7",
+    "nom": {
+      "fr": "Semaine parfaite",
+      "en": "Perfect week"
+    },
+    "description": {
+      "fr": "Atteindre une série de 7 jours.",
+      "en": "Reach a 7-day streak."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "serie_max",
+      "seuil": 7
+    },
+    "recompense": 150
+  },
+  {
+    "id": "serie_10",
+    "nom": {
+      "fr": "Série de feu",
+      "en": "Hot streak"
+    },
+    "description": {
+      "fr": "Atteindre une série de 10 jours.",
+      "en": "Reach a 10-day streak."
+    },
+    "condition": {
+      "evenement": "daily",
+      "stat": "serie_max",
+      "seuil": 10
+    },
+    "recompense": 300
+  },
+  {
+    "id": "premier_travail",
+    "nom": {
+      "fr": "Premier boulot",
+      "en": "First job"
+    },
+    "description": {
+      "fr": "Travailler pour la première fois.",
+      "en": "Work for the first time."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "travaux",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "travail_25",
+    "nom": {
+      "fr": "Bon petit travailleur",
+      "en": "Hard worker"
+    },
+    "description": {
+      "fr": "Travailler 25 fois.",
+      "en": "Work 25 times."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "travaux",
+      "seuil": 25
+    },
+    "recompense": 100
+  },
+  {
+    "id": "travail_100",
+    "nom": {
+      "fr": "Bourreau de travail",
+      "en": "Workaholic"
+    },
+    "description": {
+      "fr": "Travailler 100 fois.",
+      "en": "Work 100 times."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "travaux",
+      "seuil": 100
+    },
+    "recompense": 300
+  },
+  {
+    "id": "travail_500",
+    "nom": {
+      "fr": "Stakhanoviste",
+      "en": "Overachiever"
+    },
+    "description": {
+      "fr": "Travailler 500 fois.",
+      "en": "Work 500 times."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "travaux",
+      "seuil": 500
+    },
+    "recompense": 700
+  },
+  {
+    "id": "metier_5",
+    "nom": {
+      "fr": "Promotion",
+      "en": "Promotion"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 5 dans un métier.",
+      "en": "Reach level 5 in a job."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "metier_niveau_max",
+      "seuil": 5
+    },
+    "recompense": 150
+  },
+  {
+    "id": "metier_10",
+    "nom": {
+      "fr": "Maître de son métier",
+      "en": "Master of the trade"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 10 dans un métier.",
+      "en": "Reach level 10 in a job."
+    },
+    "condition": {
+      "evenement": "travail",
+      "stat": "metier_niveau_max",
+      "seuil": 10
+    },
+    "recompense": 400
+  },
+  {
+    "id": "premier_achat",
+    "nom": {
+      "fr": "Première emplette",
+      "en": "First purchase"
+    },
+    "description": {
+      "fr": "Acheter un article à la boutique.",
+      "en": "Buy an item from the shop."
+    },
+    "condition": {
+      "evenement": "achat",
+      "stat": "achats",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "achats_10",
+    "nom": {
+      "fr": "Client fidèle",
+      "en": "Loyal customer"
+    },
+    "description": {
+      "fr": "Faire 10 achats à la boutique.",
+      "en": "Make 10 purchases in the shop."
+    },
+    "condition": {
+      "evenement": "achat",
+      "stat": "achats",
+      "seuil": 10
+    },
+    "recompense": 150
+  },
+  {
+    "id": "achats_50",
+    "nom": {
+      "fr": "Grand acheteur",
+      "en": "Big spender"
+    },
+    "description": {
+      "fr": "Faire 50 achats à la boutique.",
+      "en": "Make 50 purchases in the shop."
+    },
+    "condition": {
+      "evenement": "achat",
+      "stat": "achats",
+      "seuil": 50
+    },
+    "recompense": 400
+  },
+  {
+    "id": "premier_paiement",
+    "nom": {
+      "fr": "Main généreuse",
+      "en": "Generous hand"
+    },
+    "description": {
+      "fr": "Envoyer de la monnaie à un autre membre.",
+      "en": "Send currency to another member."
+    },
+    "condition": {
+      "evenement": "paiement",
+      "stat": "paiements",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "paiements_20",
+    "nom": {
+      "fr": "Mécène",
+      "en": "Patron"
+    },
+    "description": {
+      "fr": "Envoyer de la monnaie 20 fois.",
+      "en": "Send currency 20 times."
+    },
+    "condition": {
+      "evenement": "paiement",
+      "stat": "paiements",
+      "seuil": 20
+    },
+    "recompense": 200
+  },
+  {
+    "id": "philanthrope",
+    "nom": {
+      "fr": "Philanthrope",
+      "en": "Philanthropist"
+    },
+    "description": {
+      "fr": "Donner 1 000 au total à d'autres membres.",
+      "en": "Give 1,000 in total to other members."
+    },
+    "condition": {
+      "evenement": "paiement",
+      "stat": "monnaie_donnee",
+      "seuil": 1000
+    },
+    "recompense": 300
+  },
+  {
+    "id": "niveau_5",
+    "nom": {
+      "fr": "Premiers pas",
+      "en": "First steps"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 5.",
+      "en": "Reach level 5."
+    },
+    "condition": {
+      "evenement": "niveau",
+      "stat": "niveau_max",
+      "seuil": 5
+    },
+    "recompense": 50
+  },
+  {
+    "id": "niveau_10",
+    "nom": {
+      "fr": "Habitué",
+      "en": "Regular"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 10.",
+      "en": "Reach level 10."
+    },
+    "condition": {
+      "evenement": "niveau",
+      "stat": "niveau_max",
+      "seuil": 10
+    },
+    "recompense": 100
+  },
+  {
+    "id": "niveau_25",
+    "nom": {
+      "fr": "Vétéran",
+      "en": "Veteran"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 25.",
+      "en": "Reach level 25."
+    },
+    "condition": {
+      "evenement": "niveau",
+      "stat": "niveau_max",
+      "seuil": 25
+    },
+    "recompense": 300
+  },
+  {
+    "id": "niveau_50",
+    "nom": {
+      "fr": "Légende du serveur",
+      "en": "Server legend"
+    },
+    "description": {
+      "fr": "Atteindre le niveau 50.",
+      "en": "Reach level 50."
+    },
+    "condition": {
+      "evenement": "niveau",
+      "stat": "niveau_max",
+      "seuil": 50
+    },
+    "recompense": 1000
+  },
+  {
+    "id": "premiere_partie",
+    "nom": {
+      "fr": "Joueur du dimanche",
+      "en": "Casual player"
+    },
+    "description": {
+      "fr": "Jouer une première partie.",
+      "en": "Play your first game."
+    },
+    "condition": {
+      "evenement": "partie:jouee",
+      "stat": "parties_jouees",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "parties_25",
+    "nom": {
+      "fr": "Joueur assidu",
+      "en": "Dedicated player"
+    },
+    "description": {
+      "fr": "Jouer 25 parties.",
+      "en": "Play 25 games."
+    },
+    "condition": {
+      "evenement": "partie:jouee",
+      "stat": "parties_jouees",
+      "seuil": 25
+    },
+    "recompense": 150
+  },
+  {
+    "id": "parties_100",
+    "nom": {
+      "fr": "Accro au jeu",
+      "en": "Game addict"
+    },
+    "description": {
+      "fr": "Jouer 100 parties.",
+      "en": "Play 100 games."
+    },
+    "condition": {
+      "evenement": "partie:jouee",
+      "stat": "parties_jouees",
+      "seuil": 100
+    },
+    "recompense": 400
+  },
+  {
+    "id": "premiere_victoire",
+    "nom": {
+      "fr": "Première victoire",
+      "en": "First win"
+    },
+    "description": {
+      "fr": "Gagner une première partie.",
+      "en": "Win your first game."
+    },
+    "condition": {
+      "evenement": "partie:gagnee",
+      "stat": "parties_gagnees",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "victoires_10",
+    "nom": {
+      "fr": "Gagnant",
+      "en": "Winner"
+    },
+    "description": {
+      "fr": "Gagner 10 parties.",
+      "en": "Win 10 games."
+    },
+    "condition": {
+      "evenement": "partie:gagnee",
+      "stat": "parties_gagnees",
+      "seuil": 10
+    },
+    "recompense": 150
+  },
+  {
+    "id": "victoires_50",
+    "nom": {
+      "fr": "Champion",
+      "en": "Champion"
+    },
+    "description": {
+      "fr": "Gagner 50 parties.",
+      "en": "Win 50 games."
+    },
+    "condition": {
+      "evenement": "partie:gagnee",
+      "stat": "parties_gagnees",
+      "seuil": 50
+    },
+    "recompense": 500
+  },
+  {
+    "id": "victoires_200",
+    "nom": {
+      "fr": "Invaincu",
+      "en": "Unbeaten"
+    },
+    "description": {
+      "fr": "Gagner 200 parties.",
+      "en": "Win 200 games."
+    },
+    "condition": {
+      "evenement": "partie:gagnee",
+      "stat": "parties_gagnees",
+      "seuil": 200
+    },
+    "recompense": 1000
+  },
+  {
+    "id": "quiz_10",
+    "nom": {
+      "fr": "Bonne culture",
+      "en": "Well read"
+    },
+    "description": {
+      "fr": "Donner 10 bonnes réponses au quiz.",
+      "en": "Give 10 correct quiz answers."
+    },
+    "condition": {
+      "evenement": "quiz:bonne_reponse",
+      "stat": "quiz_bonnes",
+      "seuil": 10
+    },
+    "recompense": 100
+  },
+  {
+    "id": "quiz_100",
+    "nom": {
+      "fr": "Encyclopédie vivante",
+      "en": "Walking encyclopedia"
+    },
+    "description": {
+      "fr": "Donner 100 bonnes réponses au quiz.",
+      "en": "Give 100 correct quiz answers."
+    },
+    "condition": {
+      "evenement": "quiz:bonne_reponse",
+      "stat": "quiz_bonnes",
+      "seuil": 100
+    },
+    "recompense": 500
+  },
+  {
+    "id": "rep_donnee_1",
+    "nom": {
+      "fr": "Bon camarade",
+      "en": "Good friend"
+    },
+    "description": {
+      "fr": "Donner un point de réputation.",
+      "en": "Give a reputation point."
+    },
+    "condition": {
+      "evenement": "rep:donnee",
+      "stat": "rep_donnees",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "rep_donnee_25",
+    "nom": {
+      "fr": "Ambassadeur",
+      "en": "Ambassador"
+    },
+    "description": {
+      "fr": "Donner 25 points de réputation.",
+      "en": "Give 25 reputation points."
+    },
+    "condition": {
+      "evenement": "rep:donnee",
+      "stat": "rep_donnees",
+      "seuil": 25
+    },
+    "recompense": 200
+  },
+  {
+    "id": "rep_recue_1",
+    "nom": {
+      "fr": "Apprécié",
+      "en": "Appreciated"
+    },
+    "description": {
+      "fr": "Recevoir un point de réputation.",
+      "en": "Receive a reputation point."
+    },
+    "condition": {
+      "evenement": "rep:recue",
+      "stat": "rep_recues",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "rep_recue_25",
+    "nom": {
+      "fr": "Populaire",
+      "en": "Popular"
+    },
+    "description": {
+      "fr": "Recevoir 25 points de réputation.",
+      "en": "Receive 25 reputation points."
+    },
+    "condition": {
+      "evenement": "rep:recue",
+      "stat": "rep_recues",
+      "seuil": 25
+    },
+    "recompense": 250
+  },
+  {
+    "id": "rep_recue_100",
+    "nom": {
+      "fr": "Pilier de la communauté",
+      "en": "Community pillar"
+    },
+    "description": {
+      "fr": "Recevoir 100 points de réputation.",
+      "en": "Receive 100 reputation points."
+    },
+    "condition": {
+      "evenement": "rep:recue",
+      "stat": "rep_recues",
+      "seuil": 100
+    },
+    "recompense": 700
+  },
+  {
+    "id": "premier_mot",
+    "nom": {
+      "fr": "Mot juste",
+      "en": "Right word"
+    },
+    "description": {
+      "fr": "Trouver un mot du jour.",
+      "en": "Find a word of the day."
+    },
+    "condition": {
+      "evenement": "mot:trouve",
+      "stat": "mots_trouves",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "mots_30",
+    "nom": {
+      "fr": "Cruciverbiste",
+      "en": "Wordsmith"
+    },
+    "description": {
+      "fr": "Trouver 30 mots du jour.",
+      "en": "Find 30 words of the day."
+    },
+    "condition": {
+      "evenement": "mot:trouve",
+      "stat": "mots_trouves",
+      "seuil": 30
+    },
+    "recompense": 300
+  },
+  {
+    "id": "premiere_enigme",
+    "nom": {
+      "fr": "Esprit vif",
+      "en": "Sharp mind"
+    },
+    "description": {
+      "fr": "Résoudre une énigme.",
+      "en": "Solve a riddle."
+    },
+    "condition": {
+      "evenement": "enigme:trouvee",
+      "stat": "enigmes_trouvees",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "enigmes_20",
+    "nom": {
+      "fr": "Sphinx",
+      "en": "Sphinx"
+    },
+    "description": {
+      "fr": "Résoudre 20 énigmes.",
+      "en": "Solve 20 riddles."
+    },
+    "condition": {
+      "evenement": "enigme:trouvee",
+      "stat": "enigmes_trouvees",
+      "seuil": 20
+    },
+    "recompense": 300
+  },
+  {
+    "id": "premier_drop",
+    "nom": {
+      "fr": "Chasseur de coffres",
+      "en": "Chest hunter"
+    },
+    "description": {
+      "fr": "Ramasser un coffre dans le chat.",
+      "en": "Pick up a chest in the chat."
+    },
+    "condition": {
+      "evenement": "drop:ramasse",
+      "stat": "drops_ramasses",
+      "seuil": 1
+    },
+    "recompense": 50
+  },
+  {
+    "id": "drops_25",
+    "nom": {
+      "fr": "Pilleur",
+      "en": "Looter"
+    },
+    "description": {
+      "fr": "Ramasser 25 coffres.",
+      "en": "Pick up 25 chests."
+    },
+    "condition": {
+      "evenement": "drop:ramasse",
+      "stat": "drops_ramasses",
+      "seuil": 25
+    },
+    "recompense": 250
+  }
+]

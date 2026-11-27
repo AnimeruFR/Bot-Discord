@@ -1,0 +1,48 @@
+{
+  "solde": {
+    "description": "Show your balance, daily streak and rank",
+    "options": {
+      "membre": "Member to look up (you by default)"
+    }
+  },
+  "payer": {
+    "description": "Send currency to another member (2% fee)",
+    "options": {
+      "membre": "Who receives the currency",
+      "montant": "Amount to send (confirmation above 500)"
+    }
+  },
+  "classement": {
+    "description": "Show the server leaderboard",
+    "options": {
+      "type": "Which leaderboard (currency by default)"
+    },
+    "choix": {
+      "type": {
+        "monnaie": "Currency",
+        "niveau": "Level",
+        "jeux": "Games won"
+      }
+    }
+  },
+  "eco": {
+    "description": "Staff: economy log, freeze, reset and settings",
+    "options": {
+      "action": "What to do?",
+      "membre": "Member concerned (log, freeze, unfreeze, reset)",
+      "plafond": "Daily cap on active gains (300 to 2000)",
+      "multiplicateur": "Global gain multiplier (0.5 to 2)",
+      "nom": "Currency name (32 characters at most)",
+      "emoji": "Currency emoji"
+    },
+    "choix": {
+      "action": {
+        "journal": "View a member's log",
+        "geler": "Freeze an account",
+        "degeler": "Unfreeze an account",
+        "reinitialiser": "Reset an account to zero",
+        "reglages": "Change the economy settings"
+      }
+    }
+  }
+}

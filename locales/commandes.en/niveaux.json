@@ -1,0 +1,38 @@
+{
+  "rang": {
+    "description": "Show your level, XP and rank (or another member's)",
+    "options": {
+      "membre": "Member to look up (you by default)"
+    }
+  },
+  "niveaux": {
+    "description": "Configure levels: excluded channels, bonuses, tiers, weekend",
+    "options": {
+      "action": "What to do?",
+      "salon": "Channel or category (exclude, include, bonus, announcements)",
+      "role": "Role (bonus or tier)",
+      "multiplicateur": "XP multiplier from 1.1 to 2 (1 removes the bonus)",
+      "niveau": "Level of the tier",
+      "recompense": "Currency reward of the tier (0 to 5000)",
+      "actif": "On or off (weekend, announcements)",
+      "mode": "Tier mode"
+    },
+    "choix": {
+      "action": {
+        "voir": "Show the settings",
+        "exclure": "Exclude a channel",
+        "inclure": "Include a channel again",
+        "bonus": "Set an XP bonus (channel or role)",
+        "palier": "Add or edit a tier",
+        "retirer_palier": "Remove a tier",
+        "weekend": "Double XP on weekends",
+        "salon_annonce": "Level-up announcements",
+        "mode": "Tier mode (stack or replace)"
+      },
+      "mode": {
+        "cumul": "Stack: keep all reached roles",
+        "remplace": "Replace: keep only the highest tier"
+      }
+    }
+  }
+}

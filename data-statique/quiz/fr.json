@@ -1,0 +1,1562 @@
+[
+  {
+    "id": "q001",
+    "theme": "sciences",
+    "difficulte": "facile",
+    "question": "Quel gaz les plantes absorbent-elles pour réaliser la photosynthèse ?",
+    "choix": [
+      "Le dioxyde de carbone",
+      "L'oxygène",
+      "L'azote",
+      "L'hélium"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q002",
+    "theme": "sciences",
+    "difficulte": "facile",
+    "question": "Combien de planètes compte le système solaire ?",
+    "choix": [
+      "7",
+      "8",
+      "9",
+      "10"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q003",
+    "theme": "sciences",
+    "difficulte": "facile",
+    "question": "À quelle température l'eau pure gèle-t-elle sous pression normale ?",
+    "choix": [
+      "10 °C",
+      "-10 °C",
+      "0 °C",
+      "32 °C"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q004",
+    "theme": "sciences",
+    "difficulte": "facile",
+    "question": "Quel organe pompe le sang dans tout le corps ?",
+    "choix": [
+      "Le foie",
+      "Les poumons",
+      "Le rein",
+      "Le cœur"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q005",
+    "theme": "sciences",
+    "difficulte": "facile",
+    "question": "Quelle est la formule chimique de l'eau ?",
+    "choix": [
+      "CO2",
+      "H2O",
+      "O2",
+      "NaCl"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q006",
+    "theme": "sciences",
+    "difficulte": "moyen",
+    "question": "Quelle particule porte une charge électrique négative ?",
+    "choix": [
+      "Le proton",
+      "Le neutron",
+      "L'électron",
+      "Le photon"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q007",
+    "theme": "sciences",
+    "difficulte": "moyen",
+    "question": "Quel métal est liquide à température ambiante ?",
+    "choix": [
+      "Le fer",
+      "L'aluminium",
+      "Le cuivre",
+      "Le mercure"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q008",
+    "theme": "sciences",
+    "difficulte": "moyen",
+    "question": "Quelle planète est célèbre pour ses anneaux visibles depuis la Terre ?",
+    "choix": [
+      "Saturne",
+      "Mars",
+      "Mercure",
+      "Vénus"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q009",
+    "theme": "sciences",
+    "difficulte": "moyen",
+    "question": "Quel est l'os le plus long du corps humain ?",
+    "choix": [
+      "Le tibia",
+      "L'humérus",
+      "Le fémur",
+      "Le radius"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q010",
+    "theme": "sciences",
+    "difficulte": "moyen",
+    "question": "Quel gaz compose environ 78 % de l'atmosphère terrestre ?",
+    "choix": [
+      "L'oxygène",
+      "L'argon",
+      "Le dioxyde de carbone",
+      "L'azote"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q011",
+    "theme": "sciences",
+    "difficulte": "difficile",
+    "question": "Quelle est la vitesse approximative de la lumière dans le vide ?",
+    "choix": [
+      "300 000 km/s",
+      "30 000 km/s",
+      "3 000 km/s",
+      "3 000 000 km/s"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q012",
+    "theme": "sciences",
+    "difficulte": "difficile",
+    "question": "Quel savant a formulé la loi de la gravitation universelle ?",
+    "choix": [
+      "Galilée",
+      "Isaac Newton",
+      "Albert Einstein",
+      "Johannes Kepler"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q013",
+    "theme": "sciences",
+    "difficulte": "difficile",
+    "question": "Quel est le numéro atomique du carbone ?",
+    "choix": [
+      "8",
+      "12",
+      "4",
+      "6"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q014",
+    "theme": "sciences",
+    "difficulte": "difficile",
+    "question": "Quelle structure de la cellule produit l'essentiel de son énergie sous forme d'ATP ?",
+    "choix": [
+      "La mitochondrie",
+      "Le noyau",
+      "Le ribosome",
+      "L'appareil de Golgi"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q015",
+    "theme": "sciences",
+    "difficulte": "difficile",
+    "question": "Quel est l'élément chimique le plus abondant dans l'univers ?",
+    "choix": [
+      "L'hélium",
+      "L'hydrogène",
+      "L'oxygène",
+      "Le carbone"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q016",
+    "theme": "histoire",
+    "difficulte": "facile",
+    "question": "En quelle année a eu lieu la prise de la Bastille ?",
+    "choix": [
+      "1492",
+      "1815",
+      "1789",
+      "1914"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q017",
+    "theme": "histoire",
+    "difficulte": "facile",
+    "question": "Quelle civilisation a construit les pyramides de Gizeh ?",
+    "choix": [
+      "Les Égyptiens",
+      "Les Romains",
+      "Les Grecs",
+      "Les Mayas"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q018",
+    "theme": "histoire",
+    "difficulte": "facile",
+    "question": "Qui fut le premier homme à marcher sur la Lune ?",
+    "choix": [
+      "Buzz Aldrin",
+      "Neil Armstrong",
+      "Youri Gagarine",
+      "John Glenn"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q019",
+    "theme": "histoire",
+    "difficulte": "facile",
+    "question": "Quel peuple a construit le Colisée, au cœur de Rome ?",
+    "choix": [
+      "Les Vikings",
+      "Les Gaulois",
+      "Les Romains",
+      "Les Aztèques"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q020",
+    "theme": "histoire",
+    "difficulte": "facile",
+    "question": "Quel conflit mondial s'est terminé en 1945 ?",
+    "choix": [
+      "La Première Guerre mondiale",
+      "La guerre de Cent Ans",
+      "La guerre de Sécession",
+      "La Seconde Guerre mondiale"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q021",
+    "theme": "histoire",
+    "difficulte": "moyen",
+    "question": "Qui fut le premier empereur des Français ?",
+    "choix": [
+      "Louis XIV",
+      "Napoléon Ier",
+      "Charlemagne",
+      "Louis-Philippe"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q022",
+    "theme": "histoire",
+    "difficulte": "moyen",
+    "question": "En quelle année Christophe Colomb a-t-il atteint l'Amérique ?",
+    "choix": [
+      "1453",
+      "1515",
+      "1492",
+      "1620"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q023",
+    "theme": "histoire",
+    "difficulte": "moyen",
+    "question": "Quel mur a été ouvert en novembre 1989 ?",
+    "choix": [
+      "La Grande Muraille",
+      "Le mur d'Hadrien",
+      "Le mur de l'Atlantique",
+      "Le mur de Berlin"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q024",
+    "theme": "histoire",
+    "difficulte": "moyen",
+    "question": "Quelle reine fut la dernière souveraine de l'Égypte ptolémaïque ?",
+    "choix": [
+      "Cléopâtre VII",
+      "Néfertiti",
+      "Hatchepsout",
+      "Nitocris"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q025",
+    "theme": "histoire",
+    "difficulte": "moyen",
+    "question": "Quel roi de France était surnommé le Roi-Soleil ?",
+    "choix": [
+      "Louis XVI",
+      "Henri IV",
+      "Louis XIV",
+      "François Ier"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q026",
+    "theme": "histoire",
+    "difficulte": "difficile",
+    "question": "En quelle année Constantinople est-elle tombée aux mains des Ottomans ?",
+    "choix": [
+      "1204",
+      "1517",
+      "1389",
+      "1453"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q027",
+    "theme": "histoire",
+    "difficulte": "difficile",
+    "question": "Quels traités de 1648 ont mis fin à la guerre de Trente Ans ?",
+    "choix": [
+      "Les traités de Westphalie",
+      "Le traité de Versailles",
+      "Le traité d'Utrecht",
+      "Le traité de Tordesillas"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q028",
+    "theme": "histoire",
+    "difficulte": "difficile",
+    "question": "Quelle bataille de 1815 a marqué la défaite définitive de Napoléon ?",
+    "choix": [
+      "Austerlitz",
+      "Waterloo",
+      "Trafalgar",
+      "Iéna"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q029",
+    "theme": "histoire",
+    "difficulte": "difficile",
+    "question": "Quel pharaon est lié au tombeau découvert presque intact en 1922 ?",
+    "choix": [
+      "Ramsès II",
+      "Khéops",
+      "Akhénaton",
+      "Toutânkhamon"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q030",
+    "theme": "histoire",
+    "difficulte": "difficile",
+    "question": "Quelle cité grecque antique était réputée pour sa société tournée vers la guerre ?",
+    "choix": [
+      "Sparte",
+      "Athènes",
+      "Corinthe",
+      "Thèbes"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q031",
+    "theme": "geographie",
+    "difficulte": "facile",
+    "question": "Quelle est la capitale de l'Espagne ?",
+    "choix": [
+      "Barcelone",
+      "Madrid",
+      "Séville",
+      "Lisbonne"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q032",
+    "theme": "geographie",
+    "difficulte": "facile",
+    "question": "Quel est le plus grand océan du monde ?",
+    "choix": [
+      "L'océan Atlantique",
+      "L'océan Indien",
+      "L'océan Pacifique",
+      "L'océan Arctique"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q033",
+    "theme": "geographie",
+    "difficulte": "facile",
+    "question": "Sur quel continent se trouve le Kenya ?",
+    "choix": [
+      "L'Afrique",
+      "L'Asie",
+      "L'Europe",
+      "L'Amérique du Sud"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q034",
+    "theme": "geographie",
+    "difficulte": "facile",
+    "question": "Quel fleuve traverse Paris ?",
+    "choix": [
+      "La Loire",
+      "La Seine",
+      "Le Rhône",
+      "La Garonne"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q035",
+    "theme": "geographie",
+    "difficulte": "facile",
+    "question": "Quel pays a la forme d'une botte ?",
+    "choix": [
+      "La Grèce",
+      "Le Portugal",
+      "L'Italie",
+      "La Norvège"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q036",
+    "theme": "geographie",
+    "difficulte": "moyen",
+    "question": "Quelle est la capitale du Canada ?",
+    "choix": [
+      "Toronto",
+      "Montréal",
+      "Vancouver",
+      "Ottawa"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q037",
+    "theme": "geographie",
+    "difficulte": "moyen",
+    "question": "Quel est le plus long fleuve d'Europe ?",
+    "choix": [
+      "Le Danube",
+      "La Volga",
+      "Le Rhin",
+      "La Loire"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q038",
+    "theme": "geographie",
+    "difficulte": "moyen",
+    "question": "Quel est le pays le plus étendu du monde ?",
+    "choix": [
+      "Le Canada",
+      "La Chine",
+      "La Russie",
+      "Les États-Unis"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q039",
+    "theme": "geographie",
+    "difficulte": "moyen",
+    "question": "Quelle chaîne de montagnes sépare traditionnellement l'Europe de l'Asie ?",
+    "choix": [
+      "Les Alpes",
+      "L'Atlas",
+      "Les Pyrénées",
+      "L'Oural"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q040",
+    "theme": "geographie",
+    "difficulte": "moyen",
+    "question": "Quelle est la capitale de l'Australie ?",
+    "choix": [
+      "Canberra",
+      "Sydney",
+      "Melbourne",
+      "Perth"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q041",
+    "theme": "geographie",
+    "difficulte": "difficile",
+    "question": "Quel est le point culminant de l'Afrique ?",
+    "choix": [
+      "Le mont Kenya",
+      "Le mont Toubkal",
+      "Le Kilimandjaro",
+      "Le mont Cameroun"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q042",
+    "theme": "geographie",
+    "difficulte": "difficile",
+    "question": "Quelle est la plus grande mer fermée du monde ?",
+    "choix": [
+      "La mer Noire",
+      "La mer d'Aral",
+      "La mer Baltique",
+      "La mer Caspienne"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q043",
+    "theme": "geographie",
+    "difficulte": "difficile",
+    "question": "Quelle est la capitale du Kazakhstan ?",
+    "choix": [
+      "Astana",
+      "Almaty",
+      "Tachkent",
+      "Bichkek"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q044",
+    "theme": "geographie",
+    "difficulte": "difficile",
+    "question": "Quel détroit sépare l'Espagne du Maroc ?",
+    "choix": [
+      "Le Bosphore",
+      "Le détroit de Gibraltar",
+      "Le détroit de Messine",
+      "Le détroit de Magellan"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q045",
+    "theme": "geographie",
+    "difficulte": "difficile",
+    "question": "Quel pays a pour capitale Oulan-Bator ?",
+    "choix": [
+      "Le Kirghizistan",
+      "Le Népal",
+      "Le Bhoutan",
+      "La Mongolie"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q046",
+    "theme": "langue",
+    "difficulte": "facile",
+    "question": "Combien de lettres compte l'alphabet latin de base ?",
+    "choix": [
+      "26",
+      "24",
+      "28",
+      "32"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q047",
+    "theme": "langue",
+    "difficulte": "facile",
+    "question": "Quelle langue compte le plus de locuteurs natifs dans le monde ?",
+    "choix": [
+      "L'anglais",
+      "Le mandarin",
+      "L'espagnol",
+      "L'hindi"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q048",
+    "theme": "langue",
+    "difficulte": "facile",
+    "question": "Quelle langue officielle est parlée au Brésil ?",
+    "choix": [
+      "L'espagnol",
+      "Le français",
+      "Le portugais",
+      "L'italien"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q049",
+    "theme": "langue",
+    "difficulte": "facile",
+    "question": "Comment s'appelle l'écriture en relief inventée au XIXe siècle pour les personnes aveugles ?",
+    "choix": [
+      "Le braille",
+      "Le morse",
+      "L'espéranto",
+      "Le cunéiforme"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q050",
+    "theme": "langue",
+    "difficulte": "facile",
+    "question": "Comment appelle-t-on un mot de sens contraire à un autre ?",
+    "choix": [
+      "Un synonyme",
+      "Un antonyme",
+      "Un homonyme",
+      "Un acronyme"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q051",
+    "theme": "langue",
+    "difficulte": "moyen",
+    "question": "Quelle langue construite a été imaginée par Zamenhof ?",
+    "choix": [
+      "Le klingon",
+      "Le latin",
+      "L'espéranto",
+      "Le volapük"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q052",
+    "theme": "langue",
+    "difficulte": "moyen",
+    "question": "Quelle langue s'écrit avec l'alphabet cyrillique ?",
+    "choix": [
+      "Le grec",
+      "L'arabe",
+      "Le coréen",
+      "Le russe"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q053",
+    "theme": "langue",
+    "difficulte": "moyen",
+    "question": "Comment appelle-t-on un mot formé avec les initiales de plusieurs mots et qui se prononce d'une traite, comme « radar » ou « laser » ?",
+    "choix": [
+      "Un anagramme",
+      "Un acronyme",
+      "Un palindrome",
+      "Un néologisme"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q054",
+    "theme": "langue",
+    "difficulte": "moyen",
+    "question": "Lequel de ces mots se lit de la même façon dans les deux sens ?",
+    "choix": [
+      "Jardin",
+      "Fenêtre",
+      "Radar",
+      "Planète"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q055",
+    "theme": "langue",
+    "difficulte": "moyen",
+    "question": "De quelle langue vient le mot « kimono » ?",
+    "choix": [
+      "Le chinois",
+      "Le coréen",
+      "Le thaï",
+      "Le japonais"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q056",
+    "theme": "langue",
+    "difficulte": "difficile",
+    "question": "Quelle famille de langues réunit le français, l'espagnol et l'italien ?",
+    "choix": [
+      "Les langues romanes",
+      "Les langues germaniques",
+      "Les langues slaves",
+      "Les langues celtiques"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q057",
+    "theme": "langue",
+    "difficulte": "difficile",
+    "question": "Quelle langue utilise des caractères appelés kanji, en plus des kana ?",
+    "choix": [
+      "Le coréen",
+      "Le vietnamien",
+      "Le japonais",
+      "Le thaï"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q058",
+    "theme": "langue",
+    "difficulte": "difficile",
+    "question": "Quelle figure de style consiste à exagérer fortement ce que l'on dit ?",
+    "choix": [
+      "La litote",
+      "La métaphore",
+      "L'antithèse",
+      "L'hyperbole"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q059",
+    "theme": "langue",
+    "difficulte": "difficile",
+    "question": "De quelle langue vient le mot « algèbre » ?",
+    "choix": [
+      "L'arabe",
+      "Le grec",
+      "Le latin",
+      "Le persan"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q060",
+    "theme": "langue",
+    "difficulte": "difficile",
+    "question": "Combien de lettres compte l'alphabet grec moderne ?",
+    "choix": [
+      "22",
+      "24",
+      "26",
+      "28"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q061",
+    "theme": "nature",
+    "difficulte": "facile",
+    "question": "Quel est le plus grand animal terrestre ?",
+    "choix": [
+      "La girafe",
+      "Le rhinocéros",
+      "L'hippopotame",
+      "L'éléphant d'Afrique"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q062",
+    "theme": "nature",
+    "difficulte": "facile",
+    "question": "Combien de pattes a une araignée ?",
+    "choix": [
+      "8",
+      "6",
+      "10",
+      "4"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q063",
+    "theme": "nature",
+    "difficulte": "facile",
+    "question": "Quelle couleur donne la chlorophylle aux feuilles ?",
+    "choix": [
+      "Le rouge",
+      "Le vert",
+      "Le jaune",
+      "Le bleu"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q064",
+    "theme": "nature",
+    "difficulte": "facile",
+    "question": "Quel insecte fabrique le miel ?",
+    "choix": [
+      "La guêpe",
+      "Le frelon",
+      "L'abeille",
+      "La fourmi"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q065",
+    "theme": "nature",
+    "difficulte": "facile",
+    "question": "Quel animal terrestre est le plus rapide sur de courtes distances ?",
+    "choix": [
+      "Le guépard",
+      "Le lion",
+      "Le cheval",
+      "L'antilope"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q066",
+    "theme": "nature",
+    "difficulte": "moyen",
+    "question": "Quel mammifère est capable de voler activement ?",
+    "choix": [
+      "L'écureuil volant",
+      "La chauve-souris",
+      "Le pingouin",
+      "L'autruche"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q067",
+    "theme": "nature",
+    "difficulte": "moyen",
+    "question": "Comment appelle-t-on un animal qui ne mange que des végétaux ?",
+    "choix": [
+      "Un carnivore",
+      "Un omnivore",
+      "Un herbivore",
+      "Un insectivore"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q068",
+    "theme": "nature",
+    "difficulte": "moyen",
+    "question": "Quel arbre produit des glands ?",
+    "choix": [
+      "Le hêtre",
+      "Le pin",
+      "Le bouleau",
+      "Le chêne"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q069",
+    "theme": "nature",
+    "difficulte": "moyen",
+    "question": "Quel est le plus grand animal connu ayant jamais vécu ?",
+    "choix": [
+      "L'éléphant",
+      "La baleine bleue",
+      "Le requin-baleine",
+      "Le cachalot"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q070",
+    "theme": "nature",
+    "difficulte": "moyen",
+    "question": "Quel oiseau qui ne vole pas vit dans l'hémisphère sud et nage très bien ?",
+    "choix": [
+      "Le pélican",
+      "Le héron",
+      "Le manchot",
+      "Le toucan"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q071",
+    "theme": "nature",
+    "difficulte": "difficile",
+    "question": "Lequel de ces mammifères pond des œufs ?",
+    "choix": [
+      "Le koala",
+      "Le kangourou",
+      "Le wombat",
+      "L'ornithorynque"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q072",
+    "theme": "nature",
+    "difficulte": "difficile",
+    "question": "Comment appelle-t-on la transformation d'une chenille en papillon ?",
+    "choix": [
+      "La métamorphose",
+      "La mue",
+      "La germination",
+      "La pollinisation"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q073",
+    "theme": "nature",
+    "difficulte": "difficile",
+    "question": "Quelle est la plus grande forêt tropicale du monde ?",
+    "choix": [
+      "Le bassin du Congo",
+      "La forêt de Daintree",
+      "L'Amazonie",
+      "Bornéo"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q074",
+    "theme": "nature",
+    "difficulte": "difficile",
+    "question": "Quel animal marin possède trois cœurs ?",
+    "choix": [
+      "Le dauphin",
+      "La tortue de mer",
+      "Le requin",
+      "La pieuvre"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q075",
+    "theme": "nature",
+    "difficulte": "difficile",
+    "question": "Comment s'appelle le plus grand récif corallien du monde ?",
+    "choix": [
+      "La Grande Barrière de corail",
+      "Le récif de Belize",
+      "Le récif de la mer Rouge",
+      "L'atoll de Bikini"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q076",
+    "theme": "arts",
+    "difficulte": "facile",
+    "question": "Qui a peint la Joconde ?",
+    "choix": [
+      "Michel-Ange",
+      "Léonard de Vinci",
+      "Raphaël",
+      "Botticelli"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q077",
+    "theme": "arts",
+    "difficulte": "facile",
+    "question": "Combien de cordes a une guitare classique ?",
+    "choix": [
+      "4",
+      "5",
+      "8",
+      "6"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q078",
+    "theme": "arts",
+    "difficulte": "facile",
+    "question": "Dans quel musée parisien peut-on voir la Joconde ?",
+    "choix": [
+      "Le Louvre",
+      "Le musée d'Orsay",
+      "Le Centre Pompidou",
+      "Le Grand Palais"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q079",
+    "theme": "arts",
+    "difficulte": "facile",
+    "question": "Quelles sont les trois couleurs primaires de la peinture traditionnelle ?",
+    "choix": [
+      "Vert, orange, violet",
+      "Rouge, jaune, bleu",
+      "Noir, blanc, gris",
+      "Rouge, vert, blanc"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q080",
+    "theme": "arts",
+    "difficulte": "facile",
+    "question": "Quel instrument à clavier possède des touches blanches et noires ?",
+    "choix": [
+      "Le violon",
+      "La flûte",
+      "Le piano",
+      "La trompette"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q081",
+    "theme": "arts",
+    "difficulte": "moyen",
+    "question": "Qui a composé « Les Quatre Saisons » ?",
+    "choix": [
+      "Antonio Vivaldi",
+      "Jean-Sébastien Bach",
+      "Wolfgang Amadeus Mozart",
+      "Ludwig van Beethoven"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q082",
+    "theme": "arts",
+    "difficulte": "moyen",
+    "question": "Quel peintre a réalisé « La Nuit étoilée » ?",
+    "choix": [
+      "Claude Monet",
+      "Vincent van Gogh",
+      "Paul Cézanne",
+      "Edvard Munch"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q083",
+    "theme": "arts",
+    "difficulte": "moyen",
+    "question": "Qui a écrit « Les Misérables » ?",
+    "choix": [
+      "Émile Zola",
+      "Alexandre Dumas",
+      "Victor Hugo",
+      "Gustave Flaubert"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q084",
+    "theme": "arts",
+    "difficulte": "moyen",
+    "question": "Quel mouvement artistique est associé à Claude Monet ?",
+    "choix": [
+      "Le cubisme",
+      "Le surréalisme",
+      "Le baroque",
+      "L'impressionnisme"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q085",
+    "theme": "arts",
+    "difficulte": "moyen",
+    "question": "Qui a écrit la pièce « Roméo et Juliette » ?",
+    "choix": [
+      "Molière",
+      "William Shakespeare",
+      "Goethe",
+      "Dante"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q086",
+    "theme": "arts",
+    "difficulte": "difficile",
+    "question": "Quel peintre a fondé le cubisme avec Georges Braque ?",
+    "choix": [
+      "Salvador Dalí",
+      "Henri Matisse",
+      "Pablo Picasso",
+      "Marc Chagall"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q087",
+    "theme": "arts",
+    "difficulte": "difficile",
+    "question": "Quel artiste a peint le plafond de la chapelle Sixtine ?",
+    "choix": [
+      "Raphaël",
+      "Le Caravage",
+      "Titien",
+      "Michel-Ange"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q088",
+    "theme": "arts",
+    "difficulte": "difficile",
+    "question": "Combien de symphonies Beethoven a-t-il composées ?",
+    "choix": [
+      "9",
+      "5",
+      "12",
+      "41"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q089",
+    "theme": "arts",
+    "difficulte": "difficile",
+    "question": "Qui a écrit « Don Quichotte » ?",
+    "choix": [
+      "Lope de Vega",
+      "Federico García Lorca",
+      "Miguel de Cervantes",
+      "Gabriel García Márquez"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q090",
+    "theme": "arts",
+    "difficulte": "difficile",
+    "question": "Quel architecte a conçu la Sagrada Família ?",
+    "choix": [
+      "Le Corbusier",
+      "Gustave Eiffel",
+      "Oscar Niemeyer",
+      "Antoni Gaudí"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q091",
+    "theme": "sport",
+    "difficulte": "facile",
+    "question": "Combien de joueurs une équipe de football aligne-t-elle sur le terrain ?",
+    "choix": [
+      "11",
+      "9",
+      "10",
+      "15"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q092",
+    "theme": "sport",
+    "difficulte": "facile",
+    "question": "Dans quel sport marque-t-on des paniers ?",
+    "choix": [
+      "Le handball",
+      "Le basket-ball",
+      "Le volley-ball",
+      "Le rugby"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q093",
+    "theme": "sport",
+    "difficulte": "facile",
+    "question": "Combien d'anneaux compte le symbole olympique ?",
+    "choix": [
+      "4",
+      "6",
+      "7",
+      "5"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q094",
+    "theme": "sport",
+    "difficulte": "facile",
+    "question": "Quel sport se joue à Roland-Garros ?",
+    "choix": [
+      "Le tennis",
+      "Le golf",
+      "Le cyclisme",
+      "Le football"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q095",
+    "theme": "sport",
+    "difficulte": "facile",
+    "question": "Quelle est la distance d'un marathon, à peu près ?",
+    "choix": [
+      "21 km",
+      "42 km",
+      "10 km",
+      "100 km"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q096",
+    "theme": "sport",
+    "difficulte": "moyen",
+    "question": "Quel pays a remporté la Coupe du monde de football en 1998 ?",
+    "choix": [
+      "Le Brésil",
+      "L'Italie",
+      "La France",
+      "L'Allemagne"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q097",
+    "theme": "sport",
+    "difficulte": "moyen",
+    "question": "Combien de joueurs une équipe de volley-ball a-t-elle sur le terrain ?",
+    "choix": [
+      "6",
+      "5",
+      "7",
+      "9"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q098",
+    "theme": "sport",
+    "difficulte": "moyen",
+    "question": "Dans quel sport marque-t-on des essais ?",
+    "choix": [
+      "Le football",
+      "Le rugby",
+      "Le basket-ball",
+      "Le hockey"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q099",
+    "theme": "sport",
+    "difficulte": "moyen",
+    "question": "Quelle ville a accueilli les Jeux olympiques d'été de 2024 ?",
+    "choix": [
+      "Los Angeles",
+      "Tokyo",
+      "Paris",
+      "Londres"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q100",
+    "theme": "sport",
+    "difficulte": "moyen",
+    "question": "Quel sport se pratique sur la glace avec une crosse et un palet ?",
+    "choix": [
+      "Le curling",
+      "Le patinage artistique",
+      "Le bobsleigh",
+      "Le hockey sur glace"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q101",
+    "theme": "sport",
+    "difficulte": "difficile",
+    "question": "Dans un match de tennis masculin en Grand Chelem, combien de sets faut-il gagner pour l'emporter ?",
+    "choix": [
+      "2",
+      "3",
+      "4",
+      "5"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q102",
+    "theme": "sport",
+    "difficulte": "difficile",
+    "question": "Quel pays a organisé la première Coupe du monde de football, en 1930 ?",
+    "choix": [
+      "Le Brésil",
+      "L'Italie",
+      "L'Uruguay",
+      "La France"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q103",
+    "theme": "sport",
+    "difficulte": "difficile",
+    "question": "Quel est le nombre maximal de points d'une partie de bowling ?",
+    "choix": [
+      "200",
+      "250",
+      "500",
+      "300"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q104",
+    "theme": "sport",
+    "difficulte": "difficile",
+    "question": "Quel pays compte le plus de titres de champion du monde de football masculin ?",
+    "choix": [
+      "Le Brésil",
+      "L'Allemagne",
+      "L'Italie",
+      "L'Argentine"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q105",
+    "theme": "sport",
+    "difficulte": "difficile",
+    "question": "Dans quel sport dispute-t-on la Ryder Cup ?",
+    "choix": [
+      "Le tennis",
+      "La voile",
+      "Le golf",
+      "Le polo"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q106",
+    "theme": "technologie",
+    "difficulte": "facile",
+    "question": "Quel périphérique sert à déplacer le pointeur et à cliquer à l'écran ?",
+    "choix": [
+      "Le clavier",
+      "L'imprimante",
+      "Le casque",
+      "La souris"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q107",
+    "theme": "technologie",
+    "difficulte": "facile",
+    "question": "Quel est le système d'exploitation mobile développé par Google ?",
+    "choix": [
+      "Android",
+      "iOS",
+      "Windows Phone",
+      "Symbian"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q108",
+    "theme": "technologie",
+    "difficulte": "facile",
+    "question": "Que désigne le « cloud » en informatique ?",
+    "choix": [
+      "Un type d'écran",
+      "Des serveurs distants accessibles par Internet",
+      "Une batterie externe",
+      "Un câble réseau"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q109",
+    "theme": "technologie",
+    "difficulte": "facile",
+    "question": "Quel langage sert à structurer le contenu d'une page web ?",
+    "choix": [
+      "Python",
+      "SQL",
+      "C",
+      "HTML"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q110",
+    "theme": "technologie",
+    "difficulte": "facile",
+    "question": "Combien de bits y a-t-il dans un octet ?",
+    "choix": [
+      "8",
+      "4",
+      "16",
+      "10"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q111",
+    "theme": "technologie",
+    "difficulte": "moyen",
+    "question": "Quel langage sert à mettre en forme l'apparence d'une page web ?",
+    "choix": [
+      "HTML",
+      "CSS",
+      "Java",
+      "PHP"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q112",
+    "theme": "technologie",
+    "difficulte": "moyen",
+    "question": "À quoi sert principalement la mémoire vive (RAM) ?",
+    "choix": [
+      "Conserver les fichiers définitivement",
+      "Refroidir le processeur",
+      "Stocker temporairement les données en cours d'utilisation",
+      "Afficher l'image à l'écran"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q113",
+    "theme": "technologie",
+    "difficulte": "moyen",
+    "question": "Quel protocole chiffre les échanges entre un navigateur et un site web ?",
+    "choix": [
+      "HTTPS",
+      "FTP",
+      "SMTP",
+      "DNS"
+    ],
+    "reponse": 0
+  },
+  {
+    "id": "q114",
+    "theme": "technologie",
+    "difficulte": "moyen",
+    "question": "Quel outil de gestion de versions a été créé par Linus Torvalds ?",
+    "choix": [
+      "SVN",
+      "Git",
+      "Mercurial",
+      "CVS"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q115",
+    "theme": "technologie",
+    "difficulte": "moyen",
+    "question": "Que signifie « IP » dans « adresse IP » ?",
+    "choix": [
+      "Internal Program",
+      "Input Processor",
+      "Internet Protocol",
+      "Instant Page"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q116",
+    "theme": "technologie",
+    "difficulte": "difficile",
+    "question": "Quel nombre décimal correspond à 1010 en binaire ?",
+    "choix": [
+      "12",
+      "5",
+      "20",
+      "10"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q117",
+    "theme": "technologie",
+    "difficulte": "difficile",
+    "question": "Lequel de ces algorithmes de tri a une complexité moyenne en O(n log n) ?",
+    "choix": [
+      "Le tri à bulles",
+      "Le tri fusion",
+      "Le tri par insertion",
+      "Le tri par sélection"
+    ],
+    "reponse": 1
+  },
+  {
+    "id": "q118",
+    "theme": "technologie",
+    "difficulte": "difficile",
+    "question": "Quel port est utilisé par défaut par HTTPS ?",
+    "choix": [
+      "80",
+      "22",
+      "443",
+      "8080"
+    ],
+    "reponse": 2
+  },
+  {
+    "id": "q119",
+    "theme": "technologie",
+    "difficulte": "difficile",
+    "question": "Qui est souvent considérée comme l'autrice du premier algorithme destiné à une machine ?",
+    "choix": [
+      "Grace Hopper",
+      "Margaret Hamilton",
+      "Hedy Lamarr",
+      "Ada Lovelace"
+    ],
+    "reponse": 3
+  },
+  {
+    "id": "q120",
+    "theme": "technologie",
+    "difficulte": "difficile",
+    "question": "Comment s'appelle l'attaque qui glisse du code dans une requête adressée à une base de données ?",
+    "choix": [
+      "L'injection SQL",
+      "Le déni de service",
+      "L'hameçonnage",
+      "Le bourrage d'identifiants"
+    ],
+    "reponse": 0
+  }
+]

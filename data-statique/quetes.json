@@ -1,0 +1,247 @@
+{
+  "jour": [
+    {
+      "id": "j_daily",
+      "evenement": "daily",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Récupérer le daily du jour",
+        "en": "Claim today's daily"
+      }
+    },
+    {
+      "id": "j_travail_1",
+      "evenement": "travail",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Travailler une fois",
+        "en": "Work once"
+      }
+    },
+    {
+      "id": "j_travail_3",
+      "evenement": "travail",
+      "objectif": 3,
+      "recompense": 60,
+      "nom": {
+        "fr": "Travailler 3 fois",
+        "en": "Work 3 times"
+      }
+    },
+    {
+      "id": "j_jouer_1",
+      "evenement": "partie:jouee",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Jouer une partie",
+        "en": "Play a game"
+      }
+    },
+    {
+      "id": "j_jouer_3",
+      "evenement": "partie:jouee",
+      "objectif": 3,
+      "recompense": 60,
+      "nom": {
+        "fr": "Jouer 3 parties",
+        "en": "Play 3 games"
+      }
+    },
+    {
+      "id": "j_jouer_5",
+      "evenement": "partie:jouee",
+      "objectif": 5,
+      "recompense": 80,
+      "nom": {
+        "fr": "Jouer 5 parties",
+        "en": "Play 5 games"
+      }
+    },
+    {
+      "id": "j_gagner_1",
+      "evenement": "partie:gagnee",
+      "objectif": 1,
+      "recompense": 50,
+      "nom": {
+        "fr": "Gagner une partie",
+        "en": "Win a game"
+      }
+    },
+    {
+      "id": "j_gagner_2",
+      "evenement": "partie:gagnee",
+      "objectif": 2,
+      "recompense": 70,
+      "nom": {
+        "fr": "Gagner 2 parties",
+        "en": "Win 2 games"
+      }
+    },
+    {
+      "id": "j_quiz_3",
+      "evenement": "quiz:bonne_reponse",
+      "objectif": 3,
+      "recompense": 50,
+      "nom": {
+        "fr": "Répondre juste à 3 questions du quiz",
+        "en": "Answer 3 quiz questions correctly"
+      }
+    },
+    {
+      "id": "j_quiz_5",
+      "evenement": "quiz:bonne_reponse",
+      "objectif": 5,
+      "recompense": 70,
+      "nom": {
+        "fr": "Répondre juste à 5 questions du quiz",
+        "en": "Answer 5 quiz questions correctly"
+      }
+    },
+    {
+      "id": "j_rep_donner",
+      "evenement": "rep:donnee",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Donner un point de réputation",
+        "en": "Give a reputation point"
+      }
+    },
+    {
+      "id": "j_rep_recevoir",
+      "evenement": "rep:recue",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Recevoir un point de réputation",
+        "en": "Receive a reputation point"
+      }
+    },
+    {
+      "id": "j_mot",
+      "evenement": "mot:trouve",
+      "objectif": 1,
+      "recompense": 50,
+      "nom": {
+        "fr": "Trouver le mot du jour",
+        "en": "Find the word of the day"
+      }
+    },
+    {
+      "id": "j_enigme",
+      "evenement": "enigme:trouvee",
+      "objectif": 1,
+      "recompense": 50,
+      "nom": {
+        "fr": "Résoudre l'énigme du jour",
+        "en": "Solve today's riddle"
+      }
+    },
+    {
+      "id": "j_drop",
+      "evenement": "drop:ramasse",
+      "objectif": 1,
+      "recompense": 50,
+      "nom": {
+        "fr": "Ramasser un coffre dans le chat",
+        "en": "Pick up a chest in the chat"
+      }
+    },
+    {
+      "id": "j_achat",
+      "evenement": "achat",
+      "objectif": 1,
+      "recompense": 40,
+      "nom": {
+        "fr": "Acheter un article à la boutique",
+        "en": "Buy an item from the shop"
+      }
+    },
+    {
+      "id": "j_paiement",
+      "evenement": "paiement",
+      "objectif": 1,
+      "montantMin": 50,
+      "recompense": 40,
+      "nom": {
+        "fr": "Envoyer au moins 50 de monnaie à un membre",
+        "en": "Send at least 50 currency to a member"
+      }
+    }
+  ],
+  "semaine": [
+    {
+      "id": "s_daily_5",
+      "evenement": "daily",
+      "objectif": 5,
+      "recompense": 600,
+      "nom": {
+        "fr": "Récupérer le daily 5 jours cette semaine",
+        "en": "Claim the daily 5 days this week"
+      }
+    },
+    {
+      "id": "s_travail_20",
+      "evenement": "travail",
+      "objectif": 20,
+      "recompense": 600,
+      "nom": {
+        "fr": "Travailler 20 fois cette semaine",
+        "en": "Work 20 times this week"
+      }
+    },
+    {
+      "id": "s_gagner_10",
+      "evenement": "partie:gagnee",
+      "objectif": 10,
+      "recompense": 600,
+      "nom": {
+        "fr": "Gagner 10 parties cette semaine",
+        "en": "Win 10 games this week"
+      }
+    },
+    {
+      "id": "s_jouer_20",
+      "evenement": "partie:jouee",
+      "objectif": 20,
+      "recompense": 600,
+      "nom": {
+        "fr": "Jouer 20 parties cette semaine",
+        "en": "Play 20 games this week"
+      }
+    },
+    {
+      "id": "s_quiz_25",
+      "evenement": "quiz:bonne_reponse",
+      "objectif": 25,
+      "recompense": 600,
+      "nom": {
+        "fr": "Répondre juste à 25 questions du quiz",
+        "en": "Answer 25 quiz questions correctly"
+      }
+    },
+    {
+      "id": "s_drop_3",
+      "evenement": "drop:ramasse",
+      "objectif": 3,
+      "recompense": 600,
+      "nom": {
+        "fr": "Ramasser 3 coffres cette semaine",
+        "en": "Pick up 3 chests this week"
+      }
+    },
+    {
+      "id": "s_rep_5",
+      "evenement": "rep:donnee",
+      "objectif": 5,
+      "recompense": 600,
+      "nom": {
+        "fr": "Donner 5 points de réputation cette semaine",
+        "en": "Give 5 reputation points this week"
+      }
+    }
+  ]
+}

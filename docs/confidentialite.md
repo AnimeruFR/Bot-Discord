@@ -16,7 +16,9 @@ Le bot est géré par [NOM OU PSEUDO DE L'OPÉRATEUR], un particulier (étudiant
 
 ## 2. Ce que fait le bot (et ne fait pas)
 
-[NOM DU BOT] utilise uniquement des slash commandes. Il **ne lit pas** le contenu des messages en continu.
+[NOM DU BOT] fonctionne avec des slash commandes et des boutons. Il **ne lit pas** le contenu des messages : il n'a pas l'intent « Message Content ».
+
+Il a l'intent **Guild Messages** : Discord lui signale chaque message envoyé sur le serveur (auteur, salon, date), ce qui sert à compter l'XP et à faire apparaître les coffres (drops). Le texte du message n'est ni lu ni enregistré ; seuls le total d'XP, le niveau et la date du dernier gain sont gardés.
 
 ## 3. Données stockées
 
@@ -46,6 +48,25 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 | Trace des tickets | ID du salon et de l'auteur de l'action (transfert, alerte de délai), date | Suivi des tickets. Effacée avec le suivi du ticket |
 | Réglages de modération | Raisons prédéfinies, réponses prédéfinies des tickets, salons de logs par famille, filtre des comptes récents, anti-raid, vérification, mots interdits dans les pseudos, rôle de quarantaine, domaines autorisés | Faire fonctionner le bot |
 
+**Données de jeu (économie, niveaux, jeux).** La monnaie du bot n'a aucune valeur réelle et ne s'achète pas.
+
+| Donnée | Contenu | Pourquoi et combien de temps |
+|---|---|---|
+| Portefeuille | ID du serveur et du membre, solde, série de daily, date du dernier daily, gel éventuel par le staff, date de création | Jeux et boutique du serveur. Effacé avec les autres données de jeu après 1 an sans activité |
+| Journal du portefeuille | Chaque gain ou dépense : montant, solde après, origine (daily, jeu, achat…), ID de l'autre membre pour un paiement, date | Vérifier les soldes, enquête du staff en cas de triche. 1 an sans activité |
+| Compteurs du jour | Gains, envois, réceptions et travaux du jour ; limites des jeux du jour | Plafonds quotidiens (anti-abus). **2 jours**. Les limites des jeux du jour (duels, pendus, activité écrite) sont une seule ligne par compteur, réécrite chaque jour, effacée après 1 an d'inactivité |
+| XP et niveau | XP, niveau, XP du jour, date du dernier gain (jamais le texte des messages) | Niveaux et rôles de palier. 1 an sans activité |
+| Métier, inventaire | Métier, niveau de métier, date du dernier travail ; objets achetés | Jeux et boutique. 1 an sans activité |
+| Succès et statistiques | Succès obtenus (date, récompense versée), compteurs (parties gagnées, daily…) | Succès et classements. 1 an sans activité |
+| Quêtes | Quêtes du jour et de la semaine, progression, récompense réclamée | Quêtes. **30 jours** |
+| Profil, réputation | Bio, thème, badge mis en avant ; total de réputation reçue ; qui a donné une réputation à qui aujourd'hui | Profil (`/profil`). Réputation donnée : **2 jours** (une par jour) ; le reste : 1 an sans activité |
+| Anniversaire | Jour et mois (jamais l'année), date du dernier changement ; rôle du jour donné par le bot | Souhaiter l'anniversaire. Rôle : retiré le lendemain. Quand la date est retirée ou effacée, seule la date du dernier changement est gardée **30 jours** (délai entre deux changements) |
+| Parties | Jeu, joueurs, état de la partie, dates | Parties en cours (duels, pendu, quiz). Effacées **30 jours** après la fin. L'état d'une partie en cours (mot à deviner, ordre des réponses) n'est jamais exporté avant la fin |
+| Jeux du jour | Essais du mot du jour, de l'énigme et du quiz du jour | Une partie par jour. **30 jours** |
+| Traces anti-farm | Paires de membres déjà comptées aujourd'hui ou cette semaine (paiements, réputation, victoires, duels) | Empêcher deux comptes de se renvoyer des gains. **2 jours** (8 jours pour une semaine). Chaque trace est rangée sous le membre qui a joué et nomme son partenaire : si le partenaire efface ses données, la trace est gardée jusqu'à ce délai (l'effacer permettrait de refaire gagner le même partenaire) |
+
+Membre sans activité depuis **1 an** sur un serveur : ses données de jeu sont effacées automatiquement. Le bot ne sait pas qui a quitté le serveur, la règle est donc la date de dernière activité connue (création du portefeuille, daily, mouvement du portefeuille, gain d'XP, succès, travail, jeu du jour). Exceptions : un compte gelé par le staff est gardé tant que le gel dure ; un membre sans aucune date connue (par exemple un anniversaire seul) garde ses données jusqu'à ce qu'il les efface ou que le bot quitte le serveur.
+
 Le bot ne collecte rien d'autre.
 
 Les arrivées et départs de membres sont reçus par le bot (pour les messages de bienvenue et d'au revoir), mais rien n'en est enregistré.
@@ -59,7 +80,7 @@ Les arrivées et départs de membres sont reçus par le bot (pour les messages d
 
 ## 5. Base légale
 
-Intérêt légitime : assurer la modération demandée par les administrateurs du serveur (article 6.1.f du RGPD).
+Intérêt légitime (article 6.1.f du RGPD) : assurer la modération demandée par les administrateurs du serveur, faire fonctionner les jeux et l'économie qu'ils ont activés, et prévenir la triche (plafonds du jour, traces anti-farm, empreinte gardée après un effacement, voir plus bas).
 
 ## 6. Partage des données
 
@@ -70,7 +91,7 @@ Je ne vends rien, je ne fais pas de publicité et je ne partage pas vos données
 
 ## 7. Durée de conservation
 
-- Tant que le bot est sur un serveur, ses données sont conservées, sauf l'historique des sanctions et les avertissements, effacés automatiquement au bout de **2 ans**.
+- Tant que le bot est sur un serveur, ses données sont conservées, sauf l'historique des sanctions et les avertissements, effacés automatiquement au bout de **2 ans**, et les données de jeu, qui ont leurs propres durées (tableau de la partie 3, au plus 1 an sans activité).
 - Quand le bot quitte un serveur (expulsé ou retiré), toutes les données de ce serveur sont **supprimées automatiquement 30 jours plus tard**. Ce délai permet de réinviter le bot par erreur sans rien perdre.
 - Un administrateur peut tout supprimer **tout de suite** avec la commande `/privacy supprimer:True` (une confirmation par bouton est demandée).
 - Sauvegardes : une copie de la base est faite chaque jour et seules les plus récentes sont gardées (7 par défaut), les plus anciennes étant remplacées. Une donnée effacée disparaît donc aussi des sauvegardes, en général sous 7 jours. Ce délai peut être un peu plus long si le bot est arrêté ou si une sauvegarde échoue, ainsi que pour les éventuelles copies de sauvegarde conservées hors du serveur. Ces copies sont soumises aux mêmes règles et protégées de la même façon.
@@ -98,18 +119,25 @@ Sans m'écrire, chaque membre peut agir seul, **serveur par serveur**, avec la c
 
 | Traitement | Données concernées | Détail |
 |---|---|---|
-| **Effacer** | Participations aux giveaways | La ligne est supprimée |
-| **Anonymiser** | Auteur et membre du staff d'un ticket, organisateur et gagnants d'un giveaway, auteur d'une annonce programmée, modérateur d'un avertissement ou d'une sanction | Votre identifiant est remplacé par `0`, le reste de la ligne est gardé car il sert à d'autres membres ou au staff |
+| **Effacer** | Participations aux giveaways ; journal du portefeuille, inventaire, profil et bio, anniversaire, réputation reçue, statistiques de jeu | La ligne est supprimée |
+| **Anonymiser** | Auteur et membre du staff d'un ticket, organisateur et gagnants d'un giveaway, auteur d'une annonce programmée, modérateur d'un avertissement ou d'une sanction, joueur d'une partie, autre membre d'un paiement, membre à qui vous avez donné une réputation | Votre identifiant est remplacé par `0`, le reste de la ligne est gardé car il sert à d'autres membres ou au staff |
+| **Remettre à zéro** | Solde (0), série de daily (0), XP (ramenée au seuil de votre niveau), niveau de métier (1) | La ligne reste, sans valeur de jeu |
+| **Conserver** (empreinte anti-abus) | Gel du compte, date du dernier daily, succès déjà obtenus, niveau atteint, délai entre deux travaux | **1 an** après votre dernière activité. Sans cela, effacer ses données permettrait de rejouer des récompenses déjà versées ou de lever un gel |
+| **Conserver** (empreinte anti-abus) | Quêtes de la période en cours et de la précédente, jeux du jour et de la veille, compteurs et limites du jour, traces anti-farm, réputation donnée aujourd'hui | **2 à 30 jours** selon la donnée (voir la partie 3) |
+| **Différer** | Portefeuille (solde et journal) d'un compte gelé par le staff | Tant que le gel dure ; le reste est effacé. Relancez la commande après le dégel |
 | **Conserver** | Avertissements et sanctions dont vous avez fait l'objet | **2 ans** au plus, intérêt légitime de modération (voir la durée de conservation) |
 | **Conserver** | Délai entre deux tickets | **10 minutes** au plus (anti-spam) |
 | **Conserver** | Ban temporaire en cours | Jusqu'à la fin du ban, sinon il ne pourrait pas être levé |
 | **Conserver** | Notes du staff et appels vous concernant | **2 ans** au plus, comme l'historique des sanctions |
 | **Conserver** | Quarantaine en cours | Jusqu'à sa levée, sinon vos rôles ne pourraient pas vous être rendus |
 | **Conserver** | Essais de vérification | **1 jour** au plus (anti-contournement) |
+| **Conserver** | Rôle temporaire acheté, rôle d'anniversaire du jour | Jusqu'à son retrait, sinon le bot ne pourrait plus le retirer |
+
+L'empreinte anti-abus ne contient aucun texte écrit par vous : seulement des identifiants de succès ou de quêtes, des dates et des nombres.
 
 Avant une mise à jour du schéma de la base, le bot fait une copie de sécurité (`avant-migration-*.db`) : elle est supprimée automatiquement au bout de **30 jours** (vérifié au démarrage puis chaque jour). L'export `/privacy moi exporter` ne contient, pour les lignes où vous apparaissez seulement comme auteur d'une action (modérateur, organisateur, membre du staff), que l'identifiant de la ligne, ses dates et votre rôle. `/privacy moi effacer` est limité à une fois par heure.
 
-Les sauvegardes de la base tournent sur 7 jours : une donnée effacée ou anonymisée peut encore y figurer jusqu'à 7 jours, puis disparaît quand la sauvegarde est remplacée. Si un effacement doit être retardé (par exemple une opération en cours), le bot vous en donne la raison.
+Les sauvegardes de la base tournent sur 7 jours : une donnée effacée ou anonymisée peut encore y figurer jusqu'à 7 jours, puis disparaît quand la sauvegarde est remplacée. Si une partie de l'effacement est différée (compte gelé), le bot vous le dit avant la confirmation et dans sa réponse.
 
 Pour ce qui concerne le contenu des transcripts dans le salon de logs d'un serveur, adressez-vous d'abord aux administrateurs de ce serveur.
 

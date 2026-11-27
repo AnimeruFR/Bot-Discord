@@ -174,20 +174,30 @@ test("l'effacement est atomique : une erreur au milieu n'efface rien", () => {
     assert.strictEqual(db.sqlAll("SELECT moderator_id FROM warns WHERE guild_id = ?", [G3])[0].moderator_id, "0")
 })
 
-test("refusEffacement : un motif diffère l'effacement sans rien modifier", () => {
+test("compte gelé : le portefeuille (solde, journal) est différé et le gel reste, le reste est effacé", () => {
     const G4 = "777777777777777777"
-    assert.strictEqual(donneesMembre.refusEffacement(G4, U), null)
-    db.setTicketCooldown(G4, U)
-    const original = donneesMembre.refusEffacement
-    donneesMembre.refusEffacement = () => "séquestre en cours"
-    try {
-        assert.throws(() => donneesMembre.effacer(G4, U), err => err.code === "RGPD_DIFFERE" && err.motif === "séquestre en cours")
-    } finally {
-        donneesMembre.refusEffacement = original
-    }
-    assert.ok(db.getTicketCooldown(G4, U) > 0)
+    const economie = require('../Fonctions/economie')
+    db.sqlRun("INSERT INTO eco_comptes (guild_id, user_id, balance, frozen, created_at) VALUES (?, ?, 500, 1, ?)", [G4, U, Date.now()])
+    db.sqlRun("INSERT INTO eco_journal (guild_id, user_id, delta, balance_after, source, created_at) VALUES (?, ?, 500, 500, 'test', ?)", [G4, U, Date.now()])
+    db.sqlRun("INSERT INTO profils (guild_id, user_id, bio) VALUES (?, ?, 'ma bio')", [G4, U])
+    assert.strictEqual(donneesMembre.portefeuilleGele(G4, U), true)
+
     const resume = donneesMembre.effacer(G4, U)
-    assert.strictEqual(resume.ticket_cooldowns.conservees, 1)
+    assert.deepStrictEqual(resume.eco_comptes, { differees: 1 })
+    assert.deepStrictEqual(resume.eco_journal, { differees: 1 })
+    assert.ok(donneesMembre.aDesDifferees(resume))
+    assert.strictEqual(resume.profils.effacees, 1)
+    assert.deepStrictEqual([economie.compte(G4, U).balance, economie.compte(G4, U).frozen], [500, true], "solde et gel intacts")
+    assert.ok(economie.verifierCoherence(G4, U))
+
+    // Après le dégel, le portefeuille s'efface (solde à 0, journal vide, cohérent)
+    economie.geler(G4, U, false)
+    const apres = donneesMembre.effacer(G4, U)
+    assert.strictEqual(apres.eco_comptes.reinitialisees, 1)
+    assert.strictEqual(apres.eco_journal.effacees, 1)
+    assert.strictEqual(economie.compte(G4, U).balance, 0)
+    assert.ok(economie.verifierCoherence(G4, U))
+    assert.ok(!donneesMembre.aDesDifferees(apres))
 })
 
 test("export : une ligne trouvée seulement comme auteur sort sous forme réduite, sans tiers", () => {
@@ -288,4 +298,151 @@ test("export : les modifications des sanctions du membre (case_edits) y figurent
     // Effacement inchangé : la trace est conservée, seul l'éditeur est anonymisé
     donneesMembre.effacer(G1, W)
     assert.strictEqual(compter("SELECT COUNT(*) AS n FROM case_edits WHERE guild_id = ? AND case_id = ?", [G1, casesW]), 1)
+})
+
+// --- Empreinte anti-abus (phase 3) -------------------------------------------------------------------------------
+
+const JOUR = 24 * 3600 * 1000
+
+// Faux serveur et faux membre ancien (pas de réduction « nouveau ») pour les modules de jeu
+function serveurDeJeu(guildId) {
+    const membres = new Map()
+    const guild = {
+        id: guildId, ownerId: "1", preferredLocale: "fr", roles: { cache: new Map() }, channels: { cache: new Map() },
+        members: { me: { id: "bot", roles: { highest: { position: 10 } } }, fetch: async id => membres.get(id) }
+    }
+    const joueur = id => {
+        const m = {
+            id, guild, joinedTimestamp: Date.now() - 30 * JOUR, communicationDisabledUntilTimestamp: null, user: { id, bot: false },
+            roles: { cache: new Map(), add: async () => {}, remove: async () => {} }
+        }
+        membres.set(id, m)
+        return m
+    }
+    return { guild, joueur }
+}
+
+test("empreinte : après effacement, daily, succès, palier, quête et mot du jour ne rapportent rien de plus ; le gel reste", async () => {
+    const G = "121212121212121212", M = "343434343434343434", GELE = "565656565656565656"
+    const evenements = require('../Fonctions/evenements')
+    const economie = require('../Fonctions/economie')
+    const daily = require('../Fonctions/daily')
+    const succes = require('../Fonctions/succes')
+    const quetes = require('../Fonctions/quetes')
+    const xp = require('../Fonctions/xp')
+    const paliers = require('../Fonctions/paliers')
+    const mots = require('../Fonctions/mots')
+    evenements.retirerEcouteurs() // les événements sont rejoués à la main, dans l'ordre
+    const { guild, joueur } = serveurDeJeu(G)
+    const membre = joueur(M)
+    succes.configurerClient({ guilds: { cache: new Map([[G, guild]]) } })
+    paliers.definirPalier(G, { niveau: 1, recompense: 30 })
+    const salon = { id: "salon", send: async () => {} }
+    const message = { guild, member: membre, channel: salon, channelId: salon.id, author: { bot: false } }
+    const maintenant = Date.now()
+    const gainsHorsXp = () => db.sqlAll("SELECT COALESCE(SUM(delta), 0) AS n FROM eco_journal WHERE guild_id = ? AND user_id = ? AND source != 'xp'", [G, M])[0].n
+
+    const jouerTout = async decalage => {
+        const d = daily.reclamer(membre, maintenant)
+        await succes.enregistrer("daily", { guildId: G, userId: M, streak: 1 })
+        quetes.quetesDuMembre(G, M, { instant: maintenant })
+        db.sqlRun("UPDATE quetes SET progress = goal WHERE guild_id = ? AND user_id = ?", [G, M]) // quêtes terminées
+        const q = quetes.reclamer(membre, { instant: maintenant })
+        const gainXp = await xp.gagnerXp(message, { maintenant: maintenant + decalage, alea: () => 0 })
+        const secret = mots.motDuJour(G, evenements.jourParis(), "fr")
+        const essai = mots.proposerEssai({ guildId: G, userId: M, essai: secret })
+        if (essai.ok) mots.recompenserMot(membre, essai)
+        return { d, q, gainXp, essai }
+    }
+
+    // 1. Premier passage : tout rapporte
+    db.sqlRun("INSERT INTO xp (guild_id, user_id, xp, level) VALUES (?, ?, 99, 0)", [G, M])
+    db.sqlRun("INSERT INTO profils (guild_id, user_id, bio) VALUES (?, ?, 'bio')", [G, M])
+    db.sqlRun("INSERT INTO anniversaires (guild_id, user_id, day, month) VALUES (?, ?, 3, 4)", [G, M])
+    const premier = await jouerTout(0)
+    assert.ok(premier.d.ok && premier.q.total > 0 && premier.essai.ok && premier.gainXp.niveau === 1)
+    const sources = new Set(db.sqlAll("SELECT source FROM eco_journal WHERE guild_id = ? AND user_id = ?", [G, M]).map(l => l.source))
+    for (const s of ["daily", "succes", "quete", "palier", "mot"]) assert.ok(sources.has(s), `gain ${s} versé`)
+
+    // 2. Effacement : solde à 0, journal et profil effacés, empreinte gardée
+    const resume = donneesMembre.effacer(G, M, { instant: maintenant })
+    assert.strictEqual(economie.compte(G, M).balance, 0)
+    assert.ok(economie.verifierCoherence(G, M))
+    assert.strictEqual(compter("SELECT COUNT(*) AS n FROM profils WHERE guild_id = ? AND user_id = ?", [G, M]), 0)
+    assert.strictEqual(compter("SELECT COUNT(*) AS n FROM anniversaires WHERE guild_id = ? AND user_id = ?", [G, M]), 0)
+    assert.ok(resume.succes.conservees >= 1 && resume.xp.reinitialisees === 1 && resume.eco_comptes.reinitialisees === 1)
+    const ligneXp = db.sqlAll("SELECT xp, level FROM xp WHERE guild_id = ? AND user_id = ?", [G, M])[0]
+    assert.deepStrictEqual({ ...ligneXp }, { xp: xp.xpCumulee(1), level: 1 }, "niveau gardé, XP ramenée au seuil")
+    assert.strictEqual(compter("SELECT COUNT(*) AS n FROM stats_joueur WHERE guild_id = ? AND user_id = ? AND stat = 'daily_total'", [G, M]), 0, "statistiques effacées")
+
+    // 3. On rejoue la même journée : aucun gain de plus (seule l'XP d'activité peut rapporter 1 ✦)
+    const second = await jouerTout(61 * 1000)
+    assert.strictEqual(second.d.refus, "deja", "daily déjà pris aujourd'hui")
+    assert.strictEqual(second.q.total, 0, "quêtes déjà réclamées")
+    assert.strictEqual(second.essai.refus, "deja_fini", "mot du jour déjà joué")
+    assert.strictEqual(second.gainXp.niveau, 1, "pas de nouveau passage de niveau")
+    assert.strictEqual(gainsHorsXp(), 0, "ni daily, ni succès, ni quête, ni palier, ni mot")
+    assert.ok(economie.compte(G, M).balance <= 1)
+
+    // 4. Compte gelé : le gel survit à l'effacement et bloque toujours les gains
+    const gele = joueur(GELE)
+    economie.crediter(gele, 200, { source: "test" })
+    economie.geler(G, GELE, true)
+    donneesMembre.effacer(G, GELE, { instant: maintenant })
+    assert.strictEqual(economie.compte(G, GELE).frozen, true)
+    assert.strictEqual(economie.compte(G, GELE).balance, 200, "portefeuille différé tant que le gel dure")
+    assert.strictEqual(economie.peutJouer(gele), "gele")
+    assert.strictEqual(daily.reclamer(gele, maintenant).refus, "gele")
+})
+
+test("empreinte : la formule SQL de l'XP gardée suit xpCumulee de Fonctions/xp.js", () => {
+    const xp = require('../Fonctions/xp')
+    const formule = REGISTRE.xp.colonnes.user_id.valeurs.xp
+    for (let niveau = 0; niveau <= 200; niveau++) {
+        const [{ v }] = db.sqlAll(`SELECT ${formule.replaceAll("level", "?")} AS v`, Array(formule.split("level").length - 1).fill(niveau))
+        assert.strictEqual(v, xp.xpCumulee(niveau), `niveau ${niveau}`)
+        assert.strictEqual(xp.niveauPourXp(v), niveau)
+    }
+})
+
+test("empreinte : seules les périodes en cours et précédentes restent (quêtes, jeux du jour, stats)", () => {
+    const G = "131313131313131313", M = "353535353535353535"
+    const instant = Date.UTC(2026, 10, 26, 12) // jeudi 26 novembre 2026, semaine 2026-W48
+    const p = donneesMembre.periodes(instant)
+    assert.deepStrictEqual(p, { jour: "2026-11-26", hier: "2026-11-25", semaine: "2026-W48", semainePrecedente: "2026-W47" })
+    for (const periode of ["2026-11-26", "2026-11-25", "2026-11-24", "2026-W48", "2026-W47", "2026-W46"]) {
+        db.sqlRun("INSERT INTO quetes (guild_id, user_id, period, quest, progress, goal, claimed) VALUES (?, ?, ?, 'q', 1, 1, 1)", [G, M, periode])
+    }
+    for (const jour of ["2026-11-26", "2026-11-25", "2026-11-20"]) {
+        db.sqlRun("INSERT INTO jeux_quotidiens (guild_id, user_id, game, day, finished) VALUES (?, ?, 'mot', ?, 1)", [G, M, jour])
+    }
+    for (const stat of ["parties_gagnees", "duels_recompenses_jour", "xp_eclats_jour", "paire:succes:paiement:2026-11-26:999", "duels_contre:999", "mot_serie", "anniv_modifie_le"]) {
+        db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, 1)", [G, M, stat])
+    }
+    donneesMembre.effacer(G, M, { instant })
+    const restent = (sql, col) => db.sqlAll(sql, [G, M]).map(l => l[col]).sort()
+    assert.deepStrictEqual(restent("SELECT period FROM quetes WHERE guild_id = ? AND user_id = ?", "period"), ["2026-11-25", "2026-11-26", "2026-W47", "2026-W48"])
+    assert.deepStrictEqual(restent("SELECT day FROM jeux_quotidiens WHERE guild_id = ? AND user_id = ?", "day"), ["2026-11-25", "2026-11-26"])
+    assert.deepStrictEqual(restent("SELECT stat FROM stats_joueur WHERE guild_id = ? AND user_id = ?", "stat"),
+        ["anniv_modifie_le", "duels_contre:999", "duels_recompenses_jour", "paire:succes:paiement:2026-11-26:999", "xp_eclats_jour"])
+})
+
+test("semaineIso suit semaineParis de Fonctions/quetes.js (changements d'année compris)", () => {
+    const { semaineParis } = require('../Fonctions/quetes')
+    for (let jour = 0; jour < 800; jour += 3) {
+        const instant = Date.UTC(2025, 11, 20, 12) + jour * JOUR
+        assert.strictEqual(donneesMembre.periodes(instant).semaine, semaineParis(instant))
+    }
+})
+
+test("export : l'état d'une partie en cours n'est jamais exporté, il l'est après la fin", () => {
+    const G = "141414141414141414", M = "363636363636363636"
+    const etat = JSON.stringify({ mot: "MAISON", ordre: [3, 1, 2] })
+    db.sqlRun("INSERT INTO parties (guild_id, game, players, state, status, expires_at, created_at, updated_at) VALUES (?, 'pendu', ?, ?, 'en_cours', 1, 1, 1)", [G, JSON.stringify([M]), etat])
+    db.sqlRun("INSERT INTO parties (guild_id, game, players, state, status, expires_at, created_at, updated_at) VALUES (?, 'quiz', ?, ?, 'finie', 1, 1, 1)", [G, JSON.stringify([M]), etat])
+    const lignes = donneesMembre.exporter(G, M).tables.parties.lignes
+    const enCours = lignes.find(l => l.status === "en_cours"), finie = lignes.find(l => l.status === "finie")
+    assert.strictEqual(enCours.state, donneesMembre.MASQUE)
+    assert.ok(!JSON.stringify(enCours).includes("MAISON"))
+    assert.strictEqual(finie.state, etat)
 })

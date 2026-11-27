@@ -1,0 +1,32 @@
+{
+  "pfc": {
+    "description": "Challenge a member to rock-paper-scissors (best of 3)",
+    "options": { "adversaire": "The member to challenge" },
+    "choix": {}
+  },
+  "morpion": {
+    "description": "Challenge a member to tic-tac-toe (button grid)",
+    "options": { "adversaire": "The member to challenge" },
+    "choix": {}
+  },
+  "reaction": {
+    "description": "Start a reaction race: the first to click the green button wins",
+    "options": {},
+    "choix": {}
+  },
+  "drops": {
+    "description": "Choose the channels where chests appear during chat",
+    "options": {
+      "action": "What to do?",
+      "salon": "Channel where chests can appear (no channel: drops disabled)",
+      "salon2": "Second channel (optional)",
+      "salon3": "Third channel (optional)"
+    },
+    "choix": {
+      "action": {
+        "salons": "Choose the channels",
+        "voir": "View the configuration"
+      }
+    }
+  }
+}

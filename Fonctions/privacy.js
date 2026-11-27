@@ -1,5 +1,7 @@
 const db = require('./db')
 const { purgerSauvegardesMigration } = require('./migrations')
+const { periodes } = require('./donneesMembre')
+const { INACTIVITE } = require('./registreRgpd')
 
 const RETENTION = 30 * 24 * 60 * 60 * 1000 // données gardées 30 jours après le départ du bot (réinvitation par erreur)
 const JOUR = 24 * 60 * 60 * 1000
@@ -43,29 +45,47 @@ function purge(serveursActuels, maintenant = Date.now()) {
     return effaces
 }
 
+// Données de jeu (phase 3, voir le registre RGPD) : compteurs et traces anti-farm 2 jours (8 jours pour une semaine),
+// quêtes et jeux du jour 30 jours, parties terminées 30 jours, membres sans activité depuis 1 an
+function purgerJeux(maintenant = Date.now()) {
+    const ilYa = jours => periodes(maintenant - jours * JOUR)
+    db.purgePhase3({
+        jourCompteurs: ilYa(2).jour, semaineTraces: ilYa(8).semaine,
+        jourAncien: ilYa(30).jour, semaineAncienne: ilYa(30).semaine, depuis30Jours: maintenant - 30 * JOUR
+    })
+    db.sqlRun("DELETE FROM stats_joueur WHERE stat = 'anniv_modifie_le' AND value < ?", [maintenant - 30 * JOUR]) // délai d'anniversaire écoulé
+    return db.purgeMembresInactifs(maintenant - INACTIVITE.jours * JOUR)
+}
+
 // Au démarrage puis une fois par jour
 function startPrivacySchedule(bot) {
     const tourner = () => {
-        try {
-            const serveurs = new Set(bot.guilds.cache.keys())
-            // Avec plusieurs shards (ShardingManager), ce processus ne voit qu'une partie des serveurs :
-            // la réconciliation marquerait les autres comme quittés. Seuls les départs reçus par guildDelete comptent alors.
-            const quittes = bot.shard ? 0 : reconcile(serveurs)
-            const effaces = purge(serveurs)
-            db.purgeTicketCooldowns(Date.now() - 10 * 60 * 1000) // délais de tickets expirés
-            db.purgeOldCases(Date.now() - CONSERVATION_HISTORIQUE) // historique des sanctions de plus de 2 ans
-            db.purgeOldWarns(Date.now() - CONSERVATION_HISTORIQUE) // avertissements de plus de 2 ans
-            purgerSauvegardesMigration() // copies avant-migration-*.db de plus de 30 jours (elles contiennent la base entière)
-            db.purgeOldTickets(Date.now() - 90 * JOUR) // suivi des tickets supprimés depuis plus de 90 jours
-            db.purgeOldGiveaways(Date.now() - 30 * JOUR) // giveaways terminés depuis plus de 30 jours (participants, gagnants)
-            db.purgePhase2({ deuxAns: Date.now() - CONSERVATION_HISTORIQUE, unAn: Date.now() - 365 * JOUR, unJour: Date.now() - JOUR })
-            if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)
-        } catch (err) {
-            console.error("Erreur pendant la purge RGPD :", err.message)
+        // Chaque purge a son propre try/catch : une purge en échec n'empêche pas les suivantes
+        const essayer = (nom, fonction) => {
+            try {
+                return fonction()
+            } catch (err) {
+                console.error(`Erreur pendant la purge RGPD (${nom}) :`, err.message)
+                return null
+            }
         }
+        const serveurs = new Set(bot.guilds.cache.keys())
+        // Avec plusieurs shards (ShardingManager), ce processus ne voit qu'une partie des serveurs :
+        // la réconciliation marquerait les autres comme quittés. Seuls les départs reçus par guildDelete comptent alors.
+        const quittes = bot.shard ? 0 : (essayer("réconciliation", () => reconcile(serveurs)) ?? 0)
+        const effaces = essayer("serveurs quittés", () => purge(serveurs)) ?? []
+        essayer("délais de tickets", () => db.purgeTicketCooldowns(Date.now() - 10 * 60 * 1000)) // délais de tickets expirés
+        essayer("sanctions", () => db.purgeOldCases(Date.now() - CONSERVATION_HISTORIQUE)) // historique des sanctions de plus de 2 ans
+        essayer("avertissements", () => db.purgeOldWarns(Date.now() - CONSERVATION_HISTORIQUE)) // avertissements de plus de 2 ans
+        essayer("sauvegardes", () => purgerSauvegardesMigration()) // copies avant-migration-*.db de plus de 30 jours (elles contiennent la base entière)
+        essayer("tickets", () => db.purgeOldTickets(Date.now() - 90 * JOUR)) // suivi des tickets supprimés depuis plus de 90 jours
+        essayer("giveaways", () => db.purgeOldGiveaways(Date.now() - 30 * JOUR)) // giveaways terminés depuis plus de 30 jours (participants, gagnants)
+        essayer("jeux", () => purgerJeux())
+        essayer("phase 2", () => db.purgePhase2({ deuxAns: Date.now() - CONSERVATION_HISTORIQUE, unAn: Date.now() - 365 * JOUR, unJour: Date.now() - JOUR }))
+        if (quittes || effaces.length) console.log(`RGPD : ${quittes} serveur(s) quitté(s) détecté(s), ${effaces.length} serveur(s) effacé(s)`)
     }
     tourner()
     return setInterval(tourner, JOUR).unref()
 }
 
-module.exports = { onGuildDelete, onGuildCreate, reconcile, purge, startPrivacySchedule, RETENTION }
+module.exports = { onGuildDelete, onGuildCreate, reconcile, purge, purgerJeux, startPrivacySchedule, RETENTION }

@@ -1,0 +1,15 @@
+{
+  "succes.titre": "Achievements ({nombre}/{total})",
+  "succes.ligne_obtenu": "✅ **{nom}** · {recompense}\n{description} · earned on <t:{date}:d>",
+  "succes.ligne_a_obtenir": "🔒 **{nom}** · {recompense}\n{description} · {valeur}/{seuil}",
+  "succes.page": "Page {page}/{pages}",
+  "quetes.titre": "Your quests",
+  "quetes.jour": "Daily quests",
+  "quetes.semaine": "Weekly quest",
+  "quetes.ligne": "{etat} **{nom}**\n{barre} {progression}/{objectif} · {recompense}",
+  "quetes.reclamee": "(claimed)",
+  "quetes.pied": "Daily quests change at midnight (Paris time), the weekly one on Monday.",
+  "quetes.pied_a_reclamer": "Rewards are waiting for you: /quetes action:Claim the rewards",
+  "quetes.rien": "No completed quest to claim right now.",
+  "quetes.reclame": "Rewards claimed for {nombre} quest(s): {total}."
+}

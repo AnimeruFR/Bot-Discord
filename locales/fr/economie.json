@@ -1,0 +1,16 @@
+{
+  "eco.refus.module": "L'économie est désactivée sur ce serveur.",
+  "eco.refus.gele": "Votre compte de {monnaie} est gelé par le staff : vous ne pouvez ni jouer ni recevoir de monnaie pour l'instant.",
+  "eco.refus.sanctionne": "Vous êtes sanctionné (exclusion temporaire ou quarantaine) : pas de jeux ni de {monnaie} en attendant.",
+  "eco.refus.plafond_solde": "Vous avez atteint le solde maximum (1 000 000 {monnaie}) : dépensez-en avant d'en gagner d'autres.",
+  "eco.refus.solde": "Vous n'avez pas assez de {monnaie}.",
+  "eco.refus.soi_meme": "Vous ne pouvez pas vous envoyer des {monnaie} à vous-même.",
+  "eco.refus.bot": "Les bots n'ont pas de {monnaie}.",
+  "eco.refus.compte_recent": "Les transferts de {monnaie} sont bloqués pour les membres arrivés depuis moins de 7 jours.",
+  "eco.refus.plafond_envoi": "Vous avez atteint la limite d'envoi du jour (2 000 {monnaie}). Réessayez demain.",
+  "eco.refus.plafond_reception": "Ce membre a atteint la limite de réception du jour (5 000 {monnaie}). Réessayez demain.",
+  "eco.refus.montant_trop_petit": "Montant trop petit : après les frais, le destinataire ne recevrait aucun {monnaie}.",
+  "eco.refus.destinataire_indisponible": "Ce membre ne peut pas recevoir de {monnaie} pour le moment.",
+  "eco.refus.destinataire_plafond_solde": "Ce membre a atteint le solde maximum de {monnaie}.",
+  "eco.plafonne": "Vous avez atteint le plafond de gains du jour : les jeux restent jouables, mais ne rapportent plus de {monnaie} jusqu'à demain."
+}

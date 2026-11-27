@@ -1,0 +1,45 @@
+{
+  "boutique": {
+    "description": "Server shop: browse, buy, and manage items (admin)",
+    "options": {
+      "action": "What to do?",
+      "article": "The item (buy, remove, edit)",
+      "type": "Item type (add)",
+      "role": "The role sold (role, temporary role, colour)",
+      "objet": "The item sold (item type)",
+      "duree": "Temporary role duration (1h to 90d, e.g. 7d)",
+      "nom": "Display name of the item (50 characters max)",
+      "prix": "Price in the server currency (1 to 1,000,000)",
+      "stock": "Limited stock (empty: unlimited; 0: sold out when editing)",
+      "illimite": "Edit: remove the stock limit"
+    },
+    "choix": {
+      "action": {
+        "voir": "See the shop",
+        "acheter": "Buy an item",
+        "ajouter": "Add an item (admin)",
+        "retirer": "Remove an item (admin)",
+        "modifier": "Edit an item (admin)"
+      },
+      "type": {
+        "role": "Permanent role",
+        "role_temp": "Temporary role",
+        "couleur": "Colour (colour role with no permission)",
+        "objet": "Catalogue item"
+      }
+    }
+  },
+  "inventaire": {
+    "description": "Your inventory: see your items and use them",
+    "options": {
+      "action": "What to do?",
+      "objet": "The item to use"
+    },
+    "choix": {
+      "action": {
+        "voir": "See my inventory",
+        "utiliser": "Use an item"
+      }
+    }
+  }
+}

@@ -5,6 +5,9 @@ const { startTempbanSchedule } = require('../Fonctions/tempbans')
 const { startTicketInactivitySchedule } = require('../Fonctions/ticketsInactifs')
 const { startProgrammesSchedule } = require('../Fonctions/programmes')
 const { startRapportHebdoSchedule } = require('../Fonctions/rapportHebdo')
+const { startPartiesSchedule } = require('../Fonctions/parties')
+const { startBoutiqueSchedule } = require('../Fonctions/boutique')
+const { startAnniversairesSchedule } = require('../Fonctions/anniversaires')
 
 let demarre = false
 
@@ -21,4 +24,7 @@ module.exports = async bot => {
     startTicketInactivitySchedule(bot)
     startProgrammesSchedule(bot)
     startRapportHebdoSchedule(bot)
+    startPartiesSchedule(bot)
+    startBoutiqueSchedule(bot)
+    startAnniversairesSchedule(bot)
 }
