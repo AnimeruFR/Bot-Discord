@@ -416,7 +416,7 @@ test("empreinte : seules les périodes en cours et précédentes restent (quête
     for (const jour of ["2026-11-26", "2026-11-25", "2026-11-20"]) {
         db.sqlRun("INSERT INTO jeux_quotidiens (guild_id, user_id, game, day, finished) VALUES (?, ?, 'mot', ?, 1)", [G, M, jour])
     }
-    for (const stat of ["parties_gagnees", "duels_recompenses_jour", "xp_eclats_jour", "paire:succes:paiement:2026-11-26:999", "duels_contre:999", "mot_serie"]) {
+    for (const stat of ["parties_gagnees", "duels_recompenses_jour", "xp_eclats_jour", "paire:succes:paiement:2026-11-26:999", "duels_contre:999", "mot_serie", "anniv_modifie_le"]) {
         db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, 1)", [G, M, stat])
     }
     donneesMembre.effacer(G, M, { instant })
@@ -424,7 +424,7 @@ test("empreinte : seules les périodes en cours et précédentes restent (quête
     assert.deepStrictEqual(restent("SELECT period FROM quetes WHERE guild_id = ? AND user_id = ?", "period"), ["2026-11-25", "2026-11-26", "2026-W47", "2026-W48"])
     assert.deepStrictEqual(restent("SELECT day FROM jeux_quotidiens WHERE guild_id = ? AND user_id = ?", "day"), ["2026-11-25", "2026-11-26"])
     assert.deepStrictEqual(restent("SELECT stat FROM stats_joueur WHERE guild_id = ? AND user_id = ?", "stat"),
-        ["duels_contre:999", "duels_recompenses_jour", "paire:succes:paiement:2026-11-26:999", "xp_eclats_jour"])
+        ["anniv_modifie_le", "duels_contre:999", "duels_recompenses_jour", "paire:succes:paiement:2026-11-26:999", "xp_eclats_jour"])
 })
 
 test("semaineIso suit semaineParis de Fonctions/quetes.js (changements d'année compris)", () => {

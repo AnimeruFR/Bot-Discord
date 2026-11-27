@@ -70,6 +70,8 @@ test("rôles réservés : staff du bot, staff des tickets (serveur, type, .env),
     assert.strictEqual(refusRoleCommunaute(guild, role("quar")), "rolecom.refus.quarantaine")
     db.sqlRun("INSERT INTO verification_config (guild_id, role_id) VALUES (?, ?)", [guild.id, "verifie"])
     assert.strictEqual(refusRoleCommunaute(guild, role("verifie")), "rolecom.refus.verifie")
+    db.sqlRun("INSERT INTO account_filter (guild_id, min_age_days, action, role_id) VALUES (?, 7, 'role', ?)", [guild.id, "attente"])
+    assert.strictEqual(refusRoleCommunaute(guild, role("attente")), "rolecom.refus.attente", "rôle en attente du filtre des comptes")
     assert.strictEqual(roleReserve(guild.id, "libre"), null)
 
     // Un autre serveur n'est pas concerné

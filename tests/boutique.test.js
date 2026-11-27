@@ -136,6 +136,13 @@ test("ajout : prix, stock, durée, doublon, limite de 25, objets du catalogue", 
     assert.strictEqual(boutique.joursDeJeu(2000), 1.9)
     assert.strictEqual(boutique.ajouterArticle(guild, admin, { type: "role", role, prix: 100 }).refus, "doublon")
     assert.strictEqual(boutique.ajouterArticle(guild, admin, { type: "role_temp", role: faussRole(guild, "r2"), prix: 2000, dureeS: 7 * 24 * 3600 }).article.dureeS, 7 * 24 * 3600)
+    // Un rôle temporaire déjà donné par un palier, un bouton de rôle ou l'anniversaire serait gardé à l'échéance : refusé à l'ajout
+    db.sqlRun("INSERT INTO xp_paliers (guild_id, level, role_id, reward) VALUES (?, 5, ?, 0)", [guild.id, "r-palier"])
+    db.sqlRun("INSERT INTO role_panel_buttons (message_id, guild_id, role_id, label) VALUES ('m-ajout', ?, ?, 'x')", [guild.id, "r-bouton"])
+    db.sqlRun("INSERT INTO anniv_config (guild_id, role_id) VALUES (?, ?)", [guild.id, "r-anniv"])
+    for (const id of ["r-palier", "r-bouton", "r-anniv"]) {
+        assert.strictEqual(boutique.ajouterArticle(guild, admin, { type: "role_temp", role: faussRole(guild, id), prix: 2000, dureeS: 3600 }).refus, "role_autre_source", id)
+    }
 
     // Objets : le boost est vendu au prix indicatif du catalogue, le ticket de tirage (phase 4) pas encore
     assert.strictEqual(boutique.ajouterArticle(guild, admin, { type: "objet", objet: "inconnu" }).refus, "objet_inconnu")

@@ -47,5 +47,5 @@
   "social.anniv.mois.11": "novembre",
   "social.anniv.mois.12": "décembre",
   "social.anniv.role_porteurs": "Ce rôle a déjà des membres : le rôle du jour est retiré chaque lendemain, choisissez un rôle que personne ne porte.",
-  "social.anniv.trop_tot": "Vous avez déjà changé votre date d'anniversaire récemment : elle ne peut être modifiée qu'une fois tous les 30 jours (prochain changement possible {date}). Vous pouvez la retirer à tout moment."
+  "social.anniv.trop_tot": "Vous avez déjà changé votre date d'anniversaire récemment : elle ne peut être modifiée qu'une fois tous les 30 jours (prochain changement possible {date}). Vous pouvez la retirer à tout moment, mais le délai continue de courir."
 }

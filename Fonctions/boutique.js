@@ -77,7 +77,7 @@ const nomValide = nom => typeof nom === "string" && nom.trim().length >= 1 && no
 const stockValide = (stock, min) => stock === null || (Number.isSafeInteger(stock) && stock >= min && stock <= STOCK_MAX)
 
 // Ajoute un article. admin : le membre qui l'ajoute. Renvoie { ok: true, article, jours } ou { ok: false, refus }.
-// refus : type, nom, prix, stock, duree, objet_inconnu, objet_non_vendable, doublon, plein, ou un motif de refusRole.
+// refus : type, nom, prix, stock, duree, role_autre_source, objet_inconnu, objet_non_vendable, doublon, plein, ou un motif de refusRole.
 function ajouterArticle(guild, admin, { type, nom = null, prix = null, stock = null, role = null, dureeS = null, objet = null }) {
     if (!TYPES.includes(type)) return { ok: false, refus: "type" }
     const estRole = type !== "objet"
@@ -91,6 +91,8 @@ function ajouterArticle(guild, admin, { type, nom = null, prix = null, stock = n
         if (type === "role_temp") {
             if (!Number.isSafeInteger(dureeS) || dureeS < DUREE_MIN || dureeS > DUREE_MAX) return { ok: false, refus: "duree" }
             duree = dureeS
+            // Le retrait à l'échéance est évité si une autre source donne le rôle : il deviendrait permanent
+            if (autreSourceDuRole(guild.id, roleId)) return { ok: false, refus: "role_autre_source" }
         }
     } else {
         const def = inventaire.objet(objet)

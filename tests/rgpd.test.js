@@ -91,3 +91,30 @@ test("purge des jeux : membre sans activité depuis 1 an effacé, sauf compte ge
     assert.strictEqual(reste(GELE), 1, "compte gelé : gardé tant que le gel dure")
     assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM profils WHERE guild_id = ? AND user_id = ?", [G, SANS_DATE])[0].n, 1, "aucune date connue : gardé")
 })
+test("purge des jeux : la date de dernier changement d'anniversaire est effacée après 30 jours", () => {
+    const G = "555555555555555580", maintenant = Date.now()
+    db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, 'u1', 'anniv_modifie_le', ?)", [G, maintenant - 31 * JOUR])
+    db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, 'u2', 'anniv_modifie_le', ?)", [G, maintenant - 5 * JOUR])
+    privacy.purgerJeux(maintenant)
+    assert.deepStrictEqual(db.sqlAll("SELECT user_id FROM stats_joueur WHERE guild_id = ?", [G]).map(l => l.user_id), ["u2"])
+})
+
+test("purge planifiée : une purge en échec n'empêche pas les suivantes", () => {
+    const origine = { cases: db.purgeOldCases, warns: db.purgeOldWarns }
+    let warnsAppele = false
+    const erreur = console.error
+    const messages = []
+    console.error = (...args) => messages.push(args.join(" "))
+    db.purgeOldCases = () => { throw new Error("panne simulée") }
+    db.purgeOldWarns = () => { warnsAppele = true }
+    try {
+        const minuteur = privacy.startPrivacySchedule({ guilds: { cache: new Map() }, shard: null })
+        clearInterval(minuteur)
+    } finally {
+        console.error = erreur
+        db.purgeOldCases = origine.cases
+        db.purgeOldWarns = origine.warns
+    }
+    assert.ok(warnsAppele, "la purge suivante a bien tourné")
+    assert.ok(messages.some(m => m.includes("panne simulée")), "l'erreur est journalisée")
+})

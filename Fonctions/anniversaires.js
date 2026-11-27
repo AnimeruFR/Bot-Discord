@@ -22,6 +22,10 @@ const PAUSE_SERVEURS = 1000
 const JOURS_PAR_MOIS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] // février : 29 accepté (fêté le 28 les années non bissextiles)
 
 const DELAI_CHANGEMENT = 30 * 24 * 3600 * 1000
+const STAT_MODIFIE = "anniv_modifie_le" // stats_joueur : instant du dernier changement, gardé quand la date est retirée
+
+const dernierChangementRetire = (guildId, userId) =>
+    db.sqlAll("SELECT value FROM stats_joueur WHERE guild_id = ? AND user_id = ? AND stat = ?", [guildId, userId, STAT_MODIFIE])[0]?.value ?? null
 
 // Un rôle du jour avec un pouvoir dangereux (même liste que la boutique et les paliers)
 const roleDangereux = role => role.permissions.any(PERMISSIONS_INTERDITES)
@@ -35,14 +39,15 @@ const estBissextile = annee => (annee % 4 === 0 && annee % 100 !== 0) || annee %
 // Enregistre la date. Renvoie { ok: true }, ou { ok: false, refus: "date" } (date inexistante), ou
 // { ok: false, refus: "delai", prochain } (changée il y a moins de 30 jours ; prochain = instant où elle sera modifiable).
 // Redonner la même date ne compte pas comme un changement. Seul un changement ou une première saisie démarre le délai
-// (retirer reste libre : le délai peut donc être contourné en retirant puis en redéfinissant, ce qui ne laisse aucune trace).
+// Retirer reste libre, mais garde la date du dernier changement (stat « anniv_modifie_le ») : retirer puis redéfinir ne contourne pas le délai.
 function definir(guildId, userId, jour, mois, instant = Date.now()) {
     if (!dateValide(jour, mois)) return { ok: false, refus: "date" }
     return db.transaction(() => {
         const actuel = db.sqlAll("SELECT day, month, changed_at FROM anniversaires WHERE guild_id = ? AND user_id = ?", [guildId, userId])[0]
         if (actuel && actuel.day === jour && actuel.month === mois) return { ok: true }
-        if (actuel?.changed_at && instant - actuel.changed_at < DELAI_CHANGEMENT) {
-            return { ok: false, refus: "delai", prochain: actuel.changed_at + DELAI_CHANGEMENT }
+        const dernier = Math.max(actuel?.changed_at ?? 0, dernierChangementRetire(guildId, userId) ?? 0)
+        if (dernier && instant - dernier < DELAI_CHANGEMENT) {
+            return { ok: false, refus: "delai", prochain: dernier + DELAI_CHANGEMENT }
         }
         db.sqlRun(`INSERT INTO anniversaires (guild_id, user_id, day, month, changed_at) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (guild_id, user_id) DO UPDATE SET day = excluded.day, month = excluded.month, changed_at = excluded.changed_at`,
@@ -51,7 +56,18 @@ function definir(guildId, userId, jour, mois, instant = Date.now()) {
     })
 }
 
-const retirer = (guildId, userId) => db.sqlRun("DELETE FROM anniversaires WHERE guild_id = ? AND user_id = ?", [guildId, userId]) > 0
+// Retire la date (toujours possible) mais garde l'instant du dernier changement pour le délai de 30 jours
+function retirer(guildId, userId) {
+    return db.transaction(() => {
+        const actuel = db.sqlAll("SELECT changed_at FROM anniversaires WHERE guild_id = ? AND user_id = ?", [guildId, userId])[0]
+        if (!actuel) return false
+        if (actuel.changed_at) {
+            db.sqlRun(`INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, ?)
+                ON CONFLICT (guild_id, user_id, stat) DO UPDATE SET value = MAX(value, excluded.value)`, [guildId, userId, STAT_MODIFIE, actuel.changed_at])
+        }
+        return db.sqlRun("DELETE FROM anniversaires WHERE guild_id = ? AND user_id = ?", [guildId, userId]) > 0
+    })
+}
 
 function lire(guildId, userId) {
     const ligne = db.sqlAll("SELECT day, month FROM anniversaires WHERE guild_id = ? AND user_id = ?", [guildId, userId])[0]

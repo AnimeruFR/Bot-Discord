@@ -47,5 +47,5 @@
   "social.anniv.mois.11": "November",
   "social.anniv.mois.12": "December",
   "social.anniv.role_porteurs": "This role already has members: the daily role is removed the next day, pick a role nobody holds.",
-  "social.anniv.trop_tot": "You changed your birthday recently: it can only be changed once every 30 days (next change possible {date}). You can remove it at any time."
+  "social.anniv.trop_tot": "You changed your birthday recently: it can only be changed once every 30 days (next change possible {date}). You can remove it at any time, but the delay keeps running."
 }

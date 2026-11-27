@@ -236,15 +236,22 @@ const REGISTRE = {
             }
         }
     },
-    // Statistiques effacées, sauf les limites du jour (clé finissant par « _jour ») et les traces anti-farm (« paire:… »,
-    // « duels_contre:… ») : elles empêchent de rejouer les gains du jour. Un module qui ajoute une limite du jour suit cette règle de nom.
+    // Statistiques effacées, sauf les limites du jour (clé finissant par « _jour »), les traces anti-farm (« paire:… »,
+    // « duels_contre:… ») et la date du dernier changement d'anniversaire (« anniv_modifie_le ») : elles empêchent de rejouer
+    // les gains du jour ou de contourner le délai de 30 jours. Un module qui ajoute une limite du jour suit cette règle de nom.
+    // Une limite « *_jour » est une seule ligne par compteur, réécrite chaque jour (la valeur contient la date du dernier jour) :
+    // elle n'est pas purgée à 2 jours mais avec le membre inactif (1 an). « anniv_modifie_le » est purgée après 30 jours.
+    // Les traces « paire:…:<id> » et « duels_contre:<id> » nomment un AUTRE membre mais sont rangées sous le membre qui a joué :
+    // à l'effacement de cet autre membre elles sont gardées (les effacer lui permettrait de refaire gagner le même partenaire
+    // dans la journée), puis purgées à 2 jours (8 jours pour les traces de la semaine).
     stats_joueur: {
         serveur: "guild_id",
         colonnes: {
             user_id: {
                 traitement: "reinitialiser",
-                garder: () => ({ sql: "(stat LIKE '%\\_jour' ESCAPE '\\' OR stat LIKE 'paire:%' OR stat LIKE 'duels_contre:%')", params: [] }),
-                motif: "Empreinte anti-abus : limites du jour et traces anti-farm gardées, statistiques effacées", duree: "2 jours (traces de la semaine : 8 jours)"
+                garder: () => ({ sql: "(stat LIKE '%\\_jour' ESCAPE '\\' OR stat LIKE 'paire:%' OR stat LIKE 'duels_contre:%' OR stat = 'anniv_modifie_le')", params: [] }),
+                motif: "Empreinte anti-abus : limites du jour, traces anti-farm et date du dernier changement d'anniversaire gardées, statistiques effacées",
+                duree: "limites du jour : une ligne par compteur, réécrite chaque jour, 1 an après la dernière activité ; traces anti-farm : 2 jours (semaine : 8 jours) ; date de changement d'anniversaire : 30 jours"
             }
         }
     },
@@ -262,8 +269,7 @@ const REGISTRE = {
     anniv_config: { serveur: "guild_id", aucune: "Salon et rôle d'anniversaire du serveur, aucune donnée de membre" },
     // Rôle d'anniversaire donné par le bot (migration 023). Conservé plutôt qu'effacé : sans la ligne, le bot ne saurait
     // plus qu'il doit retirer le rôle, et le membre le garderait. La ligne disparaît au retrait (le lendemain).
-    // Note : anniversaires.changed_at (délai de 30 jours entre deux changements de date) part avec la date à l'effacement ;
-    // le garder demanderait de garder la date elle-même. Contournement limité par le délai d'une heure entre deux effacements.
+    // Note : le délai de 30 jours entre deux changements de date est gardé à part (stats_joueur « anniv_modifie_le »), sans la date.
     anniv_roles_donnes: {
         serveur: "guild_id",
         colonnes: { user_id: { traitement: "conserver", motif: "Rôle d'anniversaire donné par le bot, retiré le lendemain", duree: "jusqu'au lendemain" } }

@@ -48,6 +48,7 @@
   "boutique.refus.prix": "Le prix doit être un entier de {min} à {maxprix}.",
   "boutique.refus.stock": "Le stock doit être un entier positif (1 au minimum à l'ajout).",
   "boutique.refus.duree": "Un rôle temporaire demande une durée de 1 h à 90 jours (option `duree`, par exemple 7d).",
+  "boutique.refus.role_autre_source": "Ce rôle est déjà donné par un palier, un bouton de rôle ou l'anniversaire : en temporaire, il deviendrait permanent. Choisissez un autre rôle.",
   "boutique.refus.doublon": "Cet article est déjà dans la boutique.",
   "boutique.refus.plein": "La boutique est pleine ({max} articles au plus) : retirez-en un d'abord.",
   "boutique.refus.rien": "Rien à modifier : donnez un nom, un prix ou un stock.",
@@ -70,6 +71,7 @@
   "rolecom.refus.dangereux_salon": "Le rôle {role} donne des pouvoirs de modération dans un salon (autorisation de salon) : il ne peut pas être donné automatiquement.",
   "rolecom.refus.staff": "Le rôle {role} est un rôle de staff (bot ou tickets) : il ne peut pas être donné automatiquement.",
   "rolecom.refus.quarantaine": "Le rôle {role} est le rôle de quarantaine : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.attente": "Le rôle {role} est le rôle « en attente » du filtre des comptes récents : il ne peut pas être donné automatiquement.",
   "rolecom.refus.verifie": "Le rôle {role} est le rôle de vérification : il ne peut pas être donné automatiquement.",
   "rolecom.refus.bot": "Le bot ne peut pas donner le rôle {role} : il lui faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci.",
   "rolecom.refus.configurateur": "Vous ne pouvez pas donner le rôle {role} vous-même : il vous faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci."

@@ -54,16 +54,16 @@ Les données sont dans une base SQLite, sur le serveur qui héberge le bot. Elle
 |---|---|---|
 | Portefeuille | ID du serveur et du membre, solde, série de daily, date du dernier daily, gel éventuel par le staff, date de création | Jeux et boutique du serveur. Effacé avec les autres données de jeu après 1 an sans activité |
 | Journal du portefeuille | Chaque gain ou dépense : montant, solde après, origine (daily, jeu, achat…), ID de l'autre membre pour un paiement, date | Vérifier les soldes, enquête du staff en cas de triche. 1 an sans activité |
-| Compteurs du jour | Gains, envois, réceptions et travaux du jour ; limites des jeux du jour | Plafonds quotidiens (anti-abus). **2 jours** |
+| Compteurs du jour | Gains, envois, réceptions et travaux du jour ; limites des jeux du jour | Plafonds quotidiens (anti-abus). **2 jours**. Les limites des jeux du jour (duels, pendus, activité écrite) sont une seule ligne par compteur, réécrite chaque jour, effacée après 1 an d'inactivité |
 | XP et niveau | XP, niveau, XP du jour, date du dernier gain (jamais le texte des messages) | Niveaux et rôles de palier. 1 an sans activité |
 | Métier, inventaire | Métier, niveau de métier, date du dernier travail ; objets achetés | Jeux et boutique. 1 an sans activité |
 | Succès et statistiques | Succès obtenus (date, récompense versée), compteurs (parties gagnées, daily…) | Succès et classements. 1 an sans activité |
 | Quêtes | Quêtes du jour et de la semaine, progression, récompense réclamée | Quêtes. **30 jours** |
 | Profil, réputation | Bio, thème, badge mis en avant ; total de réputation reçue ; qui a donné une réputation à qui aujourd'hui | Profil (`/profil`). Réputation donnée : **2 jours** (une par jour) ; le reste : 1 an sans activité |
-| Anniversaire | Jour et mois (jamais l'année), date du dernier changement ; rôle du jour donné par le bot | Souhaiter l'anniversaire. Rôle : retiré le lendemain |
+| Anniversaire | Jour et mois (jamais l'année), date du dernier changement ; rôle du jour donné par le bot | Souhaiter l'anniversaire. Rôle : retiré le lendemain. Quand la date est retirée ou effacée, seule la date du dernier changement est gardée **30 jours** (délai entre deux changements) |
 | Parties | Jeu, joueurs, état de la partie, dates | Parties en cours (duels, pendu, quiz). Effacées **30 jours** après la fin. L'état d'une partie en cours (mot à deviner, ordre des réponses) n'est jamais exporté avant la fin |
 | Jeux du jour | Essais du mot du jour, de l'énigme et du quiz du jour | Une partie par jour. **30 jours** |
-| Traces anti-farm | Paires de membres déjà comptées aujourd'hui ou cette semaine (paiements, réputation, victoires, duels) | Empêcher deux comptes de se renvoyer des gains. **2 jours** (8 jours pour une semaine) |
+| Traces anti-farm | Paires de membres déjà comptées aujourd'hui ou cette semaine (paiements, réputation, victoires, duels) | Empêcher deux comptes de se renvoyer des gains. **2 jours** (8 jours pour une semaine). Chaque trace est rangée sous le membre qui a joué et nomme son partenaire : si le partenaire efface ses données, la trace est gardée jusqu'à ce délai (l'effacer permettrait de refaire gagner le même partenaire) |
 
 Membre sans activité depuis **1 an** sur un serveur : ses données de jeu sont effacées automatiquement. Le bot ne sait pas qui a quitté le serveur, la règle est donc la date de dernière activité connue (création du portefeuille, daily, mouvement du portefeuille, gain d'XP, succès, travail, jeu du jour). Exceptions : un compte gelé par le staff est gardé tant que le gel dure ; un membre sans aucune date connue (par exemple un anniversaire seul) garde ses données jusqu'à ce qu'il les efface ou que le bot quitte le serveur.
 

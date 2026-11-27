@@ -21,7 +21,7 @@ const salonDangereux = (guild, role) =>
 
 const existe = (requete, params) => db.sqlAll(requete, params).length > 0
 
-// Le rôle est-il réservé ? "staff", "quarantaine", "verifie" ou null.
+// Le rôle est-il réservé ? "staff", "quarantaine", "verifie", "attente" (filtre des comptes récents) ou null.
 // Staff : rôle staff du bot, rôle staff des tickets (par défaut, par type, ou TICKET_STAFF_ROLE_ID du .env).
 function roleReserve(guildId, roleId) {
     if (db.getStaffRole(guildId) === roleId) return "staff"
@@ -31,6 +31,7 @@ function roleReserve(guildId, roleId) {
     if (existe("SELECT 1 FROM ticket_types WHERE guild_id = ? AND staff_role_id = ?", [guildId, roleId])) return "staff"
     if (existe("SELECT 1 FROM quarantine_config WHERE guild_id = ? AND role_id = ?", [guildId, roleId])) return "quarantaine"
     if (existe("SELECT 1 FROM verification_config WHERE guild_id = ? AND role_id = ?", [guildId, roleId])) return "verifie"
+    if (existe("SELECT 1 FROM account_filter WHERE guild_id = ? AND role_id = ?", [guildId, roleId])) return "attente"
     return null
 }
 

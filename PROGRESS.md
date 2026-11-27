@@ -163,5 +163,39 @@ Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haik
 - 🕓 Reporté : A5 vue d'ensemble des modules dans /config et /setup (phase 3) · A6 bis verrou par serveur de /massban · A8 bis message « appel refusé = définitif » et débit · P3 découpage de Fonctions/tickets.js · S8 bis fetch du massban et plafond global de MP · S4 bis défi plus robuste · N4 durée de raid réglable et alerte si le salon disparaît · tests des purges · image Docker par digest et engines strict · C4 chaînes en dur (raid, pseudos) · C5 messages de vérification plus précis.
 - ❌ Rejeté : A7 (modules distincts) · P4, P6, P7 (style) · P5 (massban déjà testé) · P2 bis (16 comparaisons locales de sens différents) · P8 bis (exports pour les tests).
 
+## Phase 3 – Cœur ludique (26-27/11/2026)
+
+Phase 2 fusionnée (PR #16). Branche d'intégration `phase-3/coeur-ludique` (part de `main`). Choix d'Animeru : XP au message (intent Guild Messages), carte de rang en embed, casino au backlog. Découpage en 3 lots : 3A Économie, 3B Progression, 3C Jeux.
+
+| Idée | État | Résumé |
+|---|---|---|
+| Socle | ✅ | migrations 019-023, bus d'événements (`Fonctions/evenements.js`), intent Guild Messages, `Events/messageCreate.js` |
+| #26 #36 #38 Noyau économie | ✅ | portefeuille, journal = solde, transactions `BEGIN IMMEDIATE`, plafond du jour 800 ✦, 50 % les 7 premiers jours, limites de transfert, sanctionné/gelé sans gain |
+| #27 #28 | ✅ | `/daily` (série en jours de Paris), `/travail` (5 métiers, 8 par jour) |
+| #29 #30 | ✅ | `/boutique` (jamais un rôle staff ou à pouvoir), `/inventaire`, boost d'XP |
+| #32 #33 #35 | ✅ | `/solde`, `/payer`, `/classement`, `/eco` (staff) |
+| #39 #40 #41 #43 | ✅ | XP au message (1/min, 3 000/jour, 100 ✦/jour), `/rang` en embed, paliers, bonus ×2,5 max |
+| #44 #45 | ✅ | 43 succès, quêtes du jour et de la semaine, anti-farm par partenaire |
+| #76 #77 #78 | ✅ | `/profil`, `/rep`, `/anniversaire` |
+| #50 Moteur de parties | ✅ | une partie par joueur, fin unique, expiration, abandon = défaite |
+| #46 #47 #48 #49 | ✅ | quiz (120 questions originales FR/EN), Mot du jour, énigme du jour (sel secret `JEUX_SEL`), pendu |
+| #51 #52 #55 #72 | ✅ | PFC, morpion, réaction (sans mise), drops dans le chat |
+
+Décisions de la phase 3 :
+- Aucune mise d'argent : le casino reste au backlog ; les duels donnent 15 ✦ au gagnant et 5 au perdant.
+- Limites du jour (validées par `tests/simulation.test.js` sur 30 jours) : 8 travaux, 8 quiz, 10 duels (3 contre un même adversaire), 5 pendus, 100 ✦ d'activité écrite ; un très actif gagne ≈ 800 ✦ plafonnés + ≈ 460 hors plafond par jour. `docs/ECONOMIE.md` réécrit avec les vraies constantes ; sources non livrées marquées « à venir ».
+- `/privacy moi effacer` garde une empreinte anti-abus réduite (gel, dernier daily, succès, niveau, quêtes et jeux du jour, limites) pour qu'effacer ses données ne permette pas de rejouer les récompenses.
+- Mot et énigme du jour salés par `JEUX_SEL` (sinon `sel-jeux.txt` à côté de la base, hors dépôt).
+- Commits faits avant la critique de fin de lot (écart à la règle), corrections dans des commits séparés.
+- `data/dev.db` a été migrée le 26/11 à 11:58 (sauvegarde `backups/avant-migration-v0-20261126-115801.db`), sans doute par un test en dev.
+
+Critiques de fin de lot (3 × sonnet) : corrigé — remboursement sans condition et livraison ambiguë (boutique), daily et travail sans perte, anti-farm par partenaire, charge de l'XP, récompenses rejouables, anniversaires sans fetch complet, abandon et défaite au temps, quiz sans question répétée, sel secret, drops et réaction fiabilisés.
+
+### Tribunal de fin de jalon 3 — 1er procès : **jalon à reprendre** ; 2e procès : corrections vérifiées et appliquées
+Accusation : sécurité (opus), amélioration continue (sonnet), propreté (haiku). Défense (sonnet), jury (opus). 2e procès court (opus) sur le diff correctif. `npm audit` : 0.
+- ✅ Corrigé : S1 empreinte anti-abus à l'effacement · S2 `refusRoleCommunaute` (jamais un rôle staff du bot, des tickets, de quarantaine, de vérification, en attente, ni à pouvoir) · S3 export sans secret de partie · S4 /privacy et confidentialite.md complétés · S5 rôle d'anniversaire retiré seulement à qui le bot l'a donné, délai de 30 jours non contournable · S6 purges (quêtes, clés d'autres membres, membres inactifs 1 an) · S7 rôles temporaires · S8 anti-farm quiz et paiements · A1 simulation 30 jours · A2 100 ✦/jour d'écrit · A3 limites recalibrées · A6 vouvoiement · A7 /pendu · A8 doc · P2 daily dans Fonctions · P6 P7 P8.
+- 🕓 Reporté (phase 4) : configured_by des articles de boutique (S7) · `/jeux` de découverte (A4) · configuration regroupée et sous-commandes (A5, A7 bis) · constantes centralisées (A8) · SQL hors des commandes (P1, classement.js) · farm à 3 comptes A→B→C→A · rôle avec porteurs détecté seulement dans le cache.
+- ❌ Rejeté : P3 (fin de partie déjà centralisée dans conclureDuel) · P4 P5 (style).
+
 ## Prochaine étape
-Phase 2 codée, deux procès passés (jalon validé), commitée en local sur `phase-2/moderation-avancee` (rien de poussé). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID`, puis `npm run dev`) ; faire relire `data-statique/domaines-phishing.txt` ; sur accord d'Animeru, pousser et ouvrir la PR. Ensuite : phase 3 (cœur ludique), qui demande de trancher les 3 questions en attente (casino, intent GuildMessages pour l'XP, carte de rang en image ou en embed).
+Phase 3 codée, critiquée et passée au tribunal (corrections du 2e procès appliquées), commitée en local sur `phase-3/coeur-ludique` (rien de poussé). À faire : tester sur l'application **dev** (`npm run deploy:dev -- --guild ID` puis `npm run dev`, intent Guild Messages à laisser actif), éventuellement définir `JEUX_SEL` dans le .env de prod ; sur accord d'Animeru, pousser et ouvrir la PR. Ensuite : phase 4 (jeux multijoueurs et produits phares).

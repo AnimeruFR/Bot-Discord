@@ -48,6 +48,7 @@
   "boutique.refus.prix": "The price must be a whole number from {min} to {maxprix}.",
   "boutique.refus.stock": "The stock must be a positive whole number (at least 1 when adding).",
   "boutique.refus.duree": "A temporary role needs a duration from 1 h to 90 days (option `duree`, for example 7d).",
+  "boutique.refus.role_autre_source": "This role is already given by a level reward, a role button or the birthday role: as a temporary item it would become permanent. Choose another role.",
   "boutique.refus.doublon": "This item is already in the shop.",
   "boutique.refus.plein": "The shop is full ({max} items at most): remove one first.",
   "boutique.refus.rien": "Nothing to change: give a name, a price or a stock.",
@@ -70,6 +71,7 @@
   "rolecom.refus.dangereux_salon": "The role {role} grants moderation powers in a channel (channel override): it cannot be given automatically.",
   "rolecom.refus.staff": "The role {role} is a staff role (bot or tickets): it cannot be given automatically.",
   "rolecom.refus.quarantaine": "The role {role} is the quarantine role: it cannot be given automatically.",
+  "rolecom.refus.attente": "The role {role} is the \"pending\" role of the new-account filter: it cannot be given automatically.",
   "rolecom.refus.verifie": "The role {role} is the verification role: it cannot be given automatically.",
   "rolecom.refus.bot": "The bot cannot give the role {role}: it needs \"Manage Roles\" and a role placed above this one.",
   "rolecom.refus.configurateur": "You cannot give the role {role} yourself: you need \"Manage Roles\" and a role placed above this one."

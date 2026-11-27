@@ -58,7 +58,7 @@ test("anniversaire : dates valides et invalides, effaçable, jamais l'année", (
     assert.strictEqual(anniv.retirer(G, U), false)
 })
 
-test("anniversaire : la date ne change qu'une fois tous les 30 jours, la suppression reste libre", () => {
+test("anniversaire : la date ne change qu'une fois tous les 30 jours, la suppression reste libre sans remettre le délai à zéro", () => {
     const U = "200000000000000002", t0 = Date.UTC(2027, 0, 1)
     assert.strictEqual(anniv.definir(G, U, 1, 5, t0).ok, true, "première saisie")
     assert.strictEqual(anniv.definir(G, U, 1, 5, t0 + JOUR).ok, true, "même date : pas un changement")
@@ -68,6 +68,9 @@ test("anniversaire : la date ne change qu'une fois tous les 30 jours, la suppres
     assert.strictEqual(anniv.definir(G, U, 2, 5, t0 + 30 * JOUR).ok, true, "30 jours après")
     assert.strictEqual(anniv.definir(G, U, 3, 5, t0 + 31 * JOUR).ok, false, "le délai repart du dernier changement")
     assert.strictEqual(anniv.retirer(G, U), true, "retirer reste libre")
+    assert.strictEqual(anniv.lire(G, U), null)
+    assert.deepStrictEqual(anniv.definir(G, U, 4, 5, t0 + 32 * JOUR), { ok: false, refus: "delai", prochain: t0 + 60 * JOUR }, "retirer puis redéfinir ne contourne pas le délai")
+    assert.strictEqual(anniv.definir(G, U, 4, 5, t0 + 60 * JOUR).ok, true, "délai écoulé")
     // Date posée avant la migration (changed_at vide) : modifiable tout de suite
     db.sqlRun("INSERT INTO anniversaires (guild_id, user_id, day, month) VALUES (?, ?, 1, 1)", [G, "200000000000000003"])
     assert.strictEqual(anniv.definir(G, "200000000000000003", 2, 2).ok, true)
