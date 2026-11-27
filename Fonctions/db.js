@@ -98,6 +98,7 @@ const requetes = {
         UNION SELECT guild_id FROM rep_donnees
         UNION SELECT guild_id FROM anniversaires
         UNION SELECT guild_id FROM anniv_config
+        UNION SELECT guild_id FROM anniv_roles_donnes
         UNION SELECT guild_id FROM parties
         UNION SELECT guild_id FROM jeux_quotidiens
         UNION SELECT guild_id FROM drops_config`),
@@ -105,7 +106,7 @@ const requetes = {
         "ticket_types", "tickets", "role_panels", "role_panel_buttons", "announcements", "guild_modules", "guild_salons_jeux",
         "log_channels", "staff_notes", "mod_reasons", "case_edits", "ticket_macros", "account_filter", "automod_config",
         "raid_config", "raid_events", "verification_config", "nick_filter", "appeals", "quarantine_config", "quarantines", "config_audit", "ticket_fields", "ticket_events", "phishing_whitelist", "verification_attempts",
-        "eco_config", "eco_comptes", "eco_journal", "eco_compteurs", "eco_metiers", "inventaire", "shop_items", "shop_roles_temp", "xp", "xp_config", "xp_bonus", "xp_paliers", "succes", "quetes", "stats_joueur", "profils", "reputation", "rep_donnees", "anniversaires", "anniv_config", "parties", "jeux_quotidiens", "drops_config"]
+        "eco_config", "eco_comptes", "eco_journal", "eco_compteurs", "eco_metiers", "inventaire", "shop_items", "shop_roles_temp", "xp", "xp_config", "xp_bonus", "xp_paliers", "succes", "quetes", "stats_joueur", "profils", "reputation", "rep_donnees", "anniversaires", "anniv_config", "anniv_roles_donnes", "parties", "jeux_quotidiens", "drops_config"]
         .map(table => db.prepare(`DELETE FROM ${table} WHERE guild_id = ?`)),
 
     // Types de tickets
@@ -232,7 +233,12 @@ const requetes = {
     // Phase 3 : compteurs du jour (anti-contournement des plafonds), réputations données, quêtes et parties terminées
     purgeEcoCompteurs: db.prepare("DELETE FROM eco_compteurs WHERE day < ?"),
     purgeRepDonnees: db.prepare("DELETE FROM rep_donnees WHERE day < ?"),
-    purgeQuetes: db.prepare("DELETE FROM quetes WHERE claimed = 1 AND period < ? OR period < ?"),
+    // Les périodes AAAA-Wnn et AAAA-MM-JJ ne se comparent pas entre elles comme du texte : une limite par format
+    purgeQuetes: db.prepare("DELETE FROM quetes WHERE (period LIKE '%-W%' AND period < ?) OR (period NOT LIKE '%-W%' AND period < ?)"),
+    // Traces anti-farm qui contiennent l'identifiant d'un autre membre : paire:<clé>:<période>:<id> et duels_contre:<id>
+    tracesPaires: db.prepare("SELECT rowid AS id, stat FROM stats_joueur WHERE stat LIKE 'paire:%'"),
+    supprimerStat: db.prepare("DELETE FROM stats_joueur WHERE rowid = ?"),
+    purgeDuelsContre: db.prepare("DELETE FROM stats_joueur WHERE stat LIKE 'duels_contre:%' AND value / 100 < ?"),
     purgeParties: db.prepare("DELETE FROM parties WHERE status != 'en_cours' AND updated_at < ?"),
     purgeJeuxQuotidiens: db.prepare("DELETE FROM jeux_quotidiens WHERE day < ?"),
     purgeWarns: db.prepare("DELETE FROM warns WHERE created_at < ?"),
@@ -411,14 +417,38 @@ module.exports = {
     // Durées de la phase 2 (voir le registre RGPD) : journal de config 2 ans, raids levés 1 an,
     // essais de vérification 1 jour. Les quarantaines ne sont jamais purgées : une ligne = une quarantaine active
     // (la levée la supprime, un membre parti la retrouve s'il revient)
-    // Durées de la phase 3 (voir le registre RGPD). jourMin : date AAAA-MM-JJ la plus ancienne gardée pour les compteurs
-    // du jour (2 jours) ; jourQuetes et jourJeux : 30 jours ; parties terminées : 30 jours
-    purgePhase3({ jourCompteurs, jourAncien, depuis30Jours }) {
-        requetes.purgeEcoCompteurs.run(jourCompteurs)
-        requetes.purgeRepDonnees.run(jourCompteurs)
-        requetes.purgeQuetes.run(jourAncien, jourAncien)
-        requetes.purgeParties.run(depuis30Jours)
-        requetes.purgeJeuxQuotidiens.run(jourAncien)
+    // Durées de la phase 3 (voir le registre RGPD). jourCompteurs : jour AAAA-MM-JJ le plus ancien gardé pour les compteurs
+    // du jour et les traces anti-farm (2 jours) ; semaineTraces : semaine AAAA-Wnn la plus ancienne gardée pour les traces ;
+    // jourAncien et semaineAncienne : 30 jours (quêtes, jeux du jour) ; parties terminées : 30 jours
+    purgePhase3({ jourCompteurs, jourAncien, semaineAncienne, semaineTraces, depuis30Jours }) {
+        module.exports.transaction(() => {
+            requetes.purgeEcoCompteurs.run(jourCompteurs)
+            requetes.purgeRepDonnees.run(jourCompteurs)
+            requetes.purgeQuetes.run(semaineAncienne, jourAncien)
+            requetes.purgeParties.run(depuis30Jours)
+            requetes.purgeJeuxQuotidiens.run(jourAncien)
+            // La période est l'avant-dernier segment de la clé (la clé elle-même contient des « : »)
+            for (const { id, stat } of requetes.tracesPaires.all()) {
+                const periode = /:(\d{4}-\d{2}-\d{2}|\d{4}-W\d{2}):[^:]*$/.exec(stat)?.[1]
+                if (periode && periode < (periode.includes("W") ? semaineTraces : jourCompteurs)) requetes.supprimerStat.run(id)
+            }
+            requetes.purgeDuelsContre.run(Number(jourCompteurs.replaceAll("-", "")))
+        })
+    },
+    // Données de jeu des membres sans activité depuis `avant` (voir INACTIVITE dans le registre RGPD). Un compte gelé est
+    // gardé tant que le gel dure ; un membre sans aucune date connue n'est pas concerné. Renvoie le nombre de membres effacés.
+    purgeMembresInactifs(avant) {
+        const { INACTIVITE } = require('./registreRgpd')
+        const membres = INACTIVITE.tables.map(t => `SELECT guild_id, user_id, NULL AS d FROM ${t}`)
+        const dates = INACTIVITE.dates.map(([t, c]) => `SELECT guild_id, user_id, ${c} AS d FROM ${t}`)
+        return module.exports.transaction(() => {
+            const inactifs = db.prepare(`SELECT guild_id, user_id FROM (${[...membres, ...dates].join(" UNION ALL ")}) AS m
+                WHERE NOT EXISTS (SELECT 1 FROM eco_comptes e WHERE e.guild_id = m.guild_id AND e.user_id = m.user_id AND e.frozen = 1)
+                GROUP BY guild_id, user_id HAVING MAX(d) IS NOT NULL AND MAX(d) < ?`).all(avant)
+            const suppressions = INACTIVITE.tables.map(t => db.prepare(`DELETE FROM ${t} WHERE guild_id = ? AND user_id = ?`))
+            for (const { guild_id: g, user_id: u } of inactifs) for (const s of suppressions) s.run(g, u)
+            return inactifs.length
+        })
     },
     purgePhase2({ deuxAns, unAn, unJour }) {
         requetes.purgeConfigAudit.run(deuxAns)

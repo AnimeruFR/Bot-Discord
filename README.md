@@ -1,12 +1,12 @@
 # Bot-Discord
 
-**Bot Discord tout-en-un, sécurisé, en français et en anglais** : modération, tickets, animation. Tout se configure avec `/config`, et le bot ne demande jamais la permission Administrateur.
+**Bot Discord tout-en-un, sécurisé, en français et en anglais** : modération, tickets, animation, et un module Communauté (économie sans valeur réelle, niveaux, succès, quêtes, jeux sans mise). Tout se configure avec `/config`, et le bot ne demande jamais la permission Administrateur.
 
-| 🛡️ Modération | 🎫 Tickets | 🎉 Animation |
+| 🛡️ Modération | 🎫 Tickets | 🎉 Animation et communauté |
 |---|---|---|
 | Ban avec confirmation, ban temporaire (déban automatique), kick, mute, warns | Types de tickets, formulaire à l'ouverture, prise en charge | Giveaways (tirage équitable, survit aux redémarrages) |
 | Historique par membre, sanctions automatiques | Transcript texte + HTML, pièces jointes, note de 1 à 5 | Rôles à boutons, sondages natifs |
-| `/lock`, `/slowmode`, règles AutoMod natives | Fermeture des tickets inactifs, `/stats` | Annonces programmées, bienvenue / au revoir |
+| `/lock`, `/slowmode`, règles AutoMod natives | Fermeture des tickets inactifs, `/stats` | Annonces programmées, bienvenue / au revoir ; monnaie du serveur, `/daily`, boutique, XP et `/rang`, succès, quêtes, quiz, Mot du jour, duels |
 
 **Sécurité** : hiérarchie des rôles revérifiée à chaque action, aucune mention @everyone possible, transcripts sans XSS, données effacées 30 jours après le départ du bot (`/privacy`), CI avec tests, lint, audit des dépendances et image Docker non root.
 
@@ -16,17 +16,17 @@
 
 ## Installation
 
-1. Crée une application sur le [Discord Developer Portal](https://discord.com/developers/applications), ajoute-lui un bot et récupère son token (*Bot > Reset Token*).
+1. Créez une application sur le [Discord Developer Portal](https://discord.com/developers/applications), ajoutez-lui un bot et récupérez son token (*Bot > Reset Token*).
    **Obligatoire** : dans *Bot > Privileged Gateway Intents*, coche **Server Members Intent** (messages de bienvenue, giveaways). Sans lui, Discord refuse la connexion (code 4014) et le bot l'indique dans la console.
 2. Invite le bot avec le lien donné par `npm run invite` (après l'étape 3) : il demande seulement les **permissions minimales** et affiche à quoi sert chacune (jamais Administrateur). Une fois le bot en ligne, `/invite` donne le même lien.
    Le rôle du bot doit être placé **au-dessus** des rôles qu'il doit modérer.
-3. Copie `.env.example` en `.env` et remplis-le :
+3. Copiez `.env.example` en `.env` et remplissez-le :
    ```
    DISCORD_TOKEN=ton_token
    TICKET_STAFF_ROLE_ID=id_du_role_staff   (optionnel)
    ```
-   Le fichier `.env` est ignoré par git : **ne mets jamais ton token dans le code**.
-4. Installe, enregistre les slash commandes puis lance (Node.js 22.23.5 ou plus, pour les correctifs de sécurité) :
+   Le fichier `.env` est ignoré par git : **ne mettez jamais votre token dans le code**.
+4. Installez, enregistrez les slash commandes puis lancez (Node.js 22.23.5 ou plus, pour les correctifs de sécurité) :
    ```
    npm install
    npm run deploy
@@ -105,7 +105,7 @@ Sans configuration, **tout est gratuit** (bot auto-hébergé). Pour vendre un ab
 
 ## Données et logs
 
-- Les avertissements, le salon de logs de chaque serveur et le délai entre tickets sont stockés dans une base SQLite locale : `data/bot.db` (ignorée par git, à sauvegarder si tu héberges le bot). Elle utilise `node:sqlite`, intégré à Node : aucune dépendance native à compiler.
+- Les avertissements, le salon de logs de chaque serveur et le délai entre tickets sont stockés dans une base SQLite locale : `data/bot.db` (ignorée par git, à sauvegarder si vous hébergez le bot). Elle utilise `node:sqlite`, intégré à Node : aucune dépendance native à compiler.
 - `/setlogs #salon` envoie dans ce salon un résumé de chaque action de modération (qui, quoi, sur qui, pourquoi). Choisis un salon privé : le bot prévient s'il est visible par tout le monde.
 - **Sanctions automatiques** : un seuil se déclenche quand le membre atteint *exactement* ce nombre de warns, et seulement si le modérateur qui met le warn a lui-même le droit d'appliquer la sanction (un modérateur qui ne peut que warn ne fait jamais bannir quelqu'un). Un membre qui repasse par le seuil après un `/unwarn` est sanctionné à nouveau.
 - **Ban temporaire** : le bot vérifie chaque minute les bans arrivés à échéance. S'il était éteint, il rattrape les débans en retard au démarrage. Si le membre a été débanni ou re-banni à la main entre-temps, le bot ne touche à rien.
@@ -115,7 +115,7 @@ Sans configuration, **tout est gratuit** (bot auto-hébergé). Pour vendre un ab
 
 Utilise **deux applications Discord** (« Bot-Discord DEV » pour tester, et la vraie) avec deux tokens et deux bases séparées. Détails dans [ROADMAP.md](ROADMAP.md) §3.
 
-| | Dev (ton PC) | Prod (serveur d'hébergement) |
+| | Dev (votre PC) | Prod (serveur d'hébergement) |
 |---|---|---|
 | Fichier | `.env.dev` (copie de `.env.dev.example`) | `.env.prod` (copie de `.env.prod.example`, `chmod 600`) |
 | Commandes | `npm run deploy:dev -- --guild ID_SERVEUR_TEST` | `npm run deploy:prod` |
@@ -137,7 +137,7 @@ L'image tourne sans root, avec un système de fichiers en lecture seule. Le `.en
 - Manuelle avec Docker : `docker compose exec bot node scripts/backup.js`. Sans Docker : `npm run backup -- --env=prod`. N'utilise pas `sudo npm run backup` sur une installation Docker : les fichiers créés appartiendraient à root et le bot ne pourrait plus ouvrir sa base.
 - **Migrations du schéma** : la base porte un numéro de version (`PRAGMA user_version`) et le bot applique tout seul les fichiers de `migrations/` au démarrage. Avant de migrer une base déjà remplie, il en fait une copie `backups/avant-migration-v<version>-<date>.db` (jamais supprimée par la rotation).
 - `npm run migrate -- --etat` affiche la version et les migrations en attente ; `npm run migrate` les applique ; `npm run migrate -- --annuler N --confirmer` revient à la version N (avec Docker : `docker compose exec bot node scripts/migrate.js --etat`).
-- **Copie régulièrement `backups/` hors du serveur** (ton PC, un stockage en ligne) : une sauvegarde sur la même machine ne protège pas d'une panne de disque.
+- **Copiez régulièrement `backups/` hors du serveur** (votre PC, un stockage en ligne) : une sauvegarde sur la même machine ne protège pas d'une panne de disque.
 - Restauration : arrête le bot, remplace `data/bot.db` par la sauvegarde choisie, supprime `data/bot.db-wal` et `data/bot.db-shm` s'ils existent, relance.
 
 ## Vérification

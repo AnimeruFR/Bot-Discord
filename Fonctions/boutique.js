@@ -4,14 +4,15 @@ const eco = require('./economie')
 const inventaire = require('./inventaire')
 const { emettre } = require('./evenements')
 const { peutDonnerRole, fetchMember } = require('./moderation')
-const { PERMISSIONS_MODERATION } = require('./config')
+const { PERMISSIONS_INTERDITES, salonDangereux, refusRoleCommunaute } = require('./rolesCommunaute')
 
 // Boutique du serveur (idée #29). Chiffres : docs/ECONOMIE.md. Quatre types d'articles :
 //   role (permanent), role_temp (durée de 1 h à 90 jours), couleur (rôle de couleur sans aucune permission),
 //   objet (du catalogue data-statique/objets.json).
 //
 // INVARIANT : la boutique ne distribue jamais un rôle qui donne un pouvoir de modération ou un pouvoir dangereux,
-// ni au niveau du serveur ni par une surcharge de salon. Vérifié à l'ajout de l'article ET à chaque achat.
+// ni au niveau du serveur ni par une surcharge de salon, ni un rôle réservé (staff, tickets, quarantaine, vérification).
+// Vérifié à l'ajout de l'article ET à chaque achat, par le contrôle commun de rolesCommunaute.js.
 
 const { Flags } = Discord.PermissionsBitField
 
@@ -29,20 +30,12 @@ const INTERVALLE_RETRAIT = 5 * 60 * 1000
 // Refus venus de l'économie (peutJouer, debiter) : leur texte est dans eco.refus.<refus>
 const REFUS_ECONOMIE = ["module", "gele", "sanctionne", "plafond_solde", "solde"]
 
-// Pouvoirs de modération (config.js) et autres pouvoirs qu'un rôle de boutique ne doit jamais avoir
-const PERMISSIONS_INTERDITES = new Discord.PermissionsBitField(PERMISSIONS_MODERATION | Flags.ManageGuildExpressions | Flags.ManageEvents
-    | Flags.MuteMembers | Flags.DeafenMembers | Flags.MoveMembers | Flags.PinMessages | Flags.ViewGuildInsights | Flags.BypassSlowmode)
-
 // Nombre de jours de jeu actif pour gagner ce prix (1 décimale), pour aider l'admin à fixer des prix cohérents
 const joursDeJeu = prix => Math.round(prix / GAIN_JOUR_ACTIF * 10) / 10
 
 // --- Rôles -----------------------------------------------------------------------------------------------------
 
-// Salon dont une surcharge donne au rôle un pouvoir interdit (le rôle serait alors dangereux dans ce salon), ou null
-const salonDangereux = (guild, role) =>
-    guild.channels.cache.find(c => c.permissionOverwrites?.cache.get(role.id)?.allow.any(PERMISSIONS_INTERDITES)) ?? null
-
-// Le rôle peut-il être vendu ? Renvoie le motif du refus, ou null.
+// Le rôle peut-il être vendu ? Renvoie le motif du refus (code court, ou clé i18n « rolecom.refus.* »), ou null.
 // admin : le membre qui ajoute l'article (il doit pouvoir donner ce rôle lui-même) ; absent à l'achat.
 // couleur : rôle de couleur, sans aucune permission.
 function refusRole(guild, role, { admin = null, couleur = false } = {}) {
@@ -59,7 +52,8 @@ function refusRole(guild, role, { admin = null, couleur = false } = {}) {
     const moi = guild.members.me
     if (!moi?.permissions.has(Flags.ManageRoles) || role.comparePositionTo(moi.roles.highest) >= 0) return "bot_sous_role"
     if (admin && !peutDonnerRole(admin, role)) return "admin_sous_role"
-    return null
+    // Contrôle commun : rôle réservé (staff, tickets, quarantaine, vérification), pouvoirs, hiérarchie
+    return refusRoleCommunaute(guild, role, admin)
 }
 
 // --- Articles --------------------------------------------------------------------------------------------------
@@ -269,10 +263,22 @@ async function acheter(member, id) {
 // --- Rôles temporaires -----------------------------------------------------------------------------------------
 
 const dejaSignale = new Set() // retraits en échec déjà écrits dans les logs (un seul message par rôle)
+const ESSAIS_MAX = 5 // échecs de retrait avant d'abandonner la ligne
+const ABANDON_APRES = 7 * 24 * 3600 * 1000 // ou 7 jours après l'échéance
+
+// Une autre source donne-t-elle ce rôle de façon durable (palier de niveau, bouton de rôle, rôle d'anniversaire) ?
+// On ne peut pas savoir si le membre l'a obtenu autrement entre-temps : dans ce cas on ne le retire pas, car le retirer
+// reprendrait un rôle gagné par ailleurs. (La boutique elle-même ne vend jamais deux fois le même rôle : doublon.)
+const autreSourceDuRole = (guildId, roleId) =>
+    ["SELECT 1 FROM xp_paliers WHERE guild_id = ? AND role_id = ?",
+        "SELECT 1 FROM role_panel_buttons WHERE guild_id = ? AND role_id = ?",
+        "SELECT 1 FROM anniv_config WHERE guild_id = ? AND role_id = ?"]
+        .some(requete => db.sqlAll(requete, [guildId, roleId]).length > 0)
 
 // Retire les rôles temporaires arrivés à échéance. Renvoie le nombre de lignes traitées.
-// Une ligne reste tant que le retrait n'a pas réussi (erreur réseau, permission) ; elle disparaît si le serveur,
-// le membre ou le rôle n'existent plus.
+// Une ligne existe seulement si le bot a donné le rôle par un achat (l'achat est refusé si le membre l'a déjà).
+// Elle reste tant que le retrait n'a pas réussi (erreur réseau, permission), puis est abandonnée avec un message dans les
+// logs après ESSAIS_MAX échecs ou 7 jours après l'échéance. Elle disparaît si le serveur, le membre ou le rôle n'existent plus.
 async function retirerExpires(bot, maintenant = Date.now()) {
     const lignes = db.sqlAll("SELECT * FROM shop_roles_temp WHERE expires_at <= ?", [maintenant])
     let traites = 0
@@ -283,7 +289,9 @@ async function retirerExpires(bot, maintenant = Date.now()) {
             const guild = bot.guilds.cache.get(l.guild_id)
             if (guild && guild.available === false) continue // serveur indisponible : on réessaie plus tard
             const membre = guild ? await fetchMember(guild, l.user_id) : null
-            if (membre && membre.roles.cache.has(l.role_id)) await membre.roles.remove(l.role_id, "Boutique : rôle temporaire expiré")
+            if (membre && membre.roles.cache.has(l.role_id) && !autreSourceDuRole(l.guild_id, l.role_id)) {
+                await membre.roles.remove(l.role_id, "Boutique : rôle temporaire expiré")
+            }
             supprimer(l)
             dejaSignale.delete(cle)
             traites++
@@ -291,7 +299,18 @@ async function retirerExpires(bot, maintenant = Date.now()) {
             if (err.code === Discord.RESTJSONErrorCodes.UnknownRole) {
                 supprimer(l)
                 traites++
-            } else if (!dejaSignale.has(cle)) {
+                continue
+            }
+            const echecs = l.failures + 1
+            if (echecs >= ESSAIS_MAX || maintenant - l.expires_at >= ABANDON_APRES) {
+                console.error(`Retrait du rôle temporaire ${l.role_id} abandonné après ${echecs} échec(s) (serveur ${l.guild_id}, membre ${l.user_id}) : le rôle reste au membre :`, err.message)
+                supprimer(l)
+                dejaSignale.delete(cle)
+                traites++
+                continue
+            }
+            db.sqlRun("UPDATE shop_roles_temp SET failures = ? WHERE guild_id = ? AND user_id = ? AND role_id = ?", [echecs, l.guild_id, l.user_id, l.role_id])
+            if (!dejaSignale.has(cle)) {
                 dejaSignale.add(cle)
                 console.error(`Retrait du rôle temporaire ${l.role_id} impossible (serveur ${l.guild_id}, membre ${l.user_id}), nouvel essai plus tard :`, err.message)
             }

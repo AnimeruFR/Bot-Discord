@@ -16,6 +16,8 @@ const ACTIONS_ADMIN = ["ajouter", "retirer", "modifier"]
 function texteRefus(cible, refus, { roleId = null } = {}) {
     const monnaie = eco.monnaie(cible.guildId ?? cible.id).nom
     if (boutique.REFUS_ECONOMIE.includes(refus)) return t(cible, `eco.refus.${refus}`, { monnaie })
+    // Refus du contrôle commun des rôles (rolesCommunaute.js) : c'est déjà une clé i18n
+    if (refus.startsWith("rolecom.")) return t(cible, refus, { role: roleId ? `<@&${roleId}>` : "?" })
     return t(cible, `boutique.refus.${refus}`, {
         role: roleId ? `<@&${roleId}>` : "?", max: boutique.ARTICLES_MAX, min: boutique.PRIX_MIN, maxprix: boutique.PRIX_MAX
     })

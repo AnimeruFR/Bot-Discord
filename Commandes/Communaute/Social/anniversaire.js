@@ -1,6 +1,6 @@
 const Discord = require('discord.js')
 const anniv = require('../../../Fonctions/anniversaires')
-const { peutDonnerRole } = require('../../../Fonctions/moderation')
+const { texteRefusRole } = require('../../../Fonctions/rolesCommunaute')
 const { t } = require('../../../Fonctions/i18n')
 const { refuser } = require('../../../Fonctions/erreurs')
 
@@ -61,7 +61,9 @@ module.exports = {
 
         if (action === "definir") {
             const jour = args.getInteger("jour"), mois = args.getInteger("mois")
-            if (!anniv.definir(guild.id, interaction.user.id, jour, mois)) return refuser(interaction, t(interaction, "social.anniv.date_invalide"))
+            const r = anniv.definir(guild.id, interaction.user.id, jour, mois)
+            if (!r.ok && r.refus === "delai") return refuser(interaction, t(interaction, "social.anniv.trop_tot", { date: `<t:${Math.floor(r.prochain / 1000)}:D>` }))
+            if (!r.ok) return refuser(interaction, t(interaction, "social.anniv.date_invalide"))
             return interaction.reply({ content: t(interaction, "social.anniv.defini", { date: dateTexte(interaction, jour, mois) }), flags: EPHEMERAL })
         }
         if (action === "retirer") {
@@ -98,9 +100,8 @@ module.exports = {
             return refuser(interaction, t(interaction, "social.anniv.salon_bot", { salon }))
         }
         if (role) {
-            if (anniv.roleDangereux(role)) return refuser(interaction, t(interaction, "social.anniv.role_dangereux"))
-            if (!peutDonnerRole(interaction.member, role)) return refuser(interaction, t(interaction, "social.anniv.role_admin"))
-            if (!peutDonnerRole(guild.members.me, role)) return refuser(interaction, t(interaction, "social.anniv.role_bot"))
+            const refus = anniv.refusRoleAnniv(guild, role, interaction.member)
+            if (refus) return refuser(interaction, refus.startsWith("social.") ? t(interaction, refus) : texteRefusRole(interaction, refus, role))
         }
         anniv.ecrireConfig(guild.id, { salon: salon?.id, role: role?.id })
         return interaction.reply({ content: t(interaction, "social.anniv.config_ok"), flags: EPHEMERAL })

@@ -325,3 +325,26 @@ test("quêtes : si crediter lève une exception, la quête reste réclamable", (
     assert.strictEqual(quetes.quetesDuMembre(G, U, { instant: t }).find(q => q.id === "j_daily").claimed, false)
     assert.strictEqual(quetes.reclamer(membre(U), { instant: t }).reclamees.length, 1)
 })
+
+test("quête de paiement : un aller-retour le même jour ne compte pas, un autre bénéficiaire compte", () => {
+    const [A, B, C] = ["200000000000000040", "200000000000000041", "200000000000000042"]
+    const [mA, mB] = [membre(A), membre(B)]
+    const t = Date.now() // le journal et le bus utilisent l'horloge réelle
+    for (const m of [mA, mB, membre(C)]) economie.crediter(m, 500, { source: "test" })
+    for (const U of [A, B]) forcerQuete(U, t, "j_paiement")
+
+    assert.ok(economie.transferer(mA, mB, 100).ok)
+    assert.strictEqual(progression(A, t, "j_paiement"), 1, "A paie B : la quête de A avance")
+    // B rend la somme à A le même jour : même si le paiement est valable, il ne fait pas avancer la quête de B
+    assert.ok(economie.transferer(mB, mA, 100).ok)
+    assert.strictEqual(progression(B, t, "j_paiement"), 0, "aller-retour : ne compte pas")
+    // Un autre bénéficiaire (qui n'a rien payé à B) compte
+    assert.ok(economie.transferer(mB, membre(C), 100).ok)
+    assert.strictEqual(progression(B, t, "j_paiement"), 1)
+    // Un paiement de moins de 50 ne compte pas non plus
+    const sous = "200000000000000043"
+    forcerQuete(sous, t, "j_paiement")
+    economie.crediter(membre(sous), 500, { source: "test" })
+    assert.ok(economie.transferer(membre(sous), membre(C), 30).ok)
+    assert.strictEqual(progression(sous, t, "j_paiement"), 0)
+})

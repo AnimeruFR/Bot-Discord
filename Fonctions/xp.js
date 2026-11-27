@@ -29,6 +29,8 @@ const MAX_BONUS = 25         // par type (salons, rôles)
 const SANS_ANNONCE = "aucun" // valeur de levelup_channel_id quand les annonces sont coupées
 const DUREE_CACHE = 60 * 1000
 const TAILLE_FILTRE_MAX = 100000 // garde-fou : au-delà, le filtre est vidé
+const ECLATS_JOUR_MAX = 100  // monnaie gagnée par l'activité écrite (1 ✦ par gain d'XP), par jour et par membre
+const STAT_ECLATS_JOUR = "xp_eclats_jour" // stats_joueur : AAAAMMJJ * 1000 + monnaie déjà versée ce jour-là
 
 // --- Niveaux ---------------------------------------------------------------------------------------------------
 
@@ -251,16 +253,31 @@ async function gagnerXp(message, { maintenant = Date.now(), alea = Math.random }
     })
     if (!resultat) return null
 
-    // 1 ✦ par gain, seulement si l'économie est active : un refus ou une erreur d'économie ne retire jamais l'XP
+    // 1 ✦ par gain (100 par jour au plus), seulement si l'économie est active : un refus ou une erreur d'économie ne retire jamais l'XP
     if (refus === null) {
         try {
-            economie.crediter(member, 1, { source: "xp", actif: true })
+            crediterActivite(member, jour)
         } catch (err) {
             console.error("XP, crédit de monnaie :", err.message)
         }
     }
     if (resultat.niveau > resultat.ancienNiveau) await passageDeNiveau(message, resultat.ancienNiveau, resultat.niveau, regl.config)
     return { ...resultat, multiplicateur: bonus.total }
+}
+
+// 1 ✦ pour un gain d'XP, tant que la monnaie d'activité du jour n'a pas atteint ECLATS_JOUR_MAX. Le compteur est une ligne
+// de stats_joueur qui repart de zéro chaque jour (sans ligne par jour). Tout est synchrone : pas de dépassement possible
+// entre la lecture du compteur et son écriture. Un gain refusé ou plafonné par l'économie (plafond du jour) n'est pas compté.
+function crediterActivite(member, jour) {
+    const guildId = member.guild.id, userId = member.id
+    const numero = Number(jour.replaceAll("-", ""))
+    const ligne = db.sqlAll("SELECT value FROM stats_joueur WHERE guild_id = ? AND user_id = ? AND stat = ?", [guildId, userId, STAT_ECLATS_JOUR])[0]
+    const deja = ligne && Math.floor(ligne.value / 1000) === numero ? ligne.value % 1000 : 0
+    if (deja >= ECLATS_JOUR_MAX) return
+    const credit = economie.crediter(member, 1, { source: "xp", actif: true })
+    if (!credit.ok || credit.credite <= 0) return
+    db.sqlRun(`INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, ?)
+        ON CONFLICT (guild_id, user_id, stat) DO UPDATE SET value = excluded.value`, [guildId, userId, STAT_ECLATS_JOUR, numero * 1000 + deja + credit.credite])
 }
 
 // Paliers, annonce et événement. Une erreur Discord (rôle, salon) n'annule jamais le niveau déjà écrit.
@@ -309,7 +326,7 @@ function profilXp(guildId, userId, instant = Date.now()) {
 }
 
 module.exports = {
-    XP_MIN, XP_MAX, INTERVALLE, PLAFOND_JOUR, BONUS_MAX, TOTAL_MAX, MAX_EXCLUS, MAX_BONUS, SANS_ANNONCE,
+    XP_MIN, XP_MAX, INTERVALLE, PLAFOND_JOUR, ECLATS_JOUR_MAX, BONUS_MAX, TOTAL_MAX, MAX_EXCLUS, MAX_BONUS, SANS_ANNONCE,
     xpPourNiveau, xpCumulee, niveauPourXp, progression, barre,
     lireConfig, definirExclusion, definirWeekend, definirSalonAnnonce, listerBonus, definirBonus,
     estWeekend, multiplicateur, gagnerXp, profilXp, invaliderReglages

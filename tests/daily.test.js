@@ -5,7 +5,7 @@ const assert = require('node:assert')
 const db = require('../Fonctions/db')
 const eco = require('../Fonctions/economie')
 const metiers = require('../Fonctions/metiers')
-const daily = require('../Commandes/Communaute/Economie/daily')
+const daily = require('../Fonctions/daily')
 const { ecouter, retirerEcouteurs } = require('../Fonctions/evenements')
 const { dateDeParis } = require('../Fonctions/dates')
 
@@ -293,4 +293,19 @@ test("travail : chaque métier a au moins 5 textes en français et en anglais", 
             assert.ok(textes.size >= 5)
         }
     }
+})
+
+test("commande /daily : elle appelle seulement les fonctions du daily et affiche le résultat", async () => {
+    const commande = require('../Commandes/Communaute/Economie/daily')
+    assert.strictEqual(commande.reclamer, undefined, "la logique est dans Fonctions/daily.js")
+    const m = membre("910000000000000020", "20")
+    const reponses = []
+    const interaction = { guildId: m.guild.id, member: m, locale: "fr", reply: async r => { reponses.push(r) } }
+    await commande.run(null, interaction)
+    assert.match(reponses[0].content, /100/)
+    assert.strictEqual(eco.compte(m.guild.id, m.id).balance, 100)
+    reponses.length = 0
+    interaction.reply = async r => { reponses.push(r) }
+    await commande.run(null, { ...interaction, reply: async r => { reponses.push(r) } }).catch(() => {})
+    assert.strictEqual(eco.compte(m.guild.id, m.id).balance, 100, "un seul daily par jour")
 })

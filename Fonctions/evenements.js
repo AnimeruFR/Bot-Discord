@@ -78,4 +78,4 @@ function peutCompter(guildId, userId, evenement, donnees, cle, periode) {
     return paireNouvelle(guildId, userId, cle, periode, ids)
 }
 
-module.exports = { emettre, ecouter, retirerEcouteurs, jourParis, LIMITES_PARTENAIRE, partenaires, paireNouvelle, peutCompter }
+module.exports = { emettre, ecouter, retirerEcouteurs, jourParis, peutCompter }

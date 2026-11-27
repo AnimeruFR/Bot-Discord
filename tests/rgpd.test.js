@@ -46,3 +46,48 @@ test("purgeOldWarns : les avertissements de plus de 2 ans sont effacés, les aut
     assert.strictEqual(db.countWarns(G5, U), 1)
     assert.strictEqual(db.purgeOldWarns(Date.now() - deuxAns), 0)
 })
+
+const JOUR = 24 * 3600 * 1000
+
+test("purge des jeux : quêtes du jour et de la semaine, traces avec l'identifiant d'un autre membre, parties", () => {
+    const G = "555555555555555560", A = "555555555555555561", AUTRE = "555555555555555562"
+    const maintenant = Date.UTC(2026, 10, 26, 12) // jeudi 26/11/2026 (2026-W48)
+    for (const periode of ["2026-11-26", "2026-10-28", "2026-10-26", "2026-W48", "2026-W44", "2026-W43", "2025-W52"]) {
+        db.sqlRun("INSERT INTO quetes (guild_id, user_id, period, quest, goal) VALUES (?, ?, ?, 'q', 1)", [G, A, periode])
+    }
+    for (const stat of [`paire:succes:paiement:2026-11-26:${AUTRE}`, `paire:succes:paiement:2026-11-23:${AUTRE}`,
+        `paire:quete:semaine:rep:donnee:2026-W47:${AUTRE}`, `paire:quete:semaine:rep:donnee:2026-W46:${AUTRE}`, "parties_gagnees"]) {
+        db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, 1)", [G, A, stat])
+    }
+    db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, ?)", [G, A, `duels_contre:${AUTRE}`, 2026112602])
+    db.sqlRun("INSERT INTO stats_joueur (guild_id, user_id, stat, value) VALUES (?, ?, ?, ?)", [G, A, "duels_contre:777", 2026112001])
+
+    privacy.purgerJeux(maintenant)
+    const periodes = db.sqlAll("SELECT period FROM quetes WHERE guild_id = ?", [G]).map(l => l.period).sort()
+    assert.deepStrictEqual(periodes, ["2026-10-28", "2026-11-26", "2026-W44", "2026-W48"], "30 jours pour chaque format")
+    const stats = db.sqlAll("SELECT stat FROM stats_joueur WHERE guild_id = ?", [G]).map(l => l.stat).sort()
+    assert.deepStrictEqual(stats, [`duels_contre:${AUTRE}`, `paire:quete:semaine:rep:donnee:2026-W47:${AUTRE}`,
+        `paire:succes:paiement:2026-11-26:${AUTRE}`, "parties_gagnees"].sort())
+})
+
+test("purge des jeux : membre sans activité depuis 1 an effacé, sauf compte gelé ou sans date connue", () => {
+    const G = "555555555555555570", PARTI = "555555555555555571", ACTIF = "555555555555555572", GELE = "555555555555555573", SANS_DATE = "555555555555555574"
+    const maintenant = Date.now(), vieux = maintenant - 400 * JOUR
+    for (const [u, date, gele] of [[PARTI, vieux, 0], [ACTIF, vieux, 0], [GELE, vieux, 1]]) {
+        db.sqlRun("INSERT INTO eco_comptes (guild_id, user_id, balance, frozen, created_at) VALUES (?, ?, 0, ?, ?)", [G, u, gele, date])
+        db.sqlRun("INSERT INTO xp (guild_id, user_id, xp, level, last_gain_at) VALUES (?, ?, 10, 0, ?)", [G, u, date])
+        db.sqlRun("INSERT INTO anniversaires (guild_id, user_id, day, month) VALUES (?, ?, 1, 1)", [G, u])
+        db.sqlRun("INSERT INTO succes (guild_id, user_id, achievement, earned_at) VALUES (?, ?, 'premier_daily', ?)", [G, u, date])
+    }
+    db.sqlRun("UPDATE xp SET last_gain_at = ? WHERE guild_id = ? AND user_id = ?", [maintenant - 10 * JOUR, G, ACTIF])
+    db.sqlRun("INSERT INTO profils (guild_id, user_id, bio) VALUES (?, ?, 'x')", [G, SANS_DATE])
+
+    assert.strictEqual(privacy.purgerJeux(maintenant), 1)
+    const reste = u => db.sqlAll("SELECT COUNT(*) AS n FROM anniversaires WHERE guild_id = ? AND user_id = ?", [G, u])[0].n
+    assert.strictEqual(reste(PARTI), 0)
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM eco_comptes WHERE guild_id = ? AND user_id = ?", [G, PARTI])[0].n, 0)
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM succes WHERE guild_id = ? AND user_id = ?", [G, PARTI])[0].n, 0)
+    assert.strictEqual(reste(ACTIF), 1, "activité récente : rien n'est effacé")
+    assert.strictEqual(reste(GELE), 1, "compte gelé : gardé tant que le gel dure")
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM profils WHERE guild_id = ? AND user_id = ?", [G, SANS_DATE])[0].n, 1, "aucune date connue : gardé")
+})

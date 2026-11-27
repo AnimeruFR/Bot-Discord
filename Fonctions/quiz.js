@@ -9,8 +9,8 @@ const { emettre, jourParis } = require('./evenements')
 
 // Quiz (idée #46) et énigme du jour (idée #48). Les questions et les énigmes sont dans data-statique/ (JSON).
 // Le quiz passe par le moteur de parties (une partie, un joueur, 30 s) ; l'énigme par la table jeux_quotidiens.
-// Limites : une question n'est jamais reposée deux fois dans la journée au même membre, et au plus 15 quiz récompensés par
-// jour et par membre (état dans jeux_quotidiens, jeu « quiz »). L'énigme du jour dépend d'un sel secret (voir mots.selJeux).
+// Limites : une question n'est jamais reposée deux fois dans la journée au même membre, et au plus 8 quiz auxquels il répond par
+// jour (justes ou fausses : sinon il tenterait sa chance à l'infini ; état dans jeux_quotidiens, jeu « quiz »). L'énigme du jour dépend d'un sel secret (voir mots.selJeux).
 // Événements émis : quiz:bonne_reponse (theme, difficulte, gain), enigme:trouvee (rang, gain, essais).
 
 const THEMES = ["sciences", "histoire", "geographie", "langue", "nature", "arts", "sport", "technologie"]
@@ -18,7 +18,7 @@ const DIFFICULTES = ["facile", "moyen", "difficile"]
 const GAINS_QUIZ = { facile: 10, moyen: 20, difficile: 40 }
 const DUREE_QUIZ_MS = 30 * 1000
 const NB_CHOIX = 4
-const MAX_QUIZ_JOUR = 15
+const MAX_QUIZ_JOUR = 8
 const JEU_QUIZ = "quiz"
 
 const GAINS_ENIGME = [40, 30, 20]
@@ -63,7 +63,8 @@ function melanger(hasard = Math.random) {
     return ordre
 }
 
-// Questions vues et quiz récompensés du jour d'un membre : { vues: [ids], recompenses: nombre }
+// Questions vues et quiz répondus du jour d'un membre : { vues: [ids], recompenses: nombre } (recompenses compte chaque réponse,
+// juste ou fausse, tant que l'économie ne l'a pas refusée : le nom est resté celui d'origine)
 function etatQuizJour(guildId, userId, jour = jourParis()) {
     const ligne = db.sqlAll("SELECT state FROM jeux_quotidiens WHERE guild_id = ? AND user_id = ? AND game = ? AND day = ?", [guildId, userId, JEU_QUIZ, jour])[0]
     const etat = ligne ? JSON.parse(ligne.state) : {}
@@ -115,19 +116,24 @@ function repondreQuiz(partieId, position) {
     return { ok: true, bonne: etat.ordre[position] === question.reponse, question, etat }
 }
 
+const compterReponse = member => majQuizJour(member.guild.id, member.id, jourParis(), jouee => { jouee.recompenses++ })
+
 // Termine la partie, verse le gain d'une bonne réponse (gain « actif », donc plafonné) et annonce l'événement.
+// Toute réponse, juste ou fausse, compte dans la limite du jour ; seul un gain refusé par l'économie (compte gelé, plafond de solde) ne compte pas.
 async function conclureQuiz(member, partieId, reponse) {
     const { bonne, etat } = reponse
     const fin = await parties.terminerPartie(partieId, { status: "finie", gagnants: bonne ? [member.id] : [] })
     if (!fin.ok) return { ok: false, refus: "terminee" }
     const resultat = { ok: true, bonne, gain: 0, credite: 0, plafonne: false, refusEco: null }
-    if (!bonne) return resultat
+    if (!bonne) {
+        compterReponse(member)
+        return resultat
+    }
     const credit = economie.crediter(member, etat.gain, { source: "quiz", actif: true, details: { theme: etat.theme, difficulte: etat.difficulte } })
     if (credit.ok) {
         resultat.credite = credit.credite
         resultat.plafonne = credit.plafonne
-        // Le quiz ne compte dans la limite du jour que si le gain a été versé
-        if (credit.credite > 0) majQuizJour(member.guild.id, member.id, jourParis(), jouee => { jouee.recompenses++ })
+        compterReponse(member)
     } else {
         resultat.refusEco = credit.refus
     }

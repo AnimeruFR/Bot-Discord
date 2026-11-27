@@ -14,13 +14,9 @@
   "pendu": {
     "description": "Hangman: find the hidden word before the drawing is complete",
     "options": {
-      "action": "What to do?",
       "mode": "Who can play (solo by default)"
     },
     "choix": {
-      "action": {
-        "lancer": "Start a game"
-      },
       "mode": {
         "solo": "Solo: only me",
         "ouvert": "Open: the whole channel"

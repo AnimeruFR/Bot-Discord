@@ -4,7 +4,13 @@
 // Traitements :
 // - effacer    : la ligne entière est supprimée ;
 // - anonymiser : la colonne est remplacée par "0" (la ligne sert à d'autres membres ou au staff) ;
-// - conserver  : rien n'est touché, avec un motif et une durée (affichés dans l'export et la page de confidentialité).
+// - conserver  : rien n'est touché, avec un motif et une durée (affichés dans l'export et la page de confidentialité) ;
+// - reinitialiser : empreinte anti-abus. Les lignes du membre qui vérifient `garder` restent (les autres sont effacées),
+//               et les colonnes de `valeurs` y reçoivent une valeur fixe (expression SQL écrite ici). Motif et durée obligatoires.
+//               garder(periodes) renvoie { sql, params } ; periodes = { jour, hier, semaine, semainePrecedente } (Paris).
+//
+// Options d'une table : differeSiGele (compte gelé par le staff : la table n'est pas touchée tant que le gel dure),
+// secret : { colonne, si: { colonne, valeur } } (colonne masquée à l'export tant que la condition est vraie).
 //
 // Autres suppressions automatiques hors registre : sauvegardes avant-migration-*.db de BACKUP_DIR, effacées après 30 jours
 // (Fonctions/migrations.js, lancé par startPrivacySchedule) ; elles contiennent une copie de la base.
@@ -161,30 +167,87 @@ const REGISTRE = {
         colonnes: { actor_id: { traitement: "anonymiser", auteur: true, motif: "La trace reste utile au staff, son auteur n'est plus identifié ; effacée avec le suivi du ticket (90 jours après sa suppression)" } }
     },
     phishing_whitelist: { serveur: "guild_id", aucune: "Domaines autorisés du serveur (#5), aucune donnée de membre" },
-    // Phase 3 : données de jeu d'un membre. Elles n'ont de valeur que pour lui : effacées à sa demande.
+    // Phase 3 : données de jeu d'un membre. Elles n'ont de valeur que pour lui : effacées à sa demande, sauf une
+    // « empreinte anti-abus » réduite (intérêt légitime : prévention de la fraude), sans contenu, qui empêche de rejouer
+    // des récompenses déjà versées ou de lever un gel en effaçant ses données. Membre sans activité depuis 1 an : voir INACTIVITE.
     eco_config: { serveur: "guild_id", aucune: "Réglages de l'économie du serveur, aucune donnée de membre" },
-    eco_comptes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Portefeuille de jeu (monnaie sans valeur réelle)" } } },
+    // Solde et série remis à 0 ; restent le gel du staff et la date du dernier daily (un seul daily par jour).
+    // Compte gelé : le portefeuille (solde et journal) n'est pas effacé tant que le gel dure.
+    eco_comptes: {
+        serveur: "guild_id",
+        differeSiGele: true,
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser", valeurs: { balance: "0", streak: "0" },
+                motif: "Empreinte anti-abus : gel du compte et date du dernier daily gardés, solde remis à 0", duree: "1 an après la dernière activité"
+            }
+        }
+    },
     eco_journal: {
         serveur: "guild_id",
+        differeSiGele: true,
         colonnes: {
             user_id: { traitement: "effacer", motif: "Historique de votre portefeuille de jeu" },
             other_id: { traitement: "anonymiser", motif: "La transaction reste dans le journal de l'autre membre, vous n'y êtes plus identifié" }
         }
     },
-    // Compteurs du jour : sans eux, effacer ses données remettrait les plafonds à zéro (gains, transferts).
+    // Compteurs du jour : sans eux, effacer ses données remettrait les plafonds à zéro (gains, transferts, travaux).
     eco_compteurs: { serveur: "guild_id", colonnes: { user_id: { traitement: "conserver", motif: "Plafonds quotidiens de l'économie (un effacement permettrait de les contourner)", duree: "2 jours" } } },
-    eco_metiers: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Métier et niveau de jeu" } } },
+    // Métier gardé au niveau 1 : le délai d'une heure entre deux travaux reste valable.
+    eco_metiers: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser", valeurs: { level: "1", job_xp: "0" },
+                motif: "Empreinte anti-abus : délai entre deux travaux gardé, niveau de métier remis à 1", duree: "1 an après la dernière activité"
+            }
+        }
+    },
     inventaire: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Objets de jeu" } } },
     shop_items: { serveur: "guild_id", aucune: "Articles de la boutique du serveur, aucune donnée de membre" },
     // Rôle temporaire acheté : sans la ligne, le rôle ne serait jamais retiré.
     shop_roles_temp: { serveur: "guild_id", colonnes: { user_id: { traitement: "conserver", motif: "Nécessaire pour retirer le rôle temporaire à l'échéance", duree: "jusqu'à l'échéance du rôle" } } },
-    xp: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Expérience et niveau" } } },
+    // Niveau gardé, XP ramenée au seuil de ce niveau (même formule que xpCumulee dans Fonctions/xp.js) : les paliers déjà
+    // atteints ne sont pas payés une deuxième fois. Le plafond d'XP du jour (day, day_xp) et le délai d'une minute restent.
+    xp: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser",
+                valeurs: { xp: "100 * level + 20 * level * (level - 1) + 4 * (level - 1) * level * (2 * level - 1) / 6" },
+                motif: "Empreinte anti-abus : niveau atteint gardé (paliers déjà payés), XP au-delà du niveau effacée", duree: "1 an après la dernière activité"
+            }
+        }
+    },
     xp_config: { serveur: "guild_id", aucune: "Réglages de l'XP du serveur, aucune donnée de membre" },
     xp_bonus: { serveur: "guild_id", aucune: "Bonus d'XP par salon ou rôle, aucune donnée de membre" },
     xp_paliers: { serveur: "guild_id", aucune: "Rôles par niveau, aucune donnée de membre" },
-    succes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Succès obtenus" } } },
-    quetes: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Quêtes en cours" } } },
-    stats_joueur: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Statistiques de jeu" } } },
+    // Identifiants des succès obtenus et récompense versée : un succès n'est jamais payé deux fois.
+    succes: { serveur: "guild_id", colonnes: { user_id: { traitement: "conserver", motif: "Empreinte anti-abus : succès déjà obtenus (récompense déjà versée)", duree: "1 an après la dernière activité" } } },
+    // Quêtes de la période en cours et de la précédente (claimed) : une quête réclamée ne l'est pas deux fois.
+    // Les périodes AAAA-MM-JJ et AAAA-Wnn ne se comparent pas entre elles : chaque format a sa limite.
+    quetes: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser",
+                garder: p => ({ sql: "((period LIKE '%-W%' AND period >= ?) OR (period NOT LIKE '%-W%' AND period >= ?))", params: [p.semainePrecedente, p.hier] }),
+                motif: "Empreinte anti-abus : quêtes du jour et de la semaine en cours et précédentes gardées, les autres effacées", duree: "30 jours"
+            }
+        }
+    },
+    // Statistiques effacées, sauf les limites du jour (clé finissant par « _jour ») et les traces anti-farm (« paire:… »,
+    // « duels_contre:… ») : elles empêchent de rejouer les gains du jour. Un module qui ajoute une limite du jour suit cette règle de nom.
+    stats_joueur: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser",
+                garder: () => ({ sql: "(stat LIKE '%\\_jour' ESCAPE '\\' OR stat LIKE 'paire:%' OR stat LIKE 'duels_contre:%')", params: [] }),
+                motif: "Empreinte anti-abus : limites du jour et traces anti-farm gardées, statistiques effacées", duree: "2 jours (traces de la semaine : 8 jours)"
+            }
+        }
+    },
     profils: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Profil (bio, thème)" } } },
     reputation: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Points de réputation reçus" } } },
     // Réputation donnée : garder qui a donné aujourd'hui empêche d'en redonner en effaçant ses données.
@@ -197,9 +260,32 @@ const REGISTRE = {
     },
     anniversaires: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Jour et mois d'anniversaire" } } },
     anniv_config: { serveur: "guild_id", aucune: "Salon et rôle d'anniversaire du serveur, aucune donnée de membre" },
+    // Rôle d'anniversaire donné par le bot (migration 023). Conservé plutôt qu'effacé : sans la ligne, le bot ne saurait
+    // plus qu'il doit retirer le rôle, et le membre le garderait. La ligne disparaît au retrait (le lendemain).
+    // Note : anniversaires.changed_at (délai de 30 jours entre deux changements de date) part avec la date à l'effacement ;
+    // le garder demanderait de garder la date elle-même. Contournement limité par le délai d'une heure entre deux effacements.
+    anniv_roles_donnes: {
+        serveur: "guild_id",
+        colonnes: { user_id: { traitement: "conserver", motif: "Rôle d'anniversaire donné par le bot, retiré le lendemain", duree: "jusqu'au lendemain" } }
+    },
     // Partie : elle concerne les autres joueurs ; votre place est gardée sous forme anonyme. Effacée 30 jours après la fin.
-    parties: { serveur: "guild_id", colonnes: { players: { traitement: "anonymiser", liste: true, motif: "La partie concerne d'autres joueurs, votre place reste anonyme (effacée 30 jours après la fin)" } } },
-    jeux_quotidiens: { serveur: "guild_id", colonnes: { user_id: { traitement: "effacer", motif: "Parties des jeux du jour" } } },
+    // L'état d'une partie en cours (mot du pendu, ordre du quiz) n'est jamais exporté : il reste secret jusqu'à la fin.
+    parties: {
+        serveur: "guild_id",
+        secret: { colonne: "state", si: { colonne: "status", valeur: "en_cours" } },
+        colonnes: { players: { traitement: "anonymiser", liste: true, motif: "La partie concerne d'autres joueurs, votre place reste anonyme (effacée 30 jours après la fin)" } }
+    },
+    // Jeux du jour J et J-1 gardés (mot du jour, énigme, quiz) : une partie finie ne se rejoue pas.
+    jeux_quotidiens: {
+        serveur: "guild_id",
+        colonnes: {
+            user_id: {
+                traitement: "reinitialiser",
+                garder: p => ({ sql: "day >= ?", params: [p.hier] }),
+                motif: "Empreinte anti-abus : jeux du jour et de la veille gardés, les autres effacés", duree: "30 jours"
+            }
+        }
+    },
     drops_config: { serveur: "guild_id", aucune: "Salons des drops du serveur, aucune donnée de membre" },
     // Essais de vérification (#4) : sans eux, un membre pourrait réessayer sans fin ; effacés après 1 jour.
     verification_attempts: {
@@ -208,13 +294,34 @@ const REGISTRE = {
     }
 }
 
-const TRAITEMENTS = ["effacer", "anonymiser", "conserver"]
+// Membre sans activité depuis 1 an sur un serveur (souvent parti) : ses données de jeu sont effacées par la purge
+// quotidienne (Fonctions/privacy.js, db.purgeMembresInactifs). Le bot ne sait pas qui a quitté le serveur : la règle
+// est la date de dernière activité connue, la plus récente des colonnes de `dates` (millisecondes).
+// Exceptions : un compte gelé par le staff (gardé tant que le gel dure) et un membre sans aucune date connue
+// (seulement un profil ou un anniversaire) : ce dernier garde ses données jusqu'à son effacement ou au départ du bot.
+const INACTIVITE = {
+    duree: "1 an sans activité",
+    jours: 365,
+    tables: ["eco_comptes", "eco_journal", "eco_compteurs", "eco_metiers", "inventaire", "xp", "succes", "quetes",
+        "stats_joueur", "profils", "reputation", "anniversaires", "jeux_quotidiens"],
+    dates: [["eco_comptes", "created_at"], ["eco_comptes", "last_daily_at"], ["eco_journal", "created_at"], ["xp", "last_gain_at"],
+        ["succes", "earned_at"], ["eco_metiers", "last_work_at"], ["jeux_quotidiens", "finished_at"]]
+}
+
+const TRAITEMENTS = ["effacer", "anonymiser", "conserver", "reinitialiser"]
 
 // Vérifie la forme du registre (appelée au chargement et par les tests) ; renvoie la liste des erreurs
-function verifier(registre = REGISTRE) {
+function verifier(registre = REGISTRE, inactivite = INACTIVITE) {
     const erreurs = []
+    for (const table of inactivite.tables) {
+        if (!registre[table]?.colonnes?.user_id) erreurs.push(`INACTIVITE : ${table} sans colonne user_id dans le registre`)
+    }
+    for (const [table] of inactivite.dates) {
+        if (!inactivite.tables.includes(table)) erreurs.push(`INACTIVITE : date de ${table} hors des tables purgées`)
+    }
     for (const [table, def] of Object.entries(registre)) {
         if (!def.serveur) erreurs.push(`${table} : serveur manquant`)
+        if (def.secret && !(def.secret.colonne && def.secret.si?.colonne)) erreurs.push(`${table}.secret : colonne ou condition manquante`)
         if (def.aucune !== undefined) {
             if (!def.aucune) erreurs.push(`${table} : motif de "aucune" vide`)
             continue
@@ -231,6 +338,11 @@ function verifier(registre = REGISTRE) {
             if (!c.motif) erreurs.push(`${table}.${colonne} : motif manquant`)
             if (c.traitement === "conserver" && !c.duree) erreurs.push(`${table}.${colonne} : durée manquante`)
             if (c.liste && c.traitement === "effacer") erreurs.push(`${table}.${colonne} : une liste ne peut pas être effacée (anonymiser)`)
+            if (c.traitement === "reinitialiser") {
+                if (!c.duree) erreurs.push(`${table}.${colonne} : durée manquante`)
+                if (!c.valeurs && typeof c.garder !== "function") erreurs.push(`${table}.${colonne} : reinitialiser sans valeurs ni garder`)
+                if (c.liste) erreurs.push(`${table}.${colonne} : une liste ne peut pas être réinitialisée (anonymiser)`)
+            }
         }
     }
     return erreurs
@@ -239,4 +351,4 @@ function verifier(registre = REGISTRE) {
 const erreurs = verifier()
 if (erreurs.length) throw new Error(`Registre RGPD invalide : ${erreurs.join(" ; ")}`)
 
-module.exports = { REGISTRE, ANONYME, TRAITEMENTS, verifier }
+module.exports = { REGISTRE, ANONYME, TRAITEMENTS, INACTIVITE, verifier }

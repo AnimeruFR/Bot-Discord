@@ -381,7 +381,7 @@ test("/enigme : voir répond en éphémère, répondre ouvre le formulaire daté
     assert.strictEqual(quiz.etatEnigme(G, m.id).essais, 0)
 })
 
-// --- Limites du jour : questions déjà vues, 15 quiz récompensés ------------------------------------------------------
+// --- Limites du jour : questions déjà vues, 8 quiz répondus ------------------------------------------------------
 
 async function jouerQuiz(m, options = {}) {
     const debut = quiz.demarrerQuiz(m, { langue: "fr", hasard: () => 0, ...options })
@@ -427,23 +427,26 @@ test("quiz : une question laissée expirer compte comme vue", async () => {
     await parties.terminerPartie(suite.partie.id, { status: "annulee" })
 })
 
-test("quiz : au plus 15 quiz récompensés par jour et par membre", async () => {
+test("quiz : au plus 8 quiz par jour et par membre, réponses fausses comprises", async () => {
     const G = "100000000000000033"
     const m = membre(G)
     economie.definirReglages(G, { plafondJour: 2000 })
-    let bonnes = 0
-    for (const theme of quiz.THEMES) {
-        for (const difficulte of quiz.DIFFICULTES) {
-            for (let n = 0; n < 5 && bonnes < quiz.MAX_QUIZ_JOUR; n++) {
-                const r = await jouerQuiz(m, { theme, difficulte })
-                if (r.ok && r.fin.bonne) bonnes++
-            }
-        }
+    assert.strictEqual(quiz.MAX_QUIZ_JOUR, 8)
+    let bonnes = 0, fausses = 0
+    for (let n = 0; n < quiz.MAX_QUIZ_JOUR; n++) {
+        const debut = quiz.demarrerQuiz(m, { hasard: () => (n + 0.5) / 20 })
+        assert.ok(debut.ok, `quiz ${n + 1}`)
+        // Une réponse sur deux est fausse : elle compte autant dans la limite
+        const juste = n % 2 === 0
+        const fin = await quiz.conclureQuiz(m, debut.partie.id, quiz.repondreQuiz(debut.partie.id, positionDe(debut, juste)))
+        assert.strictEqual(fin.bonne, juste)
+        if (fin.bonne) bonnes++
+        else fausses++
     }
-    assert.strictEqual(bonnes, 15)
-    assert.strictEqual(quiz.etatQuizJour(G, m.id).recompenses, 15)
-    const seizieme = quiz.demarrerQuiz(m, { hasard: () => 0.5 })
-    assert.deepStrictEqual([seizieme.ok, seizieme.refus], [false, "limite_jour"])
+    assert.deepStrictEqual([bonnes, fausses], [4, 4])
+    assert.strictEqual(quiz.etatQuizJour(G, m.id).recompenses, 8)
+    const neuvieme = quiz.demarrerQuiz(m, { hasard: () => 0.5 })
+    assert.deepStrictEqual([neuvieme.ok, neuvieme.refus], [false, "limite_jour"])
     // Un autre membre n'est pas touché
     const autre = quiz.demarrerQuiz(membre(G), { hasard: () => 0.5 })
     assert.ok(autre.ok)
@@ -451,7 +454,15 @@ test("quiz : au plus 15 quiz récompensés par jour et par membre", async () => 
     // Le message de refus de la commande
     const i = interactionCommande(m)
     await commandeQuiz.run(null, i, i.options)
-    assert.match(i.envoyees[0].content, /15 quiz/)
+    assert.match(i.envoyees[0].content, /8 quiz/)
+})
+
+test("quiz : une question laissée sans réponse ne compte pas dans la limite du jour", async () => {
+    const G = "100000000000000035"
+    const m = membre(G)
+    const debut = quiz.demarrerQuiz(m, { hasard: () => 0 })
+    await parties.terminerPartie(debut.partie.id, { status: "expiree" })
+    assert.strictEqual(quiz.etatQuizJour(G, m.id).recompenses, 0)
 })
 
 test("quiz : un gain refusé par l'économie ne compte pas dans la limite du jour", async () => {

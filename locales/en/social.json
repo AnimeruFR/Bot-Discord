@@ -32,9 +32,6 @@
   "social.anniv.config_actuelle": "Announcement channel: {salon}\nBirthday role: {role}",
   "social.anniv.aucun_reglage": "none",
   "social.anniv.salon_bot": "I can't write in {salon}.",
-  "social.anniv.role_dangereux": "This role has dangerous permissions (administration, moderation, mentioning everyone...): pick a purely decorative role.",
-  "social.anniv.role_admin": "You can't give this role: it is above your highest role, or it is managed by an integration.",
-  "social.anniv.role_bot": "I can't give this role: it must be below my highest role and not managed by an integration.",
   "social.anniv.config_ok": "Birthday settings saved.",
   "social.anniv.annonce": "🎂 Happy birthday to {membres}!",
   "social.anniv.mois.1": "January",
@@ -48,5 +45,7 @@
   "social.anniv.mois.9": "September",
   "social.anniv.mois.10": "October",
   "social.anniv.mois.11": "November",
-  "social.anniv.mois.12": "December"
+  "social.anniv.mois.12": "December",
+  "social.anniv.role_porteurs": "This role already has members: the daily role is removed the next day, pick a role nobody holds.",
+  "social.anniv.trop_tot": "You changed your birthday recently: it can only be changed once every 30 days (next change possible {date}). You can remove it at any time."
 }

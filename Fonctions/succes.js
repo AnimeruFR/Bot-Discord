@@ -119,4 +119,4 @@ function liste(guildId, userId) {
 
 for (const evenement of Object.keys(EFFETS)) ecouter(evenement, donnees => enregistrer(evenement, donnees))
 
-module.exports = { configurerClient, enregistrer, verserEnAttente, liste, lireStats, catalogue, EFFETS }
+module.exports = { configurerClient, enregistrer, liste, lireStats, catalogue, EFFETS }

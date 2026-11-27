@@ -220,6 +220,21 @@ test("1 ✦ par gain quand l'économie est active", async () => {
     assert.strictEqual(eco.compte(G, "20").balance, 0)
 })
 
+test("1 ✦ par gain d'XP, 100 ✦ par jour au plus, reparti de zéro le lendemain", async () => {
+    const G = "910000000000000030", { message, member } = contexte(G)
+    assert.strictEqual(xp.ECLATS_JOUR_MAX, 100)
+    for (let n = 0; n < 130; n++) {
+        const gain = await xp.gagnerXp(message, { maintenant: MERCREDI + n * MINUTE, alea: aleaMin })
+        assert.ok(gain, `gain d'XP ${n + 1} : l'XP continue après le plafond de monnaie`)
+    }
+    assert.strictEqual(eco.compte(G, member.id).balance, 100, "100 ✦ au plus par jour")
+    assert.strictEqual(db.sqlAll("SELECT COUNT(*) AS n FROM eco_journal WHERE guild_id = ? AND source = 'xp'", [G])[0].n, 100)
+    assert.ok(eco.verifierCoherence(G, member.id))
+    // Le lendemain, le compteur repart de zéro
+    assert.ok(await xp.gagnerXp(message, { maintenant: MERCREDI + JOUR, alea: aleaMin }))
+    assert.strictEqual(eco.compte(G, member.id).balance, 101)
+})
+
 // --- Bonus -------------------------------------------------------------------------------------------------------
 
 test("week-end : samedi et dimanche, heure de Paris", () => {
@@ -695,4 +710,19 @@ test("messageCreate : XP et drops partent en même temps, une panne n'arrête pa
         if (sauvegarde[1]) require.cache[cheminDrops] = sauvegarde[1]
         else delete require.cache[cheminDrops]
     }
+})
+
+test("paliers : le rôle staff du bot est refusé à la configuration et à l'attribution", async () => {
+    const G = "910000000000000041", { guild, member } = contexte(G)
+    const config = creerMembre(guild, "9")
+    config.permissions = new Discord.PermissionsBitField([Flags.ManageRoles, Flags.ManageGuild])
+    config.roles.highest = faussRole(8)
+    const staff = creerRole(guild, "staff", 5)
+    assert.strictEqual(paliers.refusRolePalier(guild, staff, config, "fr"), null, "pas encore réservé")
+    paliers.definirPalier(G, { niveau: 1, roleId: "staff" })
+    db.setStaffRole(G, "staff")
+    assert.ok(paliers.refusRolePalier(guild, staff, config, "fr"), "refusé à la configuration")
+    const bilan = await paliers.appliquerPaliers(member, 0, 1)
+    assert.deepStrictEqual(bilan.roles, [], "refusé à l'attribution")
+    assert.ok(!member.roles.cache.has("staff"))
 })

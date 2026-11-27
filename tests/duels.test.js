@@ -361,6 +361,54 @@ test("un membre sanctionné n'est ni récompensé ni compté ; une partie déjà
     assert.strictEqual(economie.compte(g.id, A).balance, 15)
 })
 
+test("conclureDuel : si la fin échoue, la partie est terminée sans crédit partiel ni double, journal = solde", async (t) => {
+    const g = creerServeur("555555555555555611")
+    brancherRecompenses()
+    const reelle = parties.terminerPartie
+    const erreurConsole = console.error
+    t.after(() => {
+        parties.terminerPartie = reelle
+        console.error = erreurConsole
+        parties.configurerRecompenses(null)
+    })
+    console.error = () => {}
+    const nouveau = () => parties.creerPartie({ guildId: g.id, game: "pfc", players: [A, B], state: duels.etatInitialPfc(A, B) }).partie
+    const lignes = (userId, source) => economie.journal(g.id, userId).filter(l => l.source === source)
+
+    // Panne après les crédits (le premier appel verse puis échoue) : versé une seule fois, partie finie, places du jour gardées
+    const apresCredit = nouveau()
+    let appels = 0
+    parties.terminerPartie = async (...args) => {
+        appels++
+        const fin = await reelle(...args)
+        if (appels === 1) throw new Error("coupure après le crédit")
+        return fin
+    }
+    const a = await duels.conclureDuel(apresCredit.id, g, { gagnants: [A], montants: duels.montantsDuel(apresCredit, A) })
+    assert.strictEqual(appels, 2, "un second appel pour terminer la partie")
+    assert.deepStrictEqual([a.ok, a.erreur, a.accordees], [true, true, {}])
+    assert.strictEqual(parties.lirePartie(apresCredit.id).status, "finie")
+    assert.strictEqual(lignes(A, "partie:pfc").length, 1, "pas de double crédit")
+    assert.strictEqual(lignes(B, "partie:pfc").length, 1)
+    assert.deepStrictEqual([economie.compte(g.id, A).balance, economie.compte(g.id, B).balance], [15, 5])
+    assert.strictEqual(duels.lireCompteurJour(g.id, A), 1, "la place du jour reste prise : rien ne peut payer deux fois")
+
+    // Panne avant tout crédit : partie finie sans récompense, places du jour rendues
+    const avantCredit = nouveau()
+    appels = 0
+    parties.terminerPartie = async (...args) => {
+        appels++
+        if (appels === 1) throw new Error("coupure avant le crédit")
+        return reelle(...args)
+    }
+    const b = await duels.conclureDuel(avantCredit.id, g, { gagnants: [B], montants: duels.montantsDuel(avantCredit, B) })
+    assert.deepStrictEqual([b.ok, b.erreur, b.accordees], [true, true, {}])
+    assert.strictEqual(parties.lirePartie(avantCredit.id).status, "finie")
+    assert.deepStrictEqual([economie.compte(g.id, A).balance, economie.compte(g.id, B).balance], [15, 5], "aucun crédit en plus")
+    assert.strictEqual(duels.lireCompteurJour(g.id, A), 1, "pas de place consommée par la partie sans récompense")
+    for (const userId of [A, B]) assert.ok(economie.verifierCoherence(g.id, userId), "journal = solde")
+})
+
 // --- Drops -----------------------------------------------------------------------------------------------------
 
 // Faux salon : chaque coffre envoyé garde son collecteur (un EventEmitter) et ses modifications

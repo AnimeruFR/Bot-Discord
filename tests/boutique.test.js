@@ -418,7 +418,7 @@ test("rôle temporaire : retiré à l'échéance, pas avant", async () => {
     const tenace = fauxMembre(guild, "j4")
     tenace.roles.cache.set("temp", {})
     tenace.roles.remove = async () => { throw new Error("Missing Permissions") }
-    db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "j4", "temp", 1])
+    db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "j4", "temp", Date.now() - 1000])
     const erreurs = console.error
     console.error = () => {}
     try {
@@ -427,6 +427,7 @@ test("rôle temporaire : retiré à l'échéance, pas avant", async () => {
         console.error = erreurs
     }
     assert.deepStrictEqual(db.sqlAll("SELECT user_id FROM shop_roles_temp").map(l => l.user_id), ["j4"], "seul le retrait en échec sera retenté")
+    assert.strictEqual(db.sqlAll("SELECT failures FROM shop_roles_temp")[0].failures, 1, "un échec compté")
     assert.ok(parti)
     // Rôle supprimé du serveur : la ligne disparaît
     tenace.roles.remove = async () => { throw erreurDiscord(Discord.RESTJSONErrorCodes.UnknownRole) }
@@ -570,4 +571,70 @@ test("commandes /boutique et /inventaire : droits, vitrine, achat par la command
     const vide = interaction(joueur, { action: "voir" })
     await inv.run(bot, vide, vide.options)
     assert.match(vide.reponses[0].embeds[0].data.description, /vide/)
+})
+
+test("rôle temporaire : ligne abandonnée après 5 échecs ou 7 jours, avec un log", async () => {
+    const { guild } = fauxServeur("910000000000000031")
+    const bot = { guilds: { cache: new Discord.Collection([[guild.id, guild]]) } }
+    const logs = []
+    const erreurs = console.error
+    console.error = (...args) => logs.push(args.join(" "))
+    try {
+        const bloque = fauxMembre(guild, "b1")
+        bloque.roles.cache.set("temp", {})
+        bloque.roles.remove = async () => { throw new Error("Missing Permissions") }
+        const ancien = fauxMembre(guild, "b2")
+        ancien.roles.cache.set("temp", {})
+        ancien.roles.remove = async () => { throw new Error("Missing Permissions") }
+        const maintenant = Date.now()
+        db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "b1", "temp", maintenant - 1000])
+        db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "b2", "temp", maintenant - 8 * JOUR])
+
+        // b2 est échu depuis plus de 7 jours : abandonné dès le premier échec ; b1 réessayé
+        assert.strictEqual(await boutique.retirerExpires(bot, maintenant), 1)
+        assert.deepStrictEqual(db.sqlAll("SELECT user_id FROM shop_roles_temp").map(l => l.user_id), ["b1"])
+        assert.ok(logs.some(l => l.includes("abandonné") && l.includes("b2")), "abandon écrit dans les logs")
+        for (let i = 0; i < 3; i++) assert.strictEqual(await boutique.retirerExpires(bot, maintenant), 0)
+        assert.strictEqual(db.sqlAll("SELECT failures FROM shop_roles_temp")[0].failures, 4)
+        assert.strictEqual(await boutique.retirerExpires(bot, maintenant), 1, "5e échec : abandonné")
+        assert.strictEqual(db.sqlAll("SELECT * FROM shop_roles_temp").length, 0)
+        assert.ok(logs.some(l => l.includes("abandonné") && l.includes("b1")))
+    } finally {
+        console.error = erreurs
+    }
+})
+
+test("rôle temporaire : pas retiré si un palier ou un bouton de rôle le donne aussi, la ligne disparaît", async () => {
+    const { guild } = fauxServeur("910000000000000032")
+    const bot = { guilds: { cache: new Discord.Collection([[guild.id, guild]]) } }
+    const j = fauxMembre(guild, "p1")
+    j.roles.cache.set("temp", {})
+    const k = fauxMembre(guild, "p2")
+    k.roles.cache.set("temp2", {})
+    const maintenant = Date.now()
+    db.sqlRun("INSERT INTO xp_paliers (guild_id, level, role_id, reward) VALUES (?, 5, ?, 0)", [guild.id, "temp"])
+    db.sqlRun("INSERT INTO role_panel_buttons (message_id, guild_id, role_id, label) VALUES ('m', ?, ?, 'x')", [guild.id, "temp2"])
+    db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "p1", "temp", maintenant - 1000])
+    db.sqlRun("INSERT INTO shop_roles_temp (guild_id, user_id, role_id, expires_at) VALUES (?, ?, ?, ?)", [guild.id, "p2", "temp2", maintenant - 1000])
+    assert.strictEqual(await boutique.retirerExpires(bot, maintenant), 2)
+    assert.ok(j.roles.cache.has("temp"), "le palier donne ce rôle : gardé")
+    assert.ok(k.roles.cache.has("temp2"), "le bouton de rôle donne ce rôle : gardé")
+    assert.strictEqual(db.sqlAll("SELECT * FROM shop_roles_temp WHERE guild_id = ?", [guild.id]).length, 0)
+})
+
+test("rôle staff du bot : refusé à l'ajout et à l'achat (contrôle commun)", async () => {
+    const { guild, admin } = fauxServeur("910000000000000033")
+    const staff = faussRole(guild, "staff")
+    const vip = faussRole(guild, "vip")
+    const a = boutique.ajouterArticle(guild, admin, { type: "role", role: vip, prix: 100 }).article
+    db.setStaffRole(guild.id, "staff")
+    assert.strictEqual(boutique.ajouterArticle(guild, admin, { type: "role", role: staff, prix: 100 }).refus, "rolecom.refus.staff")
+
+    // Le rôle de l'article devient le rôle staff après coup : l'achat est refusé, rien n'est débité
+    db.setStaffRole(guild.id, "vip")
+    const joueur = fauxMembre(guild, "j-staff")
+    donner(joueur, 1000)
+    assert.strictEqual((await boutique.acheter(joueur, a.id)).refus, "rolecom.refus.staff")
+    assert.ok(!joueur.roles.cache.has("vip"))
+    assert.strictEqual(solde(joueur), 1000)
 })

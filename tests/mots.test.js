@@ -8,6 +8,7 @@ const parties = require('../Fonctions/parties')
 const evenements = require('../Fonctions/evenements')
 const motCommande = require('../Commandes/Communaute/Jeux/mot')
 const penduCommande = require('../Commandes/Communaute/Jeux/pendu')
+const duels = require('../Fonctions/duels')
 
 const JOUR = 24 * 3600 * 1000
 const membre = (guildId, id) => ({
@@ -208,7 +209,7 @@ test("pendu : dessin, lettres et masque", () => {
 
 // Lance une partie et impose le mot (le mot réel est tiré au hasard)
 async function lancer(guildId, hoteId, mode, mot = "MAISON") {
-    const i = interaction({ guildId, userId: hoteId, options: { action: "lancer", mode } })
+    const i = interaction({ guildId, userId: hoteId, options: { mode } })
     await penduCommande.run(null, i, i.options)
     const partie = parties.partieEnCours(guildId, hoteId)
     parties.majPartie(partie.id, etat => { etat.mot = mot })
@@ -233,7 +234,7 @@ test("pendu : lancement, lettre déjà jouée, victoire avec gain et événement
     assert.strictEqual(parties.lirePartie(partie.id).expiresAt - parties.lirePartie(partie.id).createdAt, 2 * 60 * 1000)
 
     // Une seule partie à la fois
-    const doublon = interaction({ guildId: G, userId: H, options: { action: "lancer" } })
+    const doublon = interaction({ guildId: G, userId: H, options: {} })
     await penduCommande.run(null, doublon, doublon.options)
     assert.ok(doublon.reponses[0].flags && doublon.reponses[0].content.includes("partie"))
 
@@ -322,20 +323,21 @@ test("pendu ouvert : un participant ne peut plus lancer ni rejoindre une autre p
     await parties.terminerPartie(ouvert.partie.id, { status: "annulee" })
 })
 
-test("pendu : au plus 10 pendus récompensés par jour et par membre", async () => {
+test("pendu : au plus 5 pendus récompensés par jour et par membre", async () => {
     const G = "800000000000000011", H = "100000000000000013"
-    for (let n = 1; n <= 10; n++) {
+    assert.strictEqual(duels.MAX_PENDUS_JOUR, 5)
+    for (let n = 1; n <= duels.MAX_PENDUS_JOUR; n++) {
         const { partie } = await lancer(G, H, "solo")
         let dernier
         for (const lettre of ["M", "A", "I", "S", "O", "N"]) dernier = await jouer(partie.id, G, H, lettre)
         assert.ok(dernier.mises[0].content.includes(`<@${H}> : +${mots.GAIN_PENDU}`), `pendu ${n}`)
     }
-    assert.strictEqual(eco.compte(G, H).balance, 200)
+    assert.strictEqual(eco.compte(G, H).balance, 100)
     const { partie } = await lancer(G, H, "solo")
     let dernier
     for (const lettre of ["M", "A", "I", "S", "O", "N"]) dernier = await jouer(partie.id, G, H, lettre)
-    assert.match(dernier.mises[0].content, /10 pendus récompensés/)
-    assert.strictEqual(eco.compte(G, H).balance, 200, "le onzième ne rapporte rien")
+    assert.match(dernier.mises[0].content, /5 pendus récompensés/)
+    assert.strictEqual(eco.compte(G, H).balance, 100, "le sixième ne rapporte rien")
     assert.strictEqual(parties.lirePartie(partie.id).status, "finie")
 })
 

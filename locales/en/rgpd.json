@@ -1,14 +1,14 @@
 {
   "rgpd.serveur": "This option is used in a server: your data is stored per server.",
   "rgpd.export_ok": "Here is your data on this server (JSON file). Only you can see this message.",
-  "rgpd.question": "Erase **your data** on this server?\n• **Erased**: data with no reason to be kept (for example your giveaway entries).\n• **Anonymised**: your ID is removed from items that are used by others (tickets, giveaways, announcements, sanctions you issued).\n• **Kept**: sanctions you received (2 years, moderation) any temporary ban in progress and your ticket anti-spam delay (10 min).\nThis cannot be undone (only recent backups, up to 7 days, still contain this data).",
+  "rgpd.question": "Erase **your data** on this server?\n• **Erased**: profile, bio, birthday, inventory, reputation received, wallet history, statistics, giveaway entries…\n• **Anonymised**: your ID is removed from items that are used by others (tickets, giveaways, announcements, games, sanctions you issued).\n• **Reset**: balance set to 0, XP brought back to the threshold of your level, job back to level 1.\n• **Kept** (anti-abuse footprint, no content, so that erasing cannot be used to replay rewards): any account freeze, date of your last daily, achievements already earned, level reached, quests and daily games of today and yesterday, daily limits.\n• **Also kept**: sanctions you received (2 years), any temporary ban in progress and your ticket anti-spam delay (10 min).\nThis cannot be undone (only recent backups, up to 7 days, still contain this data).",
   "rgpd.confirmer": "Erase my data",
   "rgpd.annuler": "Cancel",
   "rgpd.temps": "Time is up, nothing was erased.",
   "rgpd.annule": "Cancelled, nothing was erased.",
   "rgpd.en_cours": "Erasing…",
   "rgpd.ok": "Your data on this server has been processed: {resume}.",
-  "rgpd.differe": "Your erasure is postponed: {motif}",
+  "rgpd.gele": "Your account is frozen by the staff: your wallet (balance and history) cannot be erased while the freeze lasts. Everything else is erased; run the command again once unfrozen to erase the wallet.",
   "rgpd.cooldown": "You already erased your data less than an hour ago. Try again in {minutes} min.",
   "rgpd.echec": "Erasure failed: nothing was changed (the operation is rolled back as a whole). Try again later."
 }

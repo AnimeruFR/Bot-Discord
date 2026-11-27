@@ -33,6 +33,6 @@
   "enigme.rate_dernier": "That is not the right answer, and you have no attempts left today.",
   "enigme.trouvee": "🎉 <@{user}> solved the riddle of the day: #{rang} on this server!",
   "enigme.gain": "You earn {gain}.",
-  "quiz.limite_jour": "You already won {max} quizzes today: come back tomorrow!",
+  "quiz.limite_jour": "You already answered {max} quizzes today: come back tomorrow!",
   "quiz.toutes_vues": "You already saw every question of this theme and difficulty today."
 }

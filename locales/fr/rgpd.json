@@ -1,14 +1,14 @@
 {
   "rgpd.serveur": "Cette option s'utilise sur un serveur : vos données sont rangées par serveur.",
   "rgpd.export_ok": "Voici vos données sur ce serveur (fichier JSON). Seul vous pouvez voir ce message.",
-  "rgpd.question": "Effacer **vos données** sur ce serveur ?\n• **Effacées** : les données sans intérêt à conserver (par exemple vos participations aux giveaways).\n• **Anonymisées** : votre identifiant est retiré des éléments qui servent à d'autres (tickets, giveaways, annonces, sanctions que vous avez données).\n• **Conservées** : les sanctions dont vous avez fait l'objet (2 ans, modération) un éventuel ban temporaire en cours et votre délai anti-spam de tickets (10 min).\nCette action est irréversible (seules les sauvegardes récentes, jusqu'à 7 jours, contiennent encore ces données).",
+  "rgpd.question": "Effacer **vos données** sur ce serveur ?\n• **Effacées** : profil, bio, anniversaire, inventaire, réputation reçue, journal du portefeuille, statistiques, participations aux giveaways…\n• **Anonymisées** : votre identifiant est retiré des éléments qui servent à d'autres (tickets, giveaways, annonces, parties, sanctions que vous avez données).\n• **Remises à zéro** : solde à 0, XP ramenée au seuil de votre niveau, métier au niveau 1.\n• **Conservées** (empreinte anti-abus, sans contenu, pour qu'un effacement ne permette pas de rejouer des gains) : gel éventuel du compte, date du dernier daily, succès déjà obtenus, niveau atteint, quêtes et jeux du jour et de la veille, limites du jour.\n• **Conservées aussi** : les sanctions dont vous avez fait l'objet (2 ans), un éventuel ban temporaire en cours et votre délai anti-spam de tickets (10 min).\nCette action est irréversible (seules les sauvegardes récentes, jusqu'à 7 jours, contiennent encore ces données).",
   "rgpd.confirmer": "Effacer mes données",
   "rgpd.annuler": "Annuler",
   "rgpd.temps": "Temps écoulé, rien n'a été effacé.",
   "rgpd.annule": "Annulé, rien n'a été effacé.",
   "rgpd.en_cours": "Effacement en cours…",
   "rgpd.ok": "Vos données sur ce serveur ont été traitées : {resume}.",
-  "rgpd.differe": "Votre effacement est différé : {motif}",
+  "rgpd.gele": "Votre compte est gelé par le staff : votre portefeuille (solde et journal) ne peut pas être effacé tant que le gel dure. Le reste est effacé ; relancez la commande après le dégel pour effacer le portefeuille.",
   "rgpd.cooldown": "Vous avez déjà effacé vos données il y a moins d'une heure. Réessayez dans {minutes} min.",
   "rgpd.echec": "Échec de l'effacement : rien n'a été modifié (l'opération est annulée en bloc). Réessayez plus tard."
 }

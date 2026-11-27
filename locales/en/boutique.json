@@ -62,5 +62,15 @@
   "inv.refus.inconnu": "This item doesn't exist.",
   "inv.refus.absent": "You don't have this item.",
   "inv.refus.inutilisable": "This item can't be used yet.",
-  "inv.refus.boost_actif": "An XP boost is already active (ends {fin}): it doesn't stack."
+  "inv.refus.boost_actif": "An XP boost is already active (ends {fin}): it doesn't stack.",
+  "rolecom.refus.inexistant": "This role does not exist.",
+  "rolecom.refus.everyone": "The @everyone role cannot be given automatically.",
+  "rolecom.refus.gere": "A role managed by an integration cannot be given.",
+  "rolecom.refus.dangereux": "The role {role} grants moderation or administration powers: it cannot be given automatically.",
+  "rolecom.refus.dangereux_salon": "The role {role} grants moderation powers in a channel (channel override): it cannot be given automatically.",
+  "rolecom.refus.staff": "The role {role} is a staff role (bot or tickets): it cannot be given automatically.",
+  "rolecom.refus.quarantaine": "The role {role} is the quarantine role: it cannot be given automatically.",
+  "rolecom.refus.verifie": "The role {role} is the verification role: it cannot be given automatically.",
+  "rolecom.refus.bot": "The bot cannot give the role {role}: it needs \"Manage Roles\" and a role placed above this one.",
+  "rolecom.refus.configurateur": "You cannot give the role {role} yourself: you need \"Manage Roles\" and a role placed above this one."
 }

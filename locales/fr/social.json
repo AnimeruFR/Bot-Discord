@@ -32,9 +32,6 @@
   "social.anniv.config_actuelle": "Salon d'annonce : {salon}\nRôle du jour : {role}",
   "social.anniv.aucun_reglage": "aucun",
   "social.anniv.salon_bot": "Je ne peux pas écrire dans {salon}.",
-  "social.anniv.role_dangereux": "Ce rôle a des permissions dangereuses (administration, modération, mentions de tous…) : choisissez un rôle purement décoratif.",
-  "social.anniv.role_admin": "Vous ne pouvez pas donner ce rôle : il est au-dessus de votre rôle le plus haut, ou il est géré par une intégration.",
-  "social.anniv.role_bot": "Je ne peux pas donner ce rôle : il doit être sous mon rôle le plus haut, et ne pas être géré par une intégration.",
   "social.anniv.config_ok": "Configuration des anniversaires enregistrée.",
   "social.anniv.annonce": "🎂 Joyeux anniversaire à {membres} !",
   "social.anniv.mois.1": "janvier",
@@ -48,5 +45,7 @@
   "social.anniv.mois.9": "septembre",
   "social.anniv.mois.10": "octobre",
   "social.anniv.mois.11": "novembre",
-  "social.anniv.mois.12": "décembre"
+  "social.anniv.mois.12": "décembre",
+  "social.anniv.role_porteurs": "Ce rôle a déjà des membres : le rôle du jour est retiré chaque lendemain, choisissez un rôle que personne ne porte.",
+  "social.anniv.trop_tot": "Vous avez déjà changé votre date d'anniversaire récemment : elle ne peut être modifiée qu'une fois tous les 30 jours (prochain changement possible {date}). Vous pouvez la retirer à tout moment."
 }

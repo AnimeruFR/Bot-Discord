@@ -128,16 +128,15 @@ async function exporterMoi(interaction) {
 async function effacerMoi(interaction) {
     if (!interaction.inCachedGuild()) return interaction.reply({ content: t(interaction, "rgpd.serveur"), flags: EPHEMERAL })
 
-    const differe = donneesMembre.refusEffacement(interaction.guild.id, interaction.user.id)
-    if (differe) return interaction.reply({ content: t(interaction, "rgpd.differe", { motif: differe }), flags: EPHEMERAL })
-
     // Une fois par heure : l'effacement est lourd et ne sert pas à être répété (libéré si rien n'est effacé)
     const restant = cooldowns.prendre(COOLDOWN_EFFACEMENT, 60 * 60, interaction.guild.id, interaction.user.id)
     if (restant > 0) return interaction.reply({ content: t(interaction, "rgpd.cooldown", { minutes: Math.ceil(restant / 60000) }), flags: EPHEMERAL })
 
+    // Compte gelé par le staff : le portefeuille ne sera pas effacé, on le dit avant la confirmation
+    const gele = donneesMembre.portefeuilleGele(interaction.guild.id, interaction.user.id)
     const clic = await demanderConfirmation(interaction, {
         prefixe: "rgpdmoi",
-        question: t(interaction, "rgpd.question"),
+        question: t(interaction, "rgpd.question") + (gele ? `\n\n${t(interaction, "rgpd.gele")}` : ""),
         confirmer: t(interaction, "rgpd.confirmer"),
         annuler: t(interaction, "rgpd.annuler"),
         temps: t(interaction, "rgpd.temps"),
@@ -159,10 +158,10 @@ async function effacerMoi(interaction) {
         const texte = donneesMembre.resumeTexte(resume)
         // Le log ne contient que l'identifiant du membre et le résumé (des nombres par table)
         await sendModLog(interaction, { action: "config", details: `Effacement RGPD du membre ${interaction.user.id} (/privacy moi) : ${texte}` })
-        await interaction.editReply({ content: t(interaction, "rgpd.ok", { resume: texte }) })
+        const differe = donneesMembre.aDesDifferees(resume) ? `\n${t(interaction, "rgpd.gele")}` : ""
+        await interaction.editReply({ content: t(interaction, "rgpd.ok", { resume: texte }) + differe })
     } catch (err) {
         if (!efface) cooldowns.liberer(COOLDOWN_EFFACEMENT, interaction.guild.id, interaction.user.id) // rien n'a été effacé : le membre peut réessayer
-        if (err.code === "RGPD_DIFFERE") return interaction.editReply({ content: t(interaction, "rgpd.differe", { motif: err.motif }) })
         console.error("Échec de l'effacement /privacy moi :", err)
         await interaction.editReply({ content: t(interaction, "rgpd.echec") })
     }

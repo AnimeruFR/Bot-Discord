@@ -49,7 +49,7 @@ function rendu(partie, { fin = null } = {}) {
 }
 
 // Récompense d'un pendu trouvé : 20 pour l'hôte, plus 5 pour chaque autre membre ayant trouvé une lettre juste.
-// Au plus 10 pendus récompensés par jour et par membre (compteur « pendu » de Fonctions/duels.js).
+// Au plus 5 pendus récompensés par jour et par membre (compteur « pendu » de Fonctions/duels.js).
 function montantsPendu(etat) {
     const montants = { [etat.hote]: mots.GAIN_PENDU }
     for (const userId of etat.justes ?? []) if (userId !== etat.hote) montants[userId] = mots.GAIN_PENDU_PARTICIPANT
@@ -107,7 +107,7 @@ async function gerer(bot, interaction) {
     if (!coup.gagne && !coup.perdu) return interaction.update(rendu(maj.partie))
 
     // Fin de partie : la partie ne se termine qu'une fois ; les récompenses passent par le moteur de parties (crédit actif,
-    // plafond du jour) et par la limite de 10 pendus récompensés par jour
+    // plafond du jour) et par la limite de 5 pendus récompensés par jour
     const langue = etat.langue
     const montants = coup.gagne ? montantsPendu(etat) : {}
     await interaction.deferUpdate()
@@ -130,12 +130,6 @@ module.exports = {
     composants: [{ prefixe: "pendu:", types: ["menu"], public: true, gestionnaire: gerer }],
     options: [
         {
-            type: "string",
-            name: "action",
-            description: "Que faire ?",
-            required: true,
-            choices: [{ name: "Lancer une partie", value: "lancer" }]
-        }, {
             type: "string",
             name: "mode",
             description: "Qui peut jouer (solo par défaut)",

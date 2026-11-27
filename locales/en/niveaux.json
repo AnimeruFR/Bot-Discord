@@ -2,8 +2,6 @@
   "niv.monte": "🎉 {membre} reached level **{niveau}**!",
   "niv.monte_roles": "Role earned: {roles}",
   "niv.monte_recompense": "Reward: {montant}",
-  "niv.palier_bot": "The bot cannot give this role: it needs \"Manage Roles\" and a role placed above this one.",
-  "niv.palier_configurateur": "You cannot give this role: you need \"Manage Roles\" and a role placed above this one.",
   "niv.rang.titre": "Rank of {nom}",
   "niv.rang.niveau": "Level **{niveau}**\n{barre} {dans} / {pour} XP",
   "niv.rang.classement": "Leaderboard",

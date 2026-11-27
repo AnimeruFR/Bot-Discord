@@ -12,7 +12,9 @@ function tirer(participants, n, exclure = []) {
     // Mélange de Fisher-Yates partiel : seules les n premières places comptent
     for (let i = 0; i < Math.min(n, urne.length); i++) {
         const j = i + crypto.randomInt(urne.length - i)
-        ;[urne[i], urne[j]] = [urne[j], urne[i]]
+        const memo = urne[i]
+        urne[i] = urne[j]
+        urne[j] = memo
     }
     return urne.slice(0, n)
 }

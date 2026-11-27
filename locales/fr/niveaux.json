@@ -2,8 +2,6 @@
   "niv.monte": "🎉 {membre} passe au niveau **{niveau}** !",
   "niv.monte_roles": "Rôle obtenu : {roles}",
   "niv.monte_recompense": "Récompense : {montant}",
-  "niv.palier_bot": "Le bot ne peut pas donner ce rôle : il lui faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci.",
-  "niv.palier_configurateur": "Vous ne pouvez pas donner ce rôle : il vous faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci.",
   "niv.rang.titre": "Rang de {nom}",
   "niv.rang.niveau": "Niveau **{niveau}**\n{barre} {dans} / {pour} XP",
   "niv.rang.classement": "Classement",

@@ -46,17 +46,31 @@ test("rep : une fois par jour, refus soi, bot, compte récent, sanctionné", () 
 
 test("anniversaire : dates valides et invalides, effaçable, jamais l'année", () => {
     const U = "200000000000000001"
-    assert.strictEqual(anniv.definir(G, U, 29, 2), true, "29/02 accepté")
+    assert.strictEqual(anniv.definir(G, U, 29, 2).ok, true, "29/02 accepté")
     assert.deepStrictEqual(anniv.lire(G, U), { day: 29, month: 2 })
     for (const [j, m] of [[31, 4], [30, 2], [31, 6], [0, 5], [32, 1], [10, 13], [10, 0], [null, 5], [1.5, 2]]) {
-        assert.strictEqual(anniv.definir(G, U, j, m), false, `${j}/${m} refusé`)
+        assert.deepStrictEqual(anniv.definir(G, U, j, m), { ok: false, refus: "date" }, `${j}/${m} refusé`)
     }
     assert.deepStrictEqual(anniv.lire(G, U), { day: 29, month: 2 }, "une date refusée ne change rien")
-    assert.strictEqual(anniv.definir(G, U, 31, 12), true)
-    assert.deepStrictEqual(Object.keys(db.sqlAll("SELECT * FROM anniversaires WHERE user_id = ?", [U])[0]).sort(), ["day", "guild_id", "month", "user_id"], "pas d'année")
+    assert.deepStrictEqual(Object.keys(db.sqlAll("SELECT * FROM anniversaires WHERE user_id = ?", [U])[0]).sort(), ["changed_at", "day", "guild_id", "month", "user_id"], "pas d'année")
     assert.strictEqual(anniv.retirer(G, U), true)
     assert.strictEqual(anniv.lire(G, U), null)
     assert.strictEqual(anniv.retirer(G, U), false)
+})
+
+test("anniversaire : la date ne change qu'une fois tous les 30 jours, la suppression reste libre", () => {
+    const U = "200000000000000002", t0 = Date.UTC(2027, 0, 1)
+    assert.strictEqual(anniv.definir(G, U, 1, 5, t0).ok, true, "première saisie")
+    assert.strictEqual(anniv.definir(G, U, 1, 5, t0 + JOUR).ok, true, "même date : pas un changement")
+    const refus = anniv.definir(G, U, 2, 5, t0 + 29 * JOUR)
+    assert.deepStrictEqual(refus, { ok: false, refus: "delai", prochain: t0 + 30 * JOUR })
+    assert.deepStrictEqual(anniv.lire(G, U), { day: 1, month: 5 }, "date inchangée")
+    assert.strictEqual(anniv.definir(G, U, 2, 5, t0 + 30 * JOUR).ok, true, "30 jours après")
+    assert.strictEqual(anniv.definir(G, U, 3, 5, t0 + 31 * JOUR).ok, false, "le délai repart du dernier changement")
+    assert.strictEqual(anniv.retirer(G, U), true, "retirer reste libre")
+    // Date posée avant la migration (changed_at vide) : modifiable tout de suite
+    db.sqlRun("INSERT INTO anniversaires (guild_id, user_id, day, month) VALUES (?, ?, 1, 1)", [G, "200000000000000003"])
+    assert.strictEqual(anniv.definir(G, "200000000000000003", 2, 2).ok, true)
 })
 
 test("anniversaire : 29/02 fêté le 28/02 les années non bissextiles", () => {
@@ -80,6 +94,7 @@ function fauxServeur(id, { roleDangereux = false } = {}) {
         const m = {
             id: uid, user: { bot: false }, roleIds: new Set(aRole ? ["ROLE"] : []),
             roles: {
+                cache: { has: id => m.roleIds.has(id) },
                 add: async () => { m.roleIds.add("ROLE") },
                 remove: async () => { m.roleIds.delete("ROLE") }
             }
@@ -99,9 +114,12 @@ function fauxServeur(id, { roleDangereux = false } = {}) {
     }
     const guild = {
         id, ownerId: "OWNER",
-        members: { me: moi, fetch: async uid => (uid ? (membres.get(uid) ?? Promise.reject(new Error("absent"))) : membres) },
-        roles: { cache: new Map([["ROLE", role]]) },
-        channels: { cache: new Map([["SALON", salon]]) }
+        members: { me: moi, fetch: async arg => {
+            const uid = typeof arg === "object" ? arg.user : arg
+            return uid ? (membres.get(uid) ?? Promise.reject(Object.assign(new Error("absent"), { code: Discord.RESTJSONErrorCodes.UnknownMember }))) : membres
+        } },
+        roles: { cache: new Discord.Collection([["ROLE", role]]) },
+        channels: { cache: new Discord.Collection([["SALON", salon]]) }
     }
     role.guild = guild
     return { guild, ajouterMembre, envoyes, role }
@@ -111,7 +129,9 @@ test("anniversaire : annonce une seule fois par jour, rôle donné puis retiré 
     const G3 = "910000000000000003"
     const { guild, ajouterMembre, envoyes } = fauxServeur(G3)
     const fete = ajouterMembre("400000000000000001")
-    const autre = ajouterMembre("400000000000000002", { aRole: true }) // fêté hier : garde le rôle jusqu'au lendemain
+    const autre = ajouterMembre("400000000000000002", { aRole: true }) // fêté hier : le bot lui a donné le rôle
+    const etranger = ajouterMembre("400000000000000003", { aRole: true }) // porte le rôle sans que le bot le lui ait donné
+    db.sqlRun("INSERT INTO anniv_roles_donnes (guild_id, user_id, role_id, day) VALUES (?, ?, 'ROLE', '2027-06-09')", [G3, autre.id])
     anniv.definir(G3, fete.id, 10, 6)
     anniv.definir(G3, autre.id, 9, 6)
     anniv.ecrireConfig(G3, { salon: "SALON", role: "ROLE" })
@@ -124,12 +144,16 @@ test("anniversaire : annonce une seule fois par jour, rôle donné puis retiré 
     assert.ok(envoyes[0].content.includes(`<@${fete.id}>`) && !envoyes[0].content.includes(autre.id))
     assert.deepStrictEqual(envoyes[0].allowedMentions, { parse: [] }, "mention non notifiante")
     assert.ok(fete.roleIds.has("ROLE"), "rôle du jour donné")
-    assert.ok(!autre.roleIds.has("ROLE"), "rôle retiré à celui dont ce n'est plus le jour")
+    assert.ok(!autre.roleIds.has("ROLE"), "rôle retiré à celui à qui le bot l'a donné et dont ce n'est plus le jour")
+    assert.ok(etranger.roleIds.has("ROLE"), "jamais retiré aux autres porteurs")
+    assert.deepStrictEqual(db.sqlAll("SELECT user_id FROM anniv_roles_donnes WHERE guild_id = ?", [G3]).map(l => l.user_id), [fete.id], "seul le fêté du jour est noté")
     assert.strictEqual(anniv.lireConfig(G3).last_run_day, "2027-06-10")
 
     // Lendemain : le rôle est retiré, personne à annoncer
     await anniv.traiterServeur(guild, Date.UTC(2027, 5, 11, 8))
     assert.ok(!fete.roleIds.has("ROLE"), "rôle retiré le lendemain")
+    assert.ok(etranger.roleIds.has("ROLE"), "toujours pas retiré aux autres porteurs")
+    assert.strictEqual(db.sqlAll("SELECT * FROM anniv_roles_donnes WHERE guild_id = ?", [G3]).length, 0)
     assert.strictEqual(envoyes.length, 1)
     assert.strictEqual(anniv.lireConfig(G3).last_run_day, "2027-06-11")
 })
@@ -228,7 +252,7 @@ test("profil : les liens de la bio deviennent « [lien] »", () => {
     assert.strictEqual(profils.definirBio(G, U, "https://" + "a".repeat(300)), "[lien]")
 })
 
-// Serveur dont le cache de rôle est incomplet : le fêté de la veille garde son rôle mais n'y figure pas
+// Serveur dont le cache est incomplet : le fêté de la veille garde son rôle (donné par le bot) mais n'est pas en cache
 function serveurCacheIncomplet(id) {
     const appels = []
     const hier = { id: "700000000000000001", user: { bot: false }, retire: false }
@@ -241,16 +265,17 @@ function serveurCacheIncomplet(id) {
         id, ownerId: "OWNER",
         members: {
             me: { id: "OWNER", permissions: new Discord.PermissionsBitField(), roles: { highest: {} } },
-            fetch: async uid => { appels.push(uid); return uid ? membres.get(uid) : membres }
+            fetch: async arg => { appels.push(arg); const uid = typeof arg === "object" ? arg.user : arg; return uid ? membres.get(uid) : membres }
         },
-        roles: { cache: new Map([["ROLE", role]]) },
-        channels: { cache: new Map() }
+        roles: { cache: new Discord.Collection([["ROLE", role]]) },
+        channels: { cache: new Discord.Collection() }
     }
     role.guild = guild
+    db.sqlRun("INSERT INTO anniv_roles_donnes (guild_id, user_id, role_id, day) VALUES (?, ?, 'ROLE', '2027-06-09')", [id, hier.id])
     return { guild, role, appels, hier, aujourdhui }
 }
 
-test("anniversaire : retrait basé sur le cache complété par un fetch ciblé, jamais de fetch complet", async () => {
+test("anniversaire : retrait des rôles notés, relu membre par membre, jamais de fetch complet", async () => {
     const G8 = "910000000000000008"
     const s = serveurCacheIncomplet(G8)
     anniv.definir(G8, s.hier.id, 9, 6)
@@ -260,20 +285,67 @@ test("anniversaire : retrait basé sur le cache complété par un fetch ciblé, 
     assert.ok(s.hier.retire, "fêté de la veille, absent du cache du rôle : rôle retiré")
     assert.ok(s.aujourdhui.ajoute)
     assert.ok(s.appels.length > 0 && s.appels.every(Boolean), "aucun fetch du serveur entier")
+    assert.deepStrictEqual(db.sqlAll("SELECT user_id FROM anniv_roles_donnes WHERE guild_id = ?", [G8]).map(l => l.user_id), [s.aujourdhui.id])
 })
 
 test("anniversaire : le jour n'est noté qu'après le retrait des rôles de la veille", async () => {
     const G9 = "910000000000000009"
     const s = serveurCacheIncomplet(G9)
-    Object.defineProperty(s.role, "members", { get() { throw new Error("cache illisible") } })
+    const fetchReel = s.guild.members.fetch
+    s.guild.members.fetch = async () => { throw new Error("réseau coupé") }
     anniv.definir(G9, s.aujourdhui.id, 10, 6)
     anniv.ecrireConfig(G9, { role: "ROLE" })
-    await assert.rejects(anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8)), /cache illisible/)
+    await assert.rejects(anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8)), /réseau coupé/)
     assert.strictEqual(anniv.lireConfig(G9).last_run_day, null, "retrait en échec : jour non noté, le passage suivant réessaie")
-    Object.defineProperty(s.role, "members", { value: new Map(), configurable: true })
+    s.guild.members.fetch = fetchReel
     await anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8, 30))
     assert.strictEqual(anniv.lireConfig(G9).last_run_day, "2027-06-10")
     assert.ok(s.aujourdhui.ajoute)
+    assert.ok(s.hier.retire)
+})
+
+test("anniversaire : un retrait refusé garde la ligne, annonces désactivées = rôles donnés retirés quand même", async () => {
+    const G = "910000000000000020"
+    const s = serveurCacheIncomplet(G)
+    s.hier.roles.remove = async () => { throw new Error("Missing Permissions") }
+    anniv.ecrireConfig(G, { role: "ROLE" })
+    await anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 10, 8))
+    assert.strictEqual(db.sqlAll("SELECT * FROM anniv_roles_donnes WHERE guild_id = ?", [G]).length, 1, "retrait échoué : ligne gardée pour un nouvel essai")
+    s.hier.roles.remove = async () => { s.hier.retire = true }
+    anniv.ecrireConfig(G, { salon: null, role: null })
+    await anniv.traiterServeur(s.guild, Date.UTC(2027, 5, 11, 8))
+    assert.ok(s.hier.retire)
+    assert.strictEqual(db.sqlAll("SELECT * FROM anniv_roles_donnes WHERE guild_id = ?", [G]).length, 0)
+})
+
+test("anniversaire : rôle staff, rôle avec porteurs, rôle de quarantaine refusés à la configuration et à l'attribution", async () => {
+    const G = "910000000000000021"
+    const { guild, ajouterMembre, role } = fauxServeur(G)
+    const configurateur = { id: "OWNER", permissions: new Discord.PermissionsBitField(), roles: { highest: {} } }
+    assert.strictEqual(anniv.refusRoleAnniv(guild, role, configurateur), null, "rôle sain, sans porteur")
+
+    // Rôle staff du bot : refusé à la configuration, jamais donné à l'attribution
+    db.setStaffRole(G, "ROLE")
+    assert.strictEqual(anniv.refusRoleAnniv(guild, role, configurateur), "rolecom.refus.staff")
+    const m = ajouterMembre("900000000000000001")
+    anniv.definir(G, m.id, 4, 4)
+    anniv.ecrireConfig(G, { salon: "SALON", role: "ROLE" })
+    await anniv.traiterServeur(guild, Date.UTC(2027, 3, 4, 12))
+    assert.ok(!m.roleIds.has("ROLE"), "rôle staff : jamais donné")
+    assert.strictEqual(db.sqlAll("SELECT * FROM anniv_roles_donnes WHERE guild_id = ?", [G]).length, 0)
+
+    // Un rôle qui a déjà des porteurs est refusé, sauf le rôle déjà configuré (ses porteurs sont ceux du bot)
+    const G2 = "910000000000000022"
+    const s2 = fauxServeur(G2)
+    s2.ajouterMembre("900000000000000002", { aRole: true })
+    assert.strictEqual(anniv.refusRoleAnniv(s2.guild, s2.role, configurateur), "social.anniv.role_porteurs")
+    anniv.ecrireConfig(G2, { role: "ROLE" })
+    assert.strictEqual(anniv.refusRoleAnniv(s2.guild, s2.role, configurateur), null, "rôle déjà configuré")
+
+    const G3 = "910000000000000023"
+    const s3 = fauxServeur(G3)
+    db.sqlRun("INSERT INTO quarantine_config (guild_id, role_id) VALUES (?, 'ROLE')", [G3])
+    assert.strictEqual(anniv.refusRoleAnniv(s3.guild, s3.role, configurateur), "rolecom.refus.quarantaine")
 })
 
 test("anniversaire : les serveurs sont traités à la suite, avec une pause entre deux", async () => {

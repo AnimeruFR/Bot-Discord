@@ -21,7 +21,7 @@ const GAIN_EGALITE = 5
 const GAIN_REACTION = 10
 const MAX_RECOMPENSES_JOUR = 10
 const MAX_DUELS_ADVERSAIRE = 3 // duels récompensés par jour contre le même adversaire
-const MAX_PENDUS_JOUR = 10 // pendus récompensés par jour et par membre
+const MAX_PENDUS_JOUR = 5 // pendus récompensés par jour et par membre
 const DELAI_INVITATION_MS = 60 * 1000
 const DELAI_MANCHE_MS = 60 * 1000
 const DELAI_COUP_MS = 60 * 1000
@@ -284,7 +284,8 @@ async function terminerDuel(partieId, guild, { gagnants = [], montants = {}, com
     try {
         fin = await parties.terminerPartie(partieId, { status: "finie", gagnants, recompenses: accordees })
     } catch (err) {
-        annulerReservation(partie.guildId, Object.keys(accordees), Date.now(), { compteur, contre })
+        // Partie déjà terminée : des crédits ont peut-être été versés, les places du jour restent prises (jamais de double gain)
+        if (parties.lirePartie(partieId)?.status === "en_cours") annulerReservation(partie.guildId, Object.keys(accordees), Date.now(), { compteur, contre })
         throw err
     }
     if (!fin.ok) {
@@ -307,6 +308,10 @@ async function terminerDuel(partieId, guild, { gagnants = [], montants = {}, com
 
 // Comme terminerDuel, sans jamais lever d'erreur : si la fin échoue, la partie est terminée sans récompense (jamais bloquée)
 // et le résultat porte erreur: true pour le dire dans le message.
+// Sens de ok : « la partie est terminée », pas « les récompenses sont versées ». ok: true + erreur: true veut dire partie finie
+// sans récompense annoncée (accordees vide) ; ok: false seulement si la partie n'existe plus ou était déjà terminée (refus).
+// Pas de double gain : si terminerPartie a échoué après avoir déjà versé un premier joueur, la partie est terminée par ce premier
+// appel, le second appel (sans récompenses) ne fait rien, et les places du jour restent prises. Si rien n'a été fait, elles sont rendues.
 async function conclureDuel(partieId, guild, options = {}) {
     try {
         return await terminerDuel(partieId, guild, options)

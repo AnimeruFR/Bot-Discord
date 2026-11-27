@@ -14,7 +14,8 @@ const catalogue = require('../data-statique/quetes.json')
 // Récompense : crediter(..., { actif: false, sansReduction: false }), versée une seule fois (claimed).
 // Anti-farm : réputation, paiement et victoires ne font avancer une quête qu'une fois par partenaire et par période
 // (jour pour une quête du jour, semaine pour celle de la semaine), voir peutCompter dans Fonctions/evenements.js.
-// Une quête peut aussi exiger un montant minimal (champ montantMin du catalogue : 50 pour le paiement).
+// Une quête peut aussi exiger un montant minimal (champ montantMin du catalogue : 50 pour le paiement). Un paiement vers quelqu'un
+// qui vous a payé le même jour (aller-retour) ne compte pas : seul le premier sens fait avancer la quête.
 // À la réclamation, la période précédente (hier, semaine dernière) reste acceptée : une quête finie tard ne se perd pas.
 
 const MODULE = "communaute.niveaux"
@@ -49,8 +50,10 @@ function tirer(reserve, n, graineTexte) {
     const hasard = aleatoire(crypto.createHash("sha256").update(graineTexte).digest().readUInt32BE(0))
     const melange = [...reserve]
     for (let i = melange.length - 1; i > 0; i--) {
-        const j = Math.floor(hasard() * (i + 1));
-        [melange[i], melange[j]] = [melange[j], melange[i]]
+        const j = Math.floor(hasard() * (i + 1))
+        const memo = melange[i]
+        melange[i] = melange[j]
+        melange[j] = memo
     }
     const choisies = []
     for (const q of melange) if (choisies.length < n && !choisies.some(c => c.evenement === q.evenement)) choisies.push(q)
@@ -95,6 +98,15 @@ function precedentesAReclamer(guildId, userId, { instant = Date.now() } = {}) {
         [guildId, userId, veille, semainePassee]).filter(l => parId.has(l.quest)).map(l => versQuete(l, l.period === veille ? "jour" : "semaine"))
 }
 
+// Le payeur a-t-il reçu de son bénéficiaire, le même jour (Paris), par la même voie ? Lu dans le journal de l'économie :
+// la ligne du payeur est positive (il a reçu) et son autre partie est le bénéficiaire.
+function aRecuAujourdhui(guildId, userId, donnees, instant) {
+    const jour = jourParis(instant)
+    const lignes = db.sqlAll(`SELECT created_at FROM eco_journal WHERE guild_id = ? AND user_id = ? AND other_id = ? AND source = ? AND delta > 0
+        AND created_at >= ?`, [guildId, userId, String(donnees.to), donnees.source ?? "paiement", instant - 48 * 3600 * 1000])
+    return lignes.some(l => jourParis(l.created_at) === jour)
+}
+
 // Un événement fait avancer d'un cran les quêtes en cours qui l'attendent (jamais au-delà de l'objectif)
 function avancer(evenement, donnees, { instant = Date.now() } = {}) {
     const { guildId, userId } = donnees ?? {}
@@ -104,6 +116,7 @@ function avancer(evenement, donnees, { instant = Date.now() } = {}) {
         const def = parId.get(q.id)
         if (def.evenement !== evenement || q.claimed) continue
         if (def.montantMin && !(donnees.amount >= def.montantMin)) continue
+        if (evenement === "paiement" && aRecuAujourdhui(guildId, userId, donnees, instant)) continue
         compte[q.type] ??= peutCompter(guildId, userId, evenement, donnees, `quete:${q.type}:${evenement}`, q.period)
         if (!compte[q.type]) continue
         db.sqlRun("UPDATE quetes SET progress = MIN(goal, progress + 1) WHERE guild_id = ? AND user_id = ? AND period = ? AND quest = ? AND claimed = 0",
@@ -150,4 +163,4 @@ function reclamer(membre, { instant = Date.now() } = {}) {
 
 for (const evenement of EVENEMENTS) ecouter(evenement, donnees => avancer(evenement, donnees))
 
-module.exports = { quetesDuMembre, precedentesAReclamer, avancer, reclamer, semaineParis, catalogue, NOMBRE_JOUR }
+module.exports = { quetesDuMembre, precedentesAReclamer, avancer, reclamer, semaineParis, catalogue }

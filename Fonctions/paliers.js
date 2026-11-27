@@ -1,7 +1,6 @@
 const db = require('./db')
-const { t } = require('./i18n')
-const { refusRole } = require('./rolesBoutons')
 const { peutDonnerRole } = require('./moderation')
+const { refusRoleCommunaute, texteRefusRole } = require('./rolesCommunaute')
 const economie = require('./economie')
 
 // Paliers de niveau (idée #41) : un niveau atteint donne un rôle et/ou une récompense en monnaie.
@@ -26,16 +25,11 @@ const listerPaliers = guildId =>
         .map(l => ({ niveau: l.level, roleId: l.role_id, recompense: l.reward }))
 
 // Le bot et le configurateur peuvent-ils donner ce rôle, et est-il sans danger ? Renvoie un message d'erreur, ou null.
-// Mêmes règles que les rôles à boutons (refusRole) : pas de permission dangereuse, sous le rôle du bot, sous celui du configurateur.
+// Contrôle commun de rolesCommunaute.js (pouvoirs, rôles staff, quarantaine et vérification, hiérarchie).
 // configurateur : le membre qui règle le palier (null à l'attribution : on revérifie seulement le rôle et le bot).
 function refusRolePalier(guild, role, configurateur = null, cible = null) {
-    const L = cible ?? "fr"
-    const refus = refusRole(guild, role, configurateur, L)
-    if (refus) return refus
-    const moi = guild.members.me
-    if (!moi || !peutDonnerRole(moi, role)) return t(L, "niv.palier_bot")
-    if (configurateur && !peutDonnerRole(configurateur, role)) return t(L, "niv.palier_configurateur")
-    return null
+    const cle = refusRoleCommunaute(guild, role, configurateur)
+    return cle ? texteRefusRole(cible ?? "fr", cle, role) : null
 }
 
 // Ajoute ou remplace le palier d'un niveau. Valeur invalide : RangeError.
@@ -58,7 +52,7 @@ const retirerPalier = (guildId, niveau) =>
 // Rôle utilisable à l'instant T (existe, sans danger, bot capable de le donner) ou null. Revérifié à chaque attribution.
 function roleUtilisable(guild, roleId) {
     const role = roleId ? guild.roles.cache.get(roleId) : null
-    return role && !refusRolePalier(guild, role) ? role : null
+    return role && !refusRoleCommunaute(guild, role) ? role : null
 }
 
 // Applique les paliers franchis quand un membre passe de `ancien` à `nouveau` (plusieurs niveaux d'un coup possible).

@@ -62,5 +62,15 @@
   "inv.refus.inconnu": "Cet objet n'existe pas.",
   "inv.refus.absent": "Vous n'avez pas cet objet.",
   "inv.refus.inutilisable": "Cet objet n'est pas encore utilisable.",
-  "inv.refus.boost_actif": "Un boost d'XP est déjà actif (fin {fin}) : il n'est pas cumulable."
+  "inv.refus.boost_actif": "Un boost d'XP est déjà actif (fin {fin}) : il n'est pas cumulable.",
+  "rolecom.refus.inexistant": "Ce rôle n'existe pas.",
+  "rolecom.refus.everyone": "Le rôle @everyone ne peut pas être donné automatiquement.",
+  "rolecom.refus.gere": "Un rôle géré par une intégration ne peut pas être donné.",
+  "rolecom.refus.dangereux": "Le rôle {role} donne des pouvoirs de modération ou d'administration : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.dangereux_salon": "Le rôle {role} donne des pouvoirs de modération dans un salon (autorisation de salon) : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.staff": "Le rôle {role} est un rôle de staff (bot ou tickets) : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.quarantaine": "Le rôle {role} est le rôle de quarantaine : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.verifie": "Le rôle {role} est le rôle de vérification : il ne peut pas être donné automatiquement.",
+  "rolecom.refus.bot": "Le bot ne peut pas donner le rôle {role} : il lui faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci.",
+  "rolecom.refus.configurateur": "Vous ne pouvez pas donner le rôle {role} vous-même : il vous faut « Gérer les rôles » et un rôle placé au-dessus de celui-ci."
 }
